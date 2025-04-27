@@ -1,0 +1,70 @@
+# name: test/yaml/yaml_objects.test
+# description: Tests for read_yaml_objects function
+# group: [yaml]
+
+require yaml
+
+# Test reading a simple YAML structure as objects
+statement ok
+CREATE TABLE simple_objects AS 
+SELECT * FROM read_yaml_objects('test/yaml/simple.yaml');
+
+query I
+SELECT yaml FROM simple_objects;
+----
+{'name': John, 'age': 30, 'is_active': true}
+
+query I
+SELECT yaml.name FROM simple_objects;
+----
+John
+
+# Test with nested structures
+statement ok
+CREATE TABLE nested_objects AS 
+SELECT * FROM read_yaml_objects('test/yaml/nested_with_addresses.yaml');
+
+query I
+SELECT yaml.person.name FROM nested_objects;
+----
+John Doe
+
+query I
+SELECT yaml.person.addresses[2].city FROM nested_objects;
+----
+Gotham
+
+# Test handling complex nested structures properly
+statement ok
+CREATE TABLE complex_objects AS 
+SELECT * FROM read_yaml_objects('test/yaml/sample.yaml');
+
+query I
+SELECT yaml.person.skills.programming[1].language FROM complex_objects;
+----
+Python
+
+query I
+SELECT yaml.person.skills.programming[2].level FROM complex_objects;
+----
+Intermediate
+
+# Verify unnesting works as expected
+statement ok
+CREATE TABLE unnested_simple AS
+SELECT unnest(yaml) FROM read_yaml_objects('test/yaml/simple.yaml') as t;
+
+query I
+SELECT name FROM unnested_simple;
+----
+John
+
+# Test unnesting complex objects with recursive option
+statement ok
+CREATE TABLE unnested_complex AS
+SELECT unnest(yaml, recursive:=true) FROM read_yaml_objects('test/yaml/nested.yaml');
+
+query III
+SELECT name, age, is_active FROM unnested_complex;
+----
+John Doe	30	true

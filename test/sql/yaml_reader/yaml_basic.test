@@ -1,0 +1,80 @@
+# name: test/yaml/yaml_basic.test
+# description: Basic YAML reader functionality tests
+# group: [yaml]
+
+require yaml
+
+# Test loading a YAML file with scalar values
+statement ok
+CREATE TABLE simple_yaml AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml');
+
+query III
+SELECT name, age, is_active FROM simple_yaml
+----
+John	30	true
+
+# Test with nested structures
+statement ok
+CREATE TABLE nested_yaml AS 
+SELECT * FROM read_yaml('test/yaml/nested.yaml');
+
+query I
+SELECT person.name FROM nested_yaml;
+----
+John Doe
+
+query I
+SELECT person.age FROM nested_yaml;
+----
+30
+
+# Test with lists
+statement ok
+CREATE TABLE lists_yaml AS 
+SELECT * FROM read_yaml('test/yaml/lists.yaml');
+
+query I
+SELECT tags[1] FROM lists_yaml;
+----
+developer
+
+query I
+SELECT tags[3] FROM lists_yaml;
+----
+designer
+
+query I
+SELECT numbers[2] FROM lists_yaml;
+----
+2
+
+# Test with complex nested structures
+statement ok
+CREATE TABLE complex_yaml AS 
+SELECT * FROM read_yaml('test/yaml/complex.yaml');
+
+query I
+SELECT person.addresses[1].street FROM complex_yaml;
+----
+123 Main St
+
+query I
+SELECT person.addresses[2].city FROM complex_yaml;
+----
+Gotham
+
+# Test with an existing sample YAML file
+statement ok
+CREATE TABLE file_yaml AS 
+SELECT * FROM read_yaml('test/yaml/sample.yaml');
+
+query I
+SELECT person.name FROM file_yaml;
+----
+John Doe
+
+query I
+SELECT person.skills.programming[1].language FROM file_yaml;
+----
+Python

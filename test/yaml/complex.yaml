@@ -1,0 +1,9 @@
+person:
+  name: John Doe
+  addresses:
+    - street: 123 Main St
+      city: Metropolis
+      zip: "12345"
+    - street: 456 Work Blvd
+      city: Gotham
+      zip: "67890"

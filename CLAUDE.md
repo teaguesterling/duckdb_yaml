@@ -13,11 +13,13 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 ## Current Implementation Status
 
 - We've created a simplified version that focuses only on the core reading functionality
-- The implementation includes the YAMLReader class that provides the `read_yaml` table function
+- The implementation includes the YAMLReader class that provides the read_yaml function
+- We also have an object-based reader (read_yaml_objects) for compatibility with JSON-like workflows
 - Basic type detection and conversion between YAML and DuckDB types is implemented
 - Multi-document YAML support is included
+- Top-level sequence handling is implemented, treating sequence items as rows
 - Error handling is basic but functional
-- Testing infrastructure is set up
+- Testing infrastructure is set up using actual YAML files in test/yaml/
 
 ## Design Decisions
 
@@ -36,6 +38,7 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 3. **Error Handling**: How should we handle YAML parsing errors? Should we provide detailed error messages?
 4. **Anchors and Aliases**: YAML-specific features like anchors and aliases aren't currently supported. How important are they?
 5. **Integration with JSON**: How tightly should this integrate with DuckDB's JSON functionality?
+6. **Inline YAML Support**: Should we add a separate `yaml` function for handling inline YAML strings, similar to DuckDB's approach with JSON?
 
 ## Implementation Challenges
 
@@ -55,6 +58,8 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 6. **YAML Output Functions**: Allow writing DuckDB data as YAML
 7. **Streaming Processing**: For large files
 8. **Anchor and Alias Support**: For YAML-specific features
+9. **Inline YAML Function**: Add a `yaml()` function for parsing inline YAML strings
+10. **Smarter Schema Detection**: Improve handling of heterogeneous documents
 
 ## Development Strategy
 
@@ -71,6 +76,10 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - The YAMLReadFunction processes YAML nodes and fills output chunks
 - Type detection is based on the YAML node type and content
 - We use vectors of YAML nodes to support multi-document YAML files
+- Reading top-level sequences treats each sequence item as a separate row
+- DuckDB-specific syntax details:
+  - Structs use dot notation (e.g., `person.name`) not arrow operators (`person->name`)
+  - Lists are 1-indexed (e.g., `list[1]` for first element, not `list[0]`)
 
 ### yaml-cpp Integration Considerations
 - yaml-cpp provides a DOM-style API for parsing YAML (unlike SAX parsing)
@@ -78,6 +87,12 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - Need to handle yaml-cpp exceptions and translate them to DuckDB exceptions
 - Memory management: yaml-cpp loads entire documents into memory
 - YAML has features like anchors, aliases, and tags that add complexity compared to JSON
+
+### Testing Approach
+- Test files organized in a dedicated test/yaml/ directory
+- Test cases in test/sql/ directory follow DuckDB's SQLLogicTest conventions
+- Tests cover basic functionality, complex structures, multi-document, and top-level sequences
+- Tests use actual files rather than inline YAML strings
 
 ## Reminders for Conversation Continuity
 
@@ -103,3 +118,4 @@ They're using me as a technical partner to help implement and debug this extensi
 
 - Initial version: Created during first conversation about simplifying the implementation
 - Update 1: Added observations about the prompter, expanded technical notes about yaml-cpp integration, and added more detail on design decisions
+- Update 2: Updated based on implementation progress - added information about test file organization, DuckDB-specific syntax for structs and lists, handling of top-level sequences, and added potential future features

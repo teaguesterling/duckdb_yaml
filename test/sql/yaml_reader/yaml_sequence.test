@@ -1,0 +1,103 @@
+# name: test/yaml/yaml_sequence.test
+# description: Tests for handling top-level sequences in YAML
+# group: [yaml]
+
+require yaml
+
+# Test with basic top-level sequence
+statement ok
+CREATE TABLE sequence_rows AS 
+SELECT * FROM read_yaml('test/yaml/sequence_basic.yaml');
+
+query I
+SELECT COUNT(*) FROM sequence_rows;
+----
+3
+
+query III
+SELECT id, name, age FROM sequence_rows ORDER BY id;
+----
+1	John	30
+2	Jane	28
+3	Bob	35
+
+# Test with mixed content in the sequence
+statement ok
+CREATE TABLE mixed_sequence AS 
+SELECT * FROM read_yaml('test/yaml/sequence_mixed.yaml');
+
+query I
+SELECT COUNT(*) FROM mixed_sequence;
+----
+3
+
+query II
+SELECT id, department FROM mixed_sequence WHERE id = 1;
+----
+1	Engineering
+
+query II
+SELECT id, role FROM mixed_sequence WHERE id = 2;
+----
+2	Manager
+
+query II
+SELECT id, skills[1] FROM mixed_sequence WHERE id = 3;
+----
+3	Programming
+
+# Test with complex data in sequence elements
+statement ok
+CREATE TABLE complex_sequence AS 
+SELECT * FROM read_yaml('test/yaml/sequence_complex.yaml');
+
+query I
+SELECT COUNT(*) FROM complex_sequence;
+----
+2
+
+query II
+SELECT id, user.name FROM complex_sequence ORDER BY id;
+----
+1	John Doe
+2	Jane Smith
+
+query II
+SELECT id, user.contact.email FROM complex_sequence WHERE id = 2;
+----
+2	jane@example.com
+
+# Test with sequence inside multi-document YAML
+statement ok
+CREATE TABLE multi_doc_sequence AS 
+SELECT * FROM read_yaml('test/yaml/multi_sequence.yaml');
+
+query I
+SELECT COUNT(*) FROM multi_doc_sequence;
+----
+4
+
+query II
+SELECT id, name FROM multi_doc_sequence ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob
+4	Alice
+
+# Test with a mix of document types
+statement ok
+CREATE TABLE mixed_docs_sequence AS 
+SELECT * FROM read_yaml('test/yaml/mixed_sequence_doc.yaml');
+
+query I
+SELECT COUNT(*) FROM mixed_docs_sequence;
+----
+3
+
+query II
+SELECT id, name FROM mixed_docs_sequence ORDER BY id;
+----
+1	Sequence Item 1
+2	Sequence Item 2
+100	Document

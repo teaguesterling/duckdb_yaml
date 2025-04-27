@@ -1,0 +1,8 @@
+person:
+  name: John Doe
+  age: 30
+  addresses:
+    - street: 123 Main St
+      city: Metropolis
+    - street: 456 Work Blvd
+      city: Gotham

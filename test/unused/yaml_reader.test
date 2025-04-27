@@ -1,0 +1,101 @@
+# name: test/sql/yaml_reader.test
+# description: Test YAML reader functionality
+# group: [yaml]
+
+require yaml
+
+# Test loading a simple YAML document
+statement ok
+CREATE TABLE simple_yaml AS 
+SELECT * FROM read_yaml('
+name: John
+age: 30
+is_active: true
+tags:
+  - developer
+  - mentor
+');
+
+query I
+SELECT yaml->name FROM simple_yaml;
+----
+John
+
+query I
+SELECT yaml->age FROM simple_yaml;
+----
+30
+
+query I
+SELECT yaml->is_active FROM simple_yaml;
+----
+true
+
+query I
+SELECT yaml->tags[0] FROM simple_yaml;
+----
+developer
+
+# Test multi-document YAML
+statement ok
+CREATE TABLE multi_doc AS 
+SELECT * FROM read_yaml('
+---
+id: 1
+name: John
+---
+id: 2
+name: Jane
+', multi_document=true);
+
+query I
+SELECT COUNT(*) FROM multi_doc;
+----
+2
+
+query II
+SELECT yaml->id, yaml->name FROM multi_doc ORDER BY yaml->id;
+----
+1	John
+2	Jane
+
+# Test with a more complex structure
+statement ok
+CREATE TABLE complex_yaml AS 
+SELECT * FROM read_yaml('
+person:
+  name: John Doe
+  age: 30
+  is_active: true
+  addresses:
+    - street: 123 Main St
+      city: Metropolis
+      zip: "12345"
+    - street: 456 Work Blvd
+      city: Gotham
+      zip: "67890"
+');
+
+query I
+SELECT yaml->person->name FROM complex_yaml;
+----
+John Doe
+
+query I
+SELECT yaml->person->addresses[0]->city FROM complex_yaml;
+----
+Metropolis
+
+# Test with auto_detect=false
+statement ok
+CREATE TABLE raw_yaml AS 
+SELECT * FROM read_yaml('
+name: John
+age: 30
+', auto_detect=false);
+
+query I
+SELECT yaml FROM raw_yaml;
+----
+name: John
+age: 30

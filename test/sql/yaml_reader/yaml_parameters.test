@@ -1,0 +1,85 @@
+# name: test/yaml/yaml_parameters.test
+# description: Tests for YAML reader function parameters
+# group: [yaml]
+
+require yaml
+
+# Test auto_detect parameter set to false
+statement ok
+CREATE TABLE no_autodetect AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=false);
+
+# With auto_detect=false, everything is treated as VARCHAR
+query IIIIII
+DESCRIBE no_autodetect;
+----
+is_active	VARCHAR	YES	NULL	NULL	NULL
+age	VARCHAR	YES	NULL	NULL	NULL
+name	VARCHAR	YES	NULL	NULL	NULL
+
+query I
+SELECT name FROM no_autodetect;
+----
+John
+
+# Test ignore_errors parameter
+statement ok
+CREATE TABLE invalid_yaml AS 
+SELECT * FROM read_yaml('test/yaml/invalid.yaml', ignore_errors=true);
+
+query I
+SELECT COUNT(*) FROM invalid_yaml;
+----
+0
+
+# Test with valid YAML after setting ignore_errors
+statement ok
+CREATE TABLE recovered_yaml AS 
+SELECT * FROM read_yaml('test/yaml/partial_invalid.yaml', ignore_errors=true);
+
+query I
+SELECT COUNT(*) FROM recovered_yaml;
+----
+1
+
+query II
+SELECT id, name FROM recovered_yaml;
+----
+1	Recovered
+
+# Test multi_document parameter
+statement ok
+CREATE TABLE single_doc AS 
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=false);
+
+query I
+SELECT COUNT(*) FROM single_doc;
+----
+1
+
+query I
+SELECT name FROM single_doc;
+----
+John
+
+# Test maximum_object_size parameter (test will pass with default size)
+statement ok
+CREATE TABLE size_limit AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', maximum_object_size=1048576);
+
+query I
+SELECT name FROM size_limit;
+----
+John
+
+# Test combinations of parameters
+statement ok
+CREATE TABLE combo_params AS 
+SELECT * FROM read_yaml('test/yaml/multi_mixed.yaml', auto_detect=true, multi_document=true, ignore_errors=false);
+
+query II
+SELECT id, name FROM combo_params ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob

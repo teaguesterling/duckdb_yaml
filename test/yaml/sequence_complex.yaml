@@ -1,0 +1,12 @@
+- id: 1
+  user:
+    name: John Doe
+    contact:
+      email: john@example.com
+      phone: 555-1234
+- id: 2
+  user:
+    name: Jane Smith
+    contact:
+      email: jane@example.com
+      phone: 555-5678

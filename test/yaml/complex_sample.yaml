@@ -1,0 +1,213 @@
+---
+# User document
+type: user
+metadata:
+  version: 1.0
+  created_at: 2023-05-15T10:30:00Z
+  last_updated: 2023-05-15T10:30:00Z
+user:
+  id: 1001
+  username: johndoe
+  email: john.doe@example.com
+  profile:
+    first_name: John
+    last_name: Doe
+    age: 30
+    bio: >
+      Software engineer with 5+ years of experience.
+      Specializes in backend development and databases.
+    interests:
+      - programming
+      - databases
+      - data science
+      - hiking
+    education:
+      - institution: University of Technology
+        degree: Bachelor of Science
+        field: Computer Science
+        year: 2015
+      - institution: Data Institute
+        degree: Master's Degree
+        field: Data Engineering
+        year: 2017
+    work_experience:
+      - company: Tech Solutions Inc.
+        position: Junior Developer
+        years: 2
+        projects:
+          - name: Customer Portal
+            technologies: [PHP, MySQL, JavaScript]
+          - name: Inventory System
+            technologies: [Python, PostgreSQL]
+      - company: Data Innovations
+        position: Senior Developer
+        years: 3
+        projects:
+          - name: Analytics Dashboard
+            technologies: [React, Node.js, MongoDB]
+          - name: Data Pipeline
+            technologies: [Python, Apache Airflow, AWS]
+    contact:
+      address:
+        street: 123 Main St
+        city: Techville
+        state: CA
+        zip: '90210'
+      phone: '+1-555-123-4567'
+      social_media:
+        twitter: '@johndoe'
+        linkedin: 'john-doe-tech'
+        github: 'johndoe-dev'
+---
+# Project document
+type: project
+metadata:
+  version: 1.0
+  created_at: 2023-05-16T09:15:00Z
+  last_updated: 2023-05-18T14:20:00Z
+project:
+  id: 2001
+  name: Data Warehouse Migration
+  description: |
+    Project to migrate the existing data warehouse to a modern cloud-based solution.
+    Includes ETL redesign, schema optimization, and reporting dashboards.
+  status: in_progress
+  priority: high
+  start_date: 2023-06-01
+  end_date: 2023-09-30
+  budget: 150000.00
+  team:
+    - user_id: 1001
+      role: Project Lead
+      allocation: 0.8
+    - user_id: 1002
+      role: Data Engineer
+      allocation: 1.0
+    - user_id: 1003
+      role: Backend Developer
+      allocation: 0.5
+    - user_id: 1004
+      role: Frontend Developer
+      allocation: 0.5
+  milestones:
+    - name: Planning Phase
+      due_date: 2023-06-15
+      completion: 100
+      deliverables:
+        - Technical Specification
+        - Project Timeline
+        - Resource Allocation
+    - name: Development Phase
+      due_date: 2023-08-15
+      completion: 45
+      deliverables:
+        - ETL Pipelines
+        - Data Model
+        - API Integration
+    - name: Testing Phase
+      due_date: 2023-09-15
+      completion: 0
+      deliverables:
+        - Test Cases
+        - Performance Benchmarks
+        - Validation Reports
+  risks:
+    - description: Integration with legacy systems may be challenging
+      impact: medium
+      mitigation: Allocate additional time for testing and troubleshooting
+    - description: Resource availability might be limited
+      impact: high
+      mitigation: Secure commitments from stakeholders early
+  technologies:
+    databases:
+      - PostgreSQL
+      - Snowflake
+    languages:
+      - Python
+      - SQL
+      - TypeScript
+    frameworks:
+      - Apache Airflow
+      - dbt
+      - React
+    cloud:
+      provider: AWS
+      services:
+        - S3
+        - Redshift
+        - Lambda
+        - Glue
+  metrics:
+    performance:
+      current: 
+        query_time_ms: 3500
+        data_freshness_hours: 24
+      target:
+        query_time_ms: 800
+        data_freshness_hours: 4
+---
+# Configuration document
+type: config
+metadata:
+  version: 1.1
+  created_at: 2023-05-14T08:00:00Z
+  last_updated: 2023-05-19T16:45:00Z
+config:
+  environment: production
+  debug: false
+  features:
+    advanced_analytics: true
+    real_time_updates: false
+    export_formats:
+      - csv
+      - json
+      - excel
+      - pdf
+  database:
+    host: db.example.com
+    port: 5432
+    name: app_production
+    connection_pool:
+      min_connections: 5
+      max_connections: 25
+      connection_timeout_ms: 3000
+  cache:
+    enabled: true
+    ttl_seconds: 3600
+    backends:
+      - type: redis
+        host: cache.example.com
+        port: 6379
+      - type: memory
+        max_size_mb: 512
+  authentication:
+    session_timeout_minutes: 30
+    allowed_failures: 5
+    lockout_duration_minutes: 15
+    password_policy:
+      min_length: 12
+      require_uppercase: true
+      require_lowercase: true
+      require_number: true
+      require_special: true
+  logging:
+    level: info
+    outputs:
+      - type: file
+        path: /var/log/app.log
+        rotation:
+          max_size_mb: 100
+          max_files: 10
+      - type: syslog
+        facility: local0
+  monitoring:
+    metrics:
+      collect_interval_seconds: 60
+      retention_days: 90
+    alerts:
+      cpu_threshold_percent: 85
+      memory_threshold_percent: 90
+      disk_threshold_percent: 95
+      recipients:
+        - ops@example.com
+        - alerts@example.com

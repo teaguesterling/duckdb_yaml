@@ -1,0 +1,11 @@
+- id: 1
+  name: John
+  department: Engineering
+- id: 2
+  name: Jane
+  role: Manager
+- id: 3
+  name: Bob
+  skills:
+    - Programming
+    - Design

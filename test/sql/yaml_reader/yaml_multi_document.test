@@ -1,0 +1,93 @@
+# name: test/yaml/yaml_multi_document.test
+# description: Tests for multi-document YAML functionality
+# group: [yaml]
+
+require yaml
+
+# Test with basic multi-document YAML
+statement ok
+CREATE TABLE multi_doc AS 
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml');
+
+query I
+SELECT COUNT(*) FROM multi_doc;
+----
+3
+
+query II
+SELECT id, name FROM multi_doc ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob
+
+# Test with heterogeneous documents
+statement ok
+CREATE TABLE mixed_docs AS 
+SELECT * FROM read_yaml('test/yaml/multi_mixed.yaml');
+
+query I
+SELECT COUNT(*) FROM mixed_docs;
+----
+3
+
+query III
+SELECT id, name, age FROM mixed_docs WHERE id = 1;
+----
+1	John	30
+
+query II
+SELECT id, role FROM mixed_docs WHERE id = 2;
+----
+2	Developer
+
+query III
+SELECT id, department, manager FROM mixed_docs WHERE id = 3;
+----
+3	IT	true
+
+# Test with multi-document complex structures
+statement ok
+CREATE TABLE complex_docs AS 
+SELECT * FROM read_yaml('test/yaml/multi_complex.yaml');
+
+query I
+SELECT user.id FROM complex_docs ORDER BY user.id;
+----
+1
+2
+
+query I
+SELECT user.profile.skills[1] FROM complex_docs WHERE user.id = 1;
+----
+Python
+
+query I
+SELECT user.profile.skills[2] FROM complex_docs WHERE user.id = 2;
+----
+CSS
+
+# Test with file containing multiple documents
+statement ok
+CREATE TABLE file_multi_docs AS 
+SELECT * FROM read_yaml('test/yaml/samples.yaml');
+
+query I
+SELECT COUNT(*) FROM file_multi_docs;
+----
+2
+
+# Test with multi_document=false parameter
+statement ok
+CREATE TABLE first_doc_only AS 
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=false);
+
+query I
+SELECT COUNT(*) FROM first_doc_only;
+----
+1
+
+query II
+SELECT id, name FROM first_doc_only;
+----
+1	John

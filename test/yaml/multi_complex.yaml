@@ -1,0 +1,16 @@
+---
+user:
+  id: 1
+  profile:
+    name: John
+    skills:
+      - Python
+      - SQL
+---
+user:
+  id: 2
+  profile:
+    name: Jane
+    skills:
+      - JavaScript
+      - CSS

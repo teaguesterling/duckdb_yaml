@@ -1,0 +1,13 @@
+---
+id: 1
+name: John
+age: 30
+---
+id: 2
+name: Jane
+role: Developer
+---
+id: 3
+name: Bob
+department: IT
+manager: true
