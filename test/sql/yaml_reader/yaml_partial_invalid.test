@@ -1,0 +1,58 @@
+# name: test/yaml/yaml_partial_invalid.test
+# description: Tests for handling partially invalid YAML files
+# group: [yaml]
+
+require yaml
+
+# Test with partially invalid YAML file (first document invalid, second valid)
+statement ok
+CREATE TABLE partial_invalid AS 
+SELECT * FROM read_yaml('test/yaml/partial_invalid.yaml', ignore_errors=true);
+
+# Should return one row from the valid document
+query I
+SELECT COUNT(*) FROM partial_invalid;
+----
+1
+
+query II
+SELECT id, name FROM partial_invalid;
+----
+1	Recovered
+
+# Test with different partially invalid files using multiple file inputs
+statement ok
+CREATE TABLE mixed_validity AS 
+SELECT * FROM read_yaml(['test/yaml/invalid.yaml', 'test/yaml/simple.yaml'], ignore_errors=true);
+
+# Should skip the invalid file and return data from the valid one
+query I
+SELECT name FROM mixed_validity;
+----
+John
+
+# Test with partially invalid multi-document YAML using file list
+statement ok
+CREATE TABLE multi_doc_partial_invalid AS 
+SELECT * FROM read_yaml(['test/yaml/partial_invalid.yaml', 'test/yaml/multi_basic.yaml'], ignore_errors=true);
+
+# Should return all valid documents from both files (1 from partial_invalid.yaml + 3 from multi_basic.yaml)
+query I
+SELECT COUNT(*) FROM multi_doc_partial_invalid;
+----
+4
+
+# Verify all expected data is present
+query II
+SELECT id, name FROM multi_doc_partial_invalid WHERE name = 'Recovered';
+----
+1	Recovered
+
+query II
+SELECT id, name FROM multi_doc_partial_invalid WHERE name = 'John';
+----
+1	John
+
+# Test with same scenario but with ignore_errors=false (should fail)
+statement error
+SELECT * FROM read_yaml('test/yaml/partial_invalid.yaml');

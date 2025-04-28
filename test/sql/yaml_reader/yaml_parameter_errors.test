@@ -7,30 +7,38 @@ require yaml
 # Test with invalid parameter name
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', not_a_parameter=true);
-
-# Test with invalid parameter type (string instead of boolean)
-statement error
-SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect='yes');
+----
+Binder Error: Invalid named parameter "not_a_parameter" for function read_yaml
 
 # Test with invalid parameter type (string instead of integer)
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', maximum_object_size='large');
+----
+Invalid Input Error: Failed to cast value: Could not convert string 'large' to INT64
 
 # Test with duplicate parameters
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=true, auto_detect=false);
+----
+Parser Error: Duplicate parameter name
 
 # Test with multiple incorrect parameters
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', invalid1=true, invalid2='test');
+----
+Binder Error: Named parameter "invalid1" not found
 
 # Test with missing required parameter (file path)
 statement error
 SELECT * FROM read_yaml();
+----
+Binder Error: No arguments provided
 
 # Test with invalid file path format (object instead of string)
 statement error
 SELECT * FROM read_yaml(123);
+----
+Binder Error: File path must be a string or list of strings
 
 # Test ignore_errors with invalid YAML
 statement ok

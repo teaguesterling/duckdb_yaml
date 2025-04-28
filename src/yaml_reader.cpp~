@@ -10,10 +10,10 @@ namespace duckdb {
 
 // Bind data structure for read_yaml
 struct YAMLReadRowsBindData : public TableFunctionData {
-    YAMLReadRowsBindData(string file_path, YAMLReader::YAMLReadOptions options) 
+    YAMLReadRowsBindData(Value file_path, YAMLReader::YAMLReadOptions options) 
         : file_path(std::move(file_path)), options(options) {}
 
-    string file_path;
+    Value file_path;  // Store the original file path value (string or list)
     YAMLReader::YAMLReadOptions options;
     vector<YAML::Node> yaml_docs;  // Each document in the YAML file
     vector<string> names;          // Column names
@@ -24,10 +24,10 @@ struct YAMLReadRowsBindData : public TableFunctionData {
 
 // Bind data structure for read_yaml_objects
 struct YAMLReadBindData : public TableFunctionData {
-    YAMLReadBindData(string file_path, YAMLReader::YAMLReadOptions options) 
+    YAMLReadBindData(Value file_path, YAMLReader::YAMLReadOptions options) 
         : file_path(std::move(file_path)), options(options) {}
 
-    string file_path;
+    Value file_path;  // Store the original file path value
     YAMLReader::YAMLReadOptions options;
     vector<YAML::Node> yaml_docs;
     vector<string> names;
@@ -204,71 +204,41 @@ vector<YAML::Node> YAMLReader::RecoverPartialYAMLDocuments(const char* yaml_cont
     vector<YAML::Node> valid_docs;
     std::string yaml_str = yaml_content;
     
-    // Split by document separator
+    // Split the content by document markers
     std::vector<std::string> doc_strings;
-    
-    // Start by normalizing line endings
-    std::string normalized;
-    for (char c : yaml_str) {
-        if (c == '\r') {
-            continue; // Skip carriage returns
-        }
-        normalized += c;
-    }
-    
-    // Add a newline if there isn't one at the end
-    if (!normalized.empty() && normalized.back() != '\n') {
-        normalized += '\n';
-    }
-    
-    // Split by "---" document separators
     size_t pos = 0;
-    size_t start = 0;
+    size_t prev = 0;
     
-    // Handle the first document if it doesn't start with "---"
-    if (normalized.substr(0, 4) != "---\n" && normalized.substr(0, 4) != "--- ") {
-        pos = normalized.find("\n---");
+    // Handle first document if it doesn't start with '---'
+    if (yaml_str.find("---") != 0) {
+        pos = yaml_str.find("\n---");
         if (pos != std::string::npos) {
-            doc_strings.push_back(normalized.substr(0, pos + 1)); // Include the trailing newline
-            start = pos + 1;
+            doc_strings.push_back(yaml_str.substr(0, pos));
+            prev = pos + 1;
         }
     }
     
     // Find all document markers
-    while ((pos = normalized.find("\n---", start)) != std::string::npos) {
-        size_t doc_start = pos + 1; // Start of the "---" marker
-        
-        // Find the end of this document (next "---" or end of string)
-        size_t doc_end = normalized.find("\n---", doc_start + 4);
-        
-        if (doc_end == std::string::npos) {
-            // Last document in the file
-            doc_strings.push_back(normalized.substr(doc_start));
+    while ((pos = yaml_str.find("\n---", prev)) != std::string::npos) {
+        size_t end = yaml_str.find("\n---", pos + 4);
+        if (end == std::string::npos) {
+            doc_strings.push_back(yaml_str.substr(pos + 1));
             break;
-        } else {
-            // Document ends at the next marker
-            doc_strings.push_back(normalized.substr(doc_start, doc_end - doc_start + 1)); // Include the trailing newline
-            start = doc_end + 1;
         }
+        doc_strings.push_back(yaml_str.substr(pos + 1, end - pos - 1));
+        prev = end + 1;
     }
     
-    // If no document separators were found, treat the whole content as one document
-    if (doc_strings.empty()) {
-        doc_strings.push_back(normalized);
+    // Add the last document if not already added
+    if (prev < yaml_str.length() && doc_strings.empty()) {
+        doc_strings.push_back(yaml_str);
     }
     
     // Try to parse each document individually
     for (const auto& doc_str : doc_strings) {
         try {
-            // Skip empty documents
-            if (doc_str.find_first_not_of(" \t\n\r---") == std::string::npos) {
-                continue;
-            }
-            
             YAML::Node doc = YAML::Load(doc_str);
-            if (doc.IsDefined()) {
-                valid_docs.push_back(doc);
-            }
+            valid_docs.push_back(doc);
         } catch (const YAML::Exception &) {
             // Skip invalid documents
         }
@@ -298,69 +268,84 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node>& docs, b
     return row_nodes;
 }
 
-// Helper functions for file globbing and file list handling
-vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value) {
+// Helper function to get files to process from path value (string or list)
+vector<string> YAMLReader::GetFilesToProcess(ClientContext &context, const Value &path_value, bool recursive) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
     
-    // Handle list of files
-    if (path_value.type().id() == LogicalTypeId::LIST) {
-        auto &file_list = ListValue::GetChildren(path_value);
-        for (auto &file_value : file_list) {
-            if (file_value.type().id() != LogicalTypeId::VARCHAR) {
-                throw BinderException("File list must contain string values");
-            }
-            
-            string file_path = file_value.ToString();
-            if (fs.FileExists(file_path)) {
-                result.push_back(file_path);
-            } else {
-                throw IOException("File does not exist: " + file_path);
-            }
+    if (path_value.type().id() == LogicalTypeId::VARCHAR) {
+        // Single path (string)
+        string path = path_value.GetValue<string>();
+        
+        if (path.empty()) {
+            throw IOException("Empty file path provided");
         }
-    } 
-    // Handle string path (file, glob pattern, or directory)
-    else if (path_value.type().id() == LogicalTypeId::VARCHAR) {
-        string path = path_value.ToString();
         
         // Handle glob patterns
         if (path.find('*') != string::npos || path.find('?') != string::npos) {
-            auto globbed_files = fs.Glob(path);
+            auto globbed_files = fs.Glob(path, recursive ? GlobFlags::GLOB_RECURSE : GlobFlags::GLOB_DEFAULT);
             for (auto &file : globbed_files) {
                 // Skip directories
                 if (!fs.DirectoryExists(file)) {
                     result.push_back(file);
                 }
             }
-        } 
-        // Handle directory
-        else if (fs.DirectoryExists(path)) {
-            // Get all .yaml files
-            auto yaml_files = fs.Glob(path + "/*.yaml");
-            for (auto &file : yaml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+        } else if (fs.FileExists(path)) {
+            // Single file
+            result.push_back(path);
+        } else if (fs.DirectoryExists(path)) {
+            // Directory - look for .yaml and .yml files
+            vector<string> extensions = {".yaml", ".yml"};
+            for (const auto &ext : extensions) {
+                string glob_pattern = path;
+                if (glob_pattern.back() != '/' && glob_pattern.back() != '\\') {
+                    glob_pattern += '/';
+                }
+                glob_pattern += "*" + ext;
+                
+                auto files = fs.Glob(glob_pattern, recursive ? GlobFlags::GLOB_RECURSE : GlobFlags::GLOB_DEFAULT);
+                for (auto &file : files) {
+                    if (!fs.DirectoryExists(file)) {
+                        result.push_back(file);
+                    }
                 }
             }
             
-            // Also get .yml files
-            auto yml_files = fs.Glob(path + "/*.yml");
-            for (auto &file : yml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
-                }
+            if (result.empty()) {
+                throw IOException("No YAML files found in directory: " + path);
             }
-        }
-        // Handle single file
-        else if (fs.FileExists(path)) {
-            result.push_back(path);
-        } 
-        else {
+        } else {
             throw IOException("File or directory does not exist: " + path);
         }
-    } 
-    else {
-        throw BinderException("File path must be a string or list of strings");
+    } else if (path_value.type().id() == LogicalTypeId::LIST) {
+        // List of paths
+        auto &path_list = ListValue::GetChildren(path_value);
+        
+        if (path_list.empty()) {
+            throw IOException("Empty list of file paths provided");
+        }
+        
+        for (const auto &path_item : path_list) {
+            if (path_item.type().id() != LogicalTypeId::VARCHAR) {
+                throw IOException("File path must be a string, got: " + path_item.ToString());
+            }
+            
+            string path = path_item.GetValue<string>();
+            
+            if (path.empty()) {
+                throw IOException("Empty file path in list");
+            }
+            
+            // Process each path in the list
+            vector<string> files = GetFilesToProcess(context, Value(path), recursive);
+            result.insert(result.end(), files.begin(), files.end());
+        }
+    } else {
+        throw IOException("File path must be a string or list of strings, got: " + path_value.ToString());
+    }
+    
+    if (result.empty()) {
+        throw IOException("No YAML files found matching the provided path(s)");
     }
     
     return result;
@@ -388,36 +373,19 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
     fs.Read(*handle, buffer.get(), file_size);
     buffer[file_size] = '\0';
     
-    vector<YAML::Node> docs;
-    
     if (options.multi_document) {
-        // Parse as multi-document YAML with error recovery if needed
-        try {
-            // First attempt to parse the entire file
-            std::stringstream yaml_stream(buffer.get());
-            docs = YAML::LoadAll(yaml_stream);
-        } catch (const YAML::Exception &e) {
-            if (!options.ignore_errors) {
-                throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
-            }
-            
-            // On error with ignore_errors=true, try to recover partial documents
-            docs = RecoverPartialYAMLDocuments(buffer.get());
-        }
+        return ParseMultiDocumentYAML(buffer.get(), options.ignore_errors);
     } else {
-        // Parse as single-document YAML
         try {
             YAML::Node yaml_node = YAML::Load(buffer.get());
-            docs.push_back(yaml_node);
+            return {yaml_node};
         } catch (const YAML::Exception &e) {
             if (!options.ignore_errors) {
                 throw IOException("Error parsing YAML file: " + string(e.what()));
             }
-            // With ignore_errors=true, return empty result for single document mode
+            return {};
         }
     }
-    
-    return docs;
 }
 
 unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, 
@@ -429,24 +397,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
         throw BinderException("read_yaml requires a file path parameter");
     }
     
-    // Extract the file path parameter
-    Value path_value = input.inputs[0];
-    string file_path;
-    
-    // For display purposes and bind data, we'll use a string representation
-    if (path_value.type().id() == LogicalTypeId::VARCHAR) {
-        file_path = path_value.ToString();
-    } else if (path_value.type().id() == LogicalTypeId::LIST) {
-        // For lists, use the first file for the bind data's file_path (just for reference)
-        auto &file_list = ListValue::GetChildren(path_value);
-        if (!file_list.empty()) {
-            file_path = file_list[0].ToString() + " and others";
-        } else {
-            throw BinderException("File list cannot be empty");
-        }
-    } else {
-        throw BinderException("File path must be a string or list of strings");
-    }
+    // Get the file path value (string or list)
+    auto path_value = input.inputs[0];
     
     YAMLReadOptions options;
     
@@ -469,23 +421,23 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     if (input.named_parameters.count("expand_root_sequence")) {
         options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
     }
-    
-    // Create bind data
-    auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
-    
-    // Get files using globbing
-    vector<string> files;
-    try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
-        if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
-        }
-        // With ignore_errors=true, continue with empty result
+    bool recursive = false;
+    if (input.named_parameters.count("recursive")) {
+        recursive = input.named_parameters["recursive"].GetValue<bool>();
     }
     
-    if (files.empty() && !options.ignore_errors) {
-        throw IOException("No YAML files found matching the input path");
+    // Create bind data with the original path value
+    auto result = make_uniq<YAMLReadRowsBindData>(path_value, options);
+    
+    // Get files using path value
+    vector<string> files;
+    try {
+        files = GetFilesToProcess(context, path_value, recursive);
+    } catch (const IOException &e) {
+        if (!options.ignore_errors) {
+            throw e;
+        }
+        // With ignore_errors=true, we continue with empty file list
     }
     
     // Vector to store all the row data items (documents or elements)
@@ -507,7 +459,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
         }
     }
     
-    // Replace the docs with our processed row_nodes
+    // Store the processed row nodes
     result->yaml_docs = row_nodes;
     
     // Extract schema from all row nodes
@@ -578,30 +530,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
                                                TableFunctionBindInput &input,
                                                vector<LogicalType> &return_types, 
                                                vector<string> &names) {
-    // Validate primary input
-    if (input.inputs.empty()) {
-        throw BinderException("read_yaml_objects requires a file path parameter");
-    }
+    // Get the file path value (string or list)
+    auto path_value = input.inputs[0];
     
-    // Extract the file path parameter
-    Value path_value = input.inputs[0];
-    string file_path;
-    
-    // For display purposes and bind data, we'll use a string representation
-    if (path_value.type().id() == LogicalTypeId::VARCHAR) {
-        file_path = path_value.ToString();
-    } else if (path_value.type().id() == LogicalTypeId::LIST) {
-        // For lists, use the first file for the bind data's file_path (just for reference)
-        auto &file_list = ListValue::GetChildren(path_value);
-        if (!file_list.empty()) {
-            file_path = file_list[0].ToString() + " and others";
-        } else {
-            throw BinderException("File list cannot be empty");
-        }
-    } else {
-        throw BinderException("File path must be a string or list of strings");
-    }
-
     YAMLReadOptions options;
 
     // Parse optional parameters
@@ -613,30 +544,27 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     }
     if (input.named_parameters.count("maximum_object_size")) {
         options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
-        if (options.maximum_object_size <= 0) {
-            throw BinderException("maximum_object_size must be a positive integer");
-        }
     }
     if (input.named_parameters.count("multi_document")) {
         options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
     }
+    bool recursive = false;
+    if (input.named_parameters.count("recursive")) {
+        recursive = input.named_parameters["recursive"].GetValue<bool>();
+    }
 
-    // Create bind data
-    auto result = make_uniq<YAMLReadBindData>(file_path, options);
+    // Create bind data with the original path value
+    auto result = make_uniq<YAMLReadBindData>(path_value, options);
 
-    // Get files using globbing
+    // Get files using path value
     vector<string> files;
     try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
+        files = GetFilesToProcess(context, path_value, recursive);
+    } catch (const IOException &e) {
         if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
+            throw e;
         }
-        // With ignore_errors=true, continue with empty result
-    }
-    
-    if (files.empty() && !options.ignore_errors) {
-        throw IOException("No YAML files found matching the input path");
+        // With ignore_errors=true, we continue with empty file list
     }
     
     // Vector to store all YAML documents
@@ -809,6 +737,7 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
     read_yaml.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
     read_yaml.named_parameters["multi_document"] = LogicalType::BOOLEAN;
     read_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
+    read_yaml.named_parameters["recursive"] = LogicalType::BOOLEAN;
     
     // Register the function
     ExtensionUtil::RegisterFunction(db, read_yaml);
@@ -819,6 +748,7 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
     read_yaml_objects.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
     read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
     read_yaml_objects.named_parameters["multi_document"] = LogicalType::BOOLEAN;
+    read_yaml_objects.named_parameters["recursive"] = LogicalType::BOOLEAN;
     ExtensionUtil::RegisterFunction(db, read_yaml_objects);
 }
 

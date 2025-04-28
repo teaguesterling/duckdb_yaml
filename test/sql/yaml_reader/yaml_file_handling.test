@@ -1,0 +1,104 @@
+# name: test/yaml/yaml_file_handling.test
+# description: Tests for file handling capabilities of YAML reader
+# group: [yaml]
+
+require yaml
+
+# Test with single file
+statement ok
+CREATE TABLE single_file AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml');
+
+query I
+SELECT name FROM single_file;
+----
+John
+
+# Test with glob pattern
+statement ok
+CREATE TABLE glob_files AS 
+SELECT * FROM read_yaml('test/yaml/globs/*.yaml');
+
+# Should find multiple files, check that we have records from different files
+query I
+SELECT COUNT(DISTINCT name) > 1 FROM glob_files;
+----
+true
+
+# Test with file list (array of files)
+statement ok
+CREATE TABLE file_list AS 
+SELECT * FROM read_yaml(['test/yaml/simple.yaml', 'test/yaml/nested.yaml']);
+
+# Should have both simple and nested data
+query I
+SELECT name FROM file_list WHERE name IS NOT NULL;
+----
+John
+
+query I
+SELECT person.name FROM file_list WHERE person.name IS NOT NULL;
+----
+John Doe
+
+# Test with directory path
+statement ok
+CREATE TABLE dir_files AS 
+SELECT * FROM read_yaml('test/yaml/globs');
+
+# Should have records (same as glob)
+query I
+SELECT COUNT(*) > 0 FROM dir_files;
+----
+true
+
+# Test error handling with mix of valid and invalid files
+statement ok
+CREATE TABLE mixed_valid_invalid AS 
+SELECT * FROM read_yaml(['test/yaml/simple.yaml', 'test/yaml/invalid.yaml', 'test/yaml/nested.yaml'], ignore_errors=true);
+
+# Should have both simple and nested data, skipping the invalid file
+query I
+SELECT name FROM mixed_valid_invalid WHERE name IS NOT NULL;
+----
+John
+
+query I
+SELECT person.name FROM mixed_valid_invalid WHERE person.name IS NOT NULL;
+----
+John Doe
+
+# Test with non-existent file with ignore_errors
+statement ok
+CREATE TABLE ignored_missing AS 
+SELECT * FROM read_yaml(['test/yaml/simple.yaml', 'non_existent_file.yaml'], ignore_errors=true);
+
+query I
+SELECT name FROM ignored_missing;
+----
+John
+
+# Test with non-existent file without ignore_errors (should fail)
+statement error
+SELECT * FROM read_yaml(['test/yaml/simple.yaml', 'non_existent_file.yaml']);
+
+# Test with multi-document partial errors
+statement ok
+CREATE TABLE partial_invalid_docs AS 
+SELECT * FROM read_yaml('test/yaml/partial_invalid.yaml', ignore_errors=true);
+
+# Should return the valid document after the invalid one
+query II
+SELECT id, name FROM partial_invalid_docs;
+----
+1	Recovered
+
+# Test with empty results due to all files being invalid
+statement ok
+CREATE TABLE all_invalid AS 
+SELECT * FROM read_yaml(['test/yaml/invalid.yaml'], ignore_errors=true);
+
+query I
+SELECT COUNT(*) FROM all_invalid;
+----
+0
