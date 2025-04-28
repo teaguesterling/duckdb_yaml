@@ -256,7 +256,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         
         // Handle glob patterns
         if (path.find('*') != string::npos || path.find('?') != string::npos) {
-            auto globbed_files = fs.GlobFiles(path, context);
+            auto globbed_files = fs.Glob(path);
             for (auto &file : globbed_files) {
                 // Skip directories
                 if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
@@ -267,7 +267,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         // Handle directory
         else if (fs.DirectoryExists(path)) {
             // Get all .yaml files
-            auto yaml_files = fs.GlobFiles(path + "/*.yaml", context);
+            auto yaml_files = fs.Glob(path + "/*.yaml");
             for (auto &file : yaml_files) {
                 if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
                     result.push_back(HACK_GLOB_PATH(file));
@@ -275,7 +275,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             }
             
             // Also get .yml files
-            auto yml_files = fs.GlobFiles(path + "/*.yml", context);
+            auto yml_files = fs.Glob(path + "/*.yml");
             for (auto &file : yml_files) {
                 if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
                     result.push_back(HACK_GLOB_PATH(file));
