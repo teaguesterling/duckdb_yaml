@@ -56,3 +56,5 @@ SELECT id, name FROM multi_doc_partial_invalid WHERE name = 'John';
 # Test with same scenario but with ignore_errors=false (should fail)
 statement error
 SELECT * FROM read_yaml('test/yaml/partial_invalid.yaml');
+----
+IO Error: Error processing YAML file 'test/yaml/partial_invalid.yaml': 
