@@ -495,16 +495,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
 
     // Get files using globbing
-    vector<string> files;
-    try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
-        if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
-        }
-        // With ignore_errors=true, continue with empty result
-    }
-
+    auto files = GlobFiles(context, path_value);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
@@ -532,6 +523,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     result->yaml_docs = row_nodes;
 
     // Handle empty result set early
+    // TODO: This is very messy and could probably be drastically simplified
+    // or at the very least, moved into a helper function
     if (result->yaml_docs.empty()) {
         if (options.ignore_errors) {
             // With ignore_errors=true, return an empty table with a dummy structure
@@ -731,16 +724,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     auto result = make_uniq<YAMLReadBindData>(file_path, options);
 
     // Get files using globbing
-    vector<string> files;
-    try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
-        if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
-        }
-        // With ignore_errors=true, continue with empty result
-    }
-
+    auto files = GlobFiles(context, path_value);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
