@@ -495,7 +495,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
 
     // Get files using globbing
-    auto files = GlobFiles(context, path_value);
+    auto files = GlobFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
