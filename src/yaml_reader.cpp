@@ -223,7 +223,7 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
 }
 
 // Helper functions for file globbing and file list handling
-vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value) {
+vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value, bool only_existing) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
     
@@ -238,7 +238,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             string file_path = file_value.ToString();
             if (fs.FileExists(file_path)) {
                 result.push_back(file_path);
-            } else {
+            } else if (!only_existing) {
                 throw IOException("File does not exist: " + file_path);
             }
         }
@@ -279,7 +279,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         else if (fs.FileExists(path)) {
             result.push_back(path);
         } 
-        else {
+        else if(!only_existing) {
             throw IOException("File or directory does not exist: " + path);
         }
     } 
@@ -724,7 +724,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     auto result = make_uniq<YAMLReadBindData>(file_path, options);
 
     // Get files using globbing
-    auto files = GlobFiles(context, path_value);
+    auto files = GlobFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
