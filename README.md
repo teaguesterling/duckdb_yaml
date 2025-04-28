@@ -2,16 +2,14 @@
 
 This extension allows DuckDB to read YAML files directly into tables. It provides a simple interface for accessing YAML data within SQL queries.
 
-## Meta Considerations
-
-At a more meta level, this extension is an exercise in having Claude.ai create an extension for me, using other extensions as examples, while I try to delay diving into the code myself for as long as possible. The inital chat I used to start this project is [shared here](https://claude.ai/share/b7778f6e-cce4-4bba-9809-8682468a6940). Eventually, I created a project with integrations into this GitHub repository, which prevents additional sharing, but I will add the chats to this repository for reference.
-
 ## Features
 
-- Read YAML files into DuckDB tables
+- Read YAML files into DuckDB tables with `read_yaml`
+- Preserve document structure with `read_yaml_objects`
 - Auto-detect data types from YAML content
 - Support for multi-document YAML files
-- Robust error handling
+- Handle top-level sequences as rows
+- Robust parameter handling and error recovery
 
 ## Usage
 
@@ -19,76 +17,121 @@ At a more meta level, this extension is an exercise in having Claude.ai create a
 
 ```sql
 LOAD yaml;
+```
 
--- Read from a file
+### Reading YAML Files
+
+#### Basic Usage
+
+```sql
+-- Read from a file (creates a row per document or sequence item)
 SELECT * FROM read_yaml('path/to/file.yaml');
 
--- Read from a literal string
-SELECT * FROM read_yaml('
-name: John
-age: 30
-');
+-- Read preserving document structure (one row per file)
+SELECT * FROM read_yaml_objects('path/to/file.yaml');
+```
 
+#### With Parameters
+
+```sql
 -- Auto-detect types (default: true)
 SELECT * FROM read_yaml('file.yaml', auto_detect=true);
 
 -- Handle multiple YAML documents (default: true)
 SELECT * FROM read_yaml('file.yaml', multi_document=true);
 
+-- Expand top-level sequences into rows (default: true)
+SELECT * FROM read_yaml('file.yaml', expand_root_sequence=true);
+
 -- Ignore parsing errors (default: false)
 SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 
 -- Set maximum file size in bytes (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
+```
 
--- Access scalar values
-SELECT yaml->name, yaml->age FROM yaml_table;
+### Accessing YAML Data
 
--- Access array elements
-SELECT yaml->tags[0], yaml->tags[1] FROM yaml_table;
+The reader converts YAML structures to native DuckDB types:
+
+```sql
+-- Access scalar values (using DuckDB's dot notation)
+SELECT name, age FROM yaml_table;
+
+-- Access array elements (1-based indexing)
+SELECT tags[1], tags[2] FROM yaml_table;
 
 -- Access nested structures
-SELECT yaml->person->addresses[0]->city FROM yaml_table;
-
+SELECT person.addresses[1].city FROM yaml_table;
 ```
 
-## Limitations
+### Multi-document and Sequence Handling
 
-This is an alpha version with the following limitations:
+YAML files can contain multiple documents separated by `---` or top-level sequences. Both are handled automatically:
 
- - Limited type detection
- - No support for YAML anchors and aliases
- - No YAML to JSON conversion
+```yaml
+# Multi-document example
+---
+id: 1
+name: John
+---
+id: 2
+name: Jane
 
-## Building
-
-### Managing dependencies
-DuckDB extensions uses VCPKG for dependency management. Enabling VCPKG is very simple: follow the [installation instructions](https://vcpkg.io/en/getting-started) or just run the following:
-```shell
-git clone https://github.com/Microsoft/vcpkg.git
-./vcpkg/bootstrap-vcpkg.sh
-export VCPKG_TOOLCHAIN_PATH=`pwd`/vcpkg/scripts/buildsystems/vcpkg.cmake
+# Sequence example
+- id: 1
+  name: John
+- id: 2
+  name: Jane
 ```
-Note: VCPKG is only required for extensions that want to rely on it for dependency management. If you want to develop an extension without dependencies, or want to do your own dependency management, just skip this step. Note that the example extension uses VCPKG to build with a dependency for instructive purposes, so when skipping this step the build may not work without removing the dependency.
 
-### Build steps
-Now to build the extension, run:
-```sh
+Both formats will produce the same result when read with `read_yaml()`:
+
+```sql
+SELECT id, name FROM read_yaml('file.yaml');
+```
+
+Result:
+```
+┌─────┬──────┐
+│ id  │ name │
+├─────┼──────┤
+│ 1   │ John │
+│ 2   │ Jane │
+└─────┴──────┘
+```
+
+## Building from Source
+
+This extension uses the DuckDB extension framework. To build:
+
+```bash
 make
 ```
-The main binaries that will be built are:
-```sh
-./build/release/duckdb
-./build/release/test/unittest
-./build/release/extension/yaml/yaml.duckdb_extension
-```
-- `duckdb` is the binary for the duckdb shell with the extension code automatically loaded.
-- `unittest` is the test runner of duckdb. Again, the extension is already linked into the binary.
-- `yaml.duckdb_extension` is the loadable binary as it would be distributed.
 
-## Running the tests
-Different tests can be created for DuckDB extensions. The primary way of testing DuckDB extensions should be the SQL tests in `./test/sql`. These SQL tests can be run using:
-```sh
+## Testing
+
+To run the test suite:
+
+```bash
 make test
 ```
 
+## Limitations and Future Work
+
+Current limitations:
+- No support for YAML anchors and aliases
+- No direct YAML to JSON conversion
+- Limited type detection
+- No streaming for large files
+
+Planned features:
+- YAML type system and conversion functions
+- Improved type detection for dates, timestamps, etc.
+- Support for YAML-specific features
+- Path expressions and extraction functions
+- Streaming for large files
+
+## License
+
+This extension is released under the MIT License.

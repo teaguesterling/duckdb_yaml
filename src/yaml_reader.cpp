@@ -29,7 +29,7 @@ struct YAMLReadBindData : public TableFunctionData {
 
     string file_path;
     YAMLReader::YAMLReadOptions options;
-    vector<YAML::Node> yaml_nodes;
+    vector<YAML::Node> yaml_docs;
     vector<string> names;
     vector<LogicalType> types;
     idx_t current_row = 0;
@@ -181,17 +181,25 @@ Value YAMLReader::YAMLNodeToValue(YAML::Node node, LogicalType target_type) {
     }
 }
 
-// Bind functions
 unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, 
                                                   TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, 
                                                   vector<string> &names) {
     auto &fs = FileSystem::GetFileSystem(context);
-
+    
+    // Validate primary input
+    if (input.inputs.empty()) {
+        throw BinderException("read_yaml requires a file path parameter");
+    }
+    
     // Extract parameters
     auto file_path = input.inputs[0].GetValue<string>();
+    if (file_path.empty()) {
+        throw BinderException("read_yaml requires a non-empty file path");
+    }
+    
     YAMLReadOptions options;
-
+    
     // Parse optional parameters
     if (input.named_parameters.count("auto_detect")) {
         options.auto_detect_types = input.named_parameters["auto_detect"].GetValue<bool>();
@@ -201,6 +209,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     }
     if (input.named_parameters.count("maximum_object_size")) {
         options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
+        if (options.maximum_object_size <= 0) {
+            throw BinderException("maximum_object_size must be a positive integer");
+        }
     }
     if (input.named_parameters.count("multi_document")) {
         options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
@@ -208,29 +219,55 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     if (input.named_parameters.count("expand_root_sequence")) {
         options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
     }
-
+    
     // Create bind data
-    auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
-
+    auto result = make_uniq<YAMLReadBindData>(file_path, options);
+    
     // Read YAML file
     try {
+        // Check if file exists
+        if (!fs.FileExists(file_path)) {
+            throw IOException("File does not exist: " + file_path);
+        }
+        
         auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
         idx_t file_size = fs.GetFileSize(*handle);
-
+        
         if (file_size > options.maximum_object_size) {
-            throw IOException("YAML file size exceeds maximum allowed size");
+            throw IOException("YAML file size (" + to_string(file_size) + " bytes) exceeds maximum allowed size (" + 
+                            to_string(options.maximum_object_size) + " bytes)");
         }
-
+        
         auto buffer = unique_ptr<char[]>(new char[file_size + 1]);
         fs.Read(*handle, buffer.get(), file_size);
         buffer[file_size] = '\0';
-
+        
+        // Vector to store all the row data items (documents or elements)
+        vector<YAML::Node> row_nodes;
+        bool parse_error = false;
+        
         if (options.multi_document) {
             // Parse as multi-document YAML
             std::stringstream yaml_stream(buffer.get());
             try {
-                result->yaml_docs = YAML::LoadAll(yaml_stream);
+                auto docs = YAML::LoadAll(yaml_stream);
+                
+                // Process each document
+                for (auto &doc : docs) {
+                    if (doc.IsSequence() && options.expand_root_sequence) {
+                        // Each item in the sequence becomes a row
+                        for (size_t i = 0; i < doc.size(); i++) {
+                            if (doc[i].IsMap()) { // Only add map nodes as rows
+                                row_nodes.push_back(doc[i]);
+                            }
+                        }
+                    } else if (doc.IsMap()) {
+                        // Document itself becomes a row
+                        row_nodes.push_back(doc);
+                    }
+                }
             } catch (const YAML::Exception &e) {
+                parse_error = true;
                 if (!options.ignore_errors) {
                     throw IOException("Error parsing YAML file: " + string(e.what()));
                 }
@@ -239,55 +276,46 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
             // Parse as single-document YAML
             try {
                 YAML::Node yaml_node = YAML::Load(buffer.get());
-                result->yaml_docs.push_back(yaml_node);
+                
+                if (yaml_node.IsSequence() && options.expand_root_sequence) {
+                    // Each item in the sequence becomes a row
+                    for (size_t i = 0; i < yaml_node.size(); i++) {
+                        if (yaml_node[i].IsMap()) { // Only add map nodes as rows
+                            row_nodes.push_back(yaml_node[i]);
+                        }
+                    }
+                } else if (yaml_node.IsMap()) {
+                    // Document itself becomes a row
+                    row_nodes.push_back(yaml_node);
+                }
             } catch (const YAML::Exception &e) {
+                parse_error = true;
                 if (!options.ignore_errors) {
                     throw IOException("Error parsing YAML file: " + string(e.what()));
                 }
             }
         }
+        
+        // Replace the docs with our processed row_nodes
+        result->yaml_docs = row_nodes;
     } catch (const std::exception &e) {
-        throw IOException("Error reading YAML file: " + string(e.what()));
-    }
-
-    if (result->yaml_docs.empty()) {
-        // Empty result
-        return std::move(result);
-    }
-
-    // Vector to store all the row data items
-    vector<YAML::Node> row_nodes;
-    
-    // Process each document
-    for (auto &doc : result->yaml_docs) {
-        if (doc.IsSequence() && options.expand_root_sequence) {
-            // Each item in the sequence becomes a row
-            for (size_t i = 0; i < doc.size(); i++) {
-                if (doc[i].IsMap()) {  // Only add map nodes as rows
-                    row_nodes.push_back(doc[i]);
-                }
-            }
-        } else {
-            // Document itself becomes a row
-            if (doc.IsMap()) {  // Only add map nodes as rows
-                row_nodes.push_back(doc);
-            }
+        if (!options.ignore_errors) {
+            throw IOException("Error reading YAML file: " + string(e.what()));
         }
+        // With ignore_errors=true, we allow continuing with empty result
     }
-    
-    // Replace original docs with processed row nodes
-    result->yaml_docs = row_nodes;
     
     // Extract schema from all row nodes
     unordered_map<string, LogicalType> column_types;
     
-    // Better schema extraction
+    // Process each row node to build the schema
     for (auto &node : result->yaml_docs) {
         // Process each top-level key as a potential column
         for (auto it = node.begin(); it != node.end(); ++it) {
             std::string key = it->first.Scalar();
             YAML::Node value = it->second;
             
+            // Detect the type of this value
             LogicalType value_type;
             if (options.auto_detect_types) {
                 value_type = DetectYAMLType(value);
@@ -306,33 +334,38 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
         }
     }
     
-    // Add a fallback column if none were found
-    if (column_types.empty() && !result->yaml_docs.empty()) {
-        column_types["value"] = options.auto_detect_types ? 
-            DetectYAMLType(result->yaml_docs[0]) : LogicalType::VARCHAR;
-    }
-
     // Build the schema
     for (auto &entry : column_types) {
         names.push_back(entry.first);
         return_types.push_back(entry.second);
     }
-
-    if (names.empty() && return_types.empty() && !result->yaml_docs.empty()) {
-        // If we couldn't extract any columns but have data, add a fallback column
-        names.emplace_back("value");
-        
-        if (options.auto_detect_types) {
-            return_types.emplace_back(DetectYAMLType(result->yaml_docs[0]));
+    
+    // If no columns were found, handle special cases
+    if (names.empty()) {
+        if (options.ignore_errors) {
+            // Return a dummy column for empty results
+            names.emplace_back("yaml");
+            return_types.emplace_back(LogicalType::STRUCT({})); // Empty struct
+        } else if (!result->yaml_docs.empty()) {
+            // This could happen with non-map documents without expand_root_sequence
+            // Add a fallback value column
+            names.emplace_back("value");
+            if (options.auto_detect_types) {
+                return_types.emplace_back(DetectYAMLType(result->yaml_docs[0]));
+            } else {
+                return_types.emplace_back(LogicalType::VARCHAR);
+            }
         } else {
-            return_types.emplace_back(LogicalType::VARCHAR);
+            // No data and no errors to ignore - just return an empty result
+            names.emplace_back("yaml");
+            return_types.emplace_back(LogicalType::STRUCT({}));
         }
     }
-
+    
     // Save the schema
     result->names = names;
     result->types = return_types;
-
+    
     return std::move(result);
 }
 
@@ -380,7 +413,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
             // Parse as multi-document YAML
             std::stringstream yaml_stream(buffer.get());
             try {
-                result->yaml_nodes = YAML::LoadAll(yaml_stream);
+                result->yaml_docs = YAML::LoadAll(yaml_stream);
             } catch (const YAML::Exception &e) {
                 if (!options.ignore_errors) {
                     throw IOException("Error parsing YAML file: " + string(e.what()));
@@ -390,7 +423,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
             // Parse as single-document YAML
             try {
                 YAML::Node yaml_node = YAML::Load(buffer.get());
-                result->yaml_nodes.push_back(yaml_node);
+                result->yaml_docs.push_back(yaml_node);
             } catch (const YAML::Exception &e) {
                 if (!options.ignore_errors) {
                     throw IOException("Error parsing YAML file: " + string(e.what()));
@@ -401,7 +434,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
         throw IOException("Error reading YAML file: " + string(e.what()));
     }
 
-    if (result->yaml_nodes.empty()) {
+    if (result->yaml_docs.empty()) {
         // Empty result
         names.emplace_back("yaml");
         return_types.emplace_back(LogicalType::VARCHAR);
@@ -412,7 +445,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     if (options.auto_detect_types) {
         // For each document, we create a column with the document structure
         names.emplace_back("yaml");
-        auto doc_type = DetectYAMLType(result->yaml_nodes[0]);
+        auto doc_type = DetectYAMLType(result->yaml_docs[0]);
         return_types.emplace_back(doc_type);
     } else {
         // If not auto-detecting, just use VARCHAR for the whole document
@@ -431,51 +464,78 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
 
 void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput &data_p, 
                                    DataChunk &output) {
-    auto &bind_data = (YAMLReadRowsBindData &)*data_p.bind_data;
-
-    // If we've processed all documents, we're done
-    if (bind_data.current_doc >= bind_data.yaml_docs.size()) {
+    auto &bind_data = (YAMLReadBindData &)*data_p.bind_data;
+    
+    // If we've processed all rows, we're done
+    if (bind_data.current_row >= bind_data.yaml_docs.size()) {
         output.SetCardinality(0);
         return;
     }
-
+    
+    // Process up to STANDARD_VECTOR_SIZE rows at a time
+    idx_t count = 0;
+    idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, bind_data.yaml_docs.size() - bind_data.current_row);
+    
     // Set up the output chunk
     output.Reset();
-
-    // Get the current document
-    YAML::Node doc = bind_data.yaml_docs[bind_data.current_doc];
-
-    // Move to the next document for the next call
-    bind_data.current_doc++;
-
-    // If the document is not a map, we can't process it as rows
-    if (!doc.IsMap()) {
+    
+    // Special case: if we have a dummy column due to ignore_errors=true, just return empty result
+    if (bind_data.names.size() == 1 && 
+        (bind_data.names[0] == "yaml" && bind_data.types[0].id() == LogicalTypeId::STRUCT && 
+         StructType::GetChildTypes(bind_data.types[0]).empty())) {
+        // Just return empty result for dummy columns with no data
         output.SetCardinality(0);
+        bind_data.current_row = bind_data.yaml_docs.size(); // Mark as completed
         return;
     }
-
-    // Process the document into a row
-    for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
-        string &name = bind_data.names[col_idx];
-        LogicalType &type = bind_data.types[col_idx];
-
-        // Get the value for this column
-        YAML::Node value = doc[name];
-
-        // Convert to a DuckDB value
-        Value duckdb_value;
-        if (value) {
-            duckdb_value = YAMLNodeToValue(value, type);
-        } else {
-            duckdb_value = Value(type); // NULL value
+    
+    // Handle value column specially (non-map documents)
+    if (bind_data.names.size() == 1 && bind_data.names[0] == "value") {
+        for (idx_t i = 0; i < max_count; i++) {
+            // Get the current YAML node
+            YAML::Node node = bind_data.yaml_docs[bind_data.current_row + i];
+            
+            // Convert to DuckDB value
+            Value val = YAMLNodeToValue(node, bind_data.types[0]);
+            
+            // Add to output
+            output.SetValue(0, count, val);
+            count++;
         }
-
-        // Add to output
-        output.SetValue(col_idx, 0, duckdb_value);
+    } else {
+        // Normal case - process map documents
+        for (idx_t i = 0; i < max_count; i++) {
+            // Get the current YAML node
+            YAML::Node node = bind_data.yaml_docs[bind_data.current_row + i];
+            
+            // Process each column
+            for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
+                string &name = bind_data.names[col_idx];
+                LogicalType &type = bind_data.types[col_idx];
+                
+                // Get the value for this column
+                YAML::Node value = node[name];
+                
+                // Convert to DuckDB value
+                Value duckdb_value;
+                if (value) {
+                    duckdb_value = YAMLNodeToValue(value, type);
+                } else {
+                    duckdb_value = Value(type); // NULL value
+                }
+                
+                // Add to output
+                output.SetValue(col_idx, count, duckdb_value);
+            }
+            count++;
+        }
     }
-
-    // Set cardinality
-    output.SetCardinality(1);
+    
+    // Update current row
+    bind_data.current_row += count;
+    
+    // Set the cardinality
+    output.SetCardinality(count);
 }
 
 void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &data_p, 
@@ -483,14 +543,14 @@ void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &da
     auto &bind_data = (YAMLReadBindData &)*data_p.bind_data;
 
     // If we've processed all rows, we're done
-    if (bind_data.current_row >= bind_data.yaml_nodes.size()) {
+    if (bind_data.current_row >= bind_data.yaml_docs.size()) {
         output.SetCardinality(0);
         return;
     }
 
     // Process up to STANDARD_VECTOR_SIZE rows at a time
     idx_t count = 0;
-    idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, bind_data.yaml_nodes.size() - bind_data.current_row);
+    idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, bind_data.yaml_docs.size() - bind_data.current_row);
 
     // Set up the output chunk
     output.Reset();
@@ -498,7 +558,7 @@ void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &da
     // Fill the output
     for (idx_t i = 0; i < max_count; i++) {
         // Get the current YAML node
-        YAML::Node node = bind_data.yaml_nodes[bind_data.current_row + i];
+        YAML::Node node = bind_data.yaml_docs[bind_data.current_row + i];
 
         // Convert to DuckDB value
         Value val = YAMLNodeToValue(node, bind_data.types[0]);
@@ -516,6 +576,18 @@ void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &da
 }
 
 void YAMLReader::RegisterFunction(DatabaseInstance &db) {
+    // Create read_yaml table function
+    TableFunction read_yaml("read_yaml", {LogicalType::VARCHAR}, YAMLReadRowsFunction, YAMLReadRowsBind);
+    
+    // Add optional named parameters
+    read_yaml.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
+    read_yaml.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+    read_yaml.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
+    read_yaml.named_parameters["multi_document"] = LogicalType::BOOLEAN;
+    read_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
+    
+    // Register the function
+    ExtensionUtil::RegisterFunction(db, read_yaml);
 
     // Register the object-based reader 
     TableFunction read_yaml_objects("read_yaml_objects", {LogicalType::VARCHAR}, YAMLReadFunction, YAMLReadBind);
@@ -524,15 +596,6 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
     read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
     read_yaml_objects.named_parameters["multi_document"] = LogicalType::BOOLEAN;
     ExtensionUtil::RegisterFunction(db, read_yaml_objects);
-
-    // Register the row-based reader
-    TableFunction read_yaml("read_yaml", {LogicalType::VARCHAR}, YAMLReadRowsFunction, YAMLReadRowsBind);
-    read_yaml.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-    read_yaml.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-    read_yaml.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
-    read_yaml.named_parameters["multi_document"] = LogicalType::BOOLEAN;
-    read_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
-    ExtensionUtil::RegisterFunction(db, read_yaml);
 }
 
 } // namespace duckdb

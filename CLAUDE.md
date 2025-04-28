@@ -12,14 +12,15 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 
 ## Current Implementation Status
 
-- We've created a simplified version that focuses only on the core reading functionality
-- The implementation includes the YAMLReader class that provides the read_yaml function
-- We also have an object-based reader (read_yaml_objects) for compatibility with JSON-like workflows
-- Basic type detection and conversion between YAML and DuckDB types is implemented
-- Multi-document YAML support is included
+- We've created a solid implementation of the YAML reader functionality
+- The implementation includes the YAMLReader class with read_yaml and read_yaml_objects functions
+- The read_yaml function creates a table with multiple rows from YAML documents
+- The read_yaml_objects function maintains document structure as a single row per document
+- Multi-document YAML support is fully implemented
 - Top-level sequence handling is implemented, treating sequence items as rows
-- Error handling is basic but functional
-- Testing infrastructure is set up using actual YAML files in test/yaml/
+- Comprehensive parameter handling with error checking
+- Testing infrastructure using DuckDB's SQLLogicTest framework
+- Test files organized in test/yaml/ directory
 
 ## Design Decisions
 
@@ -63,11 +64,17 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 
 ## Development Strategy
 
-1. Get the basic reader working first
-2. Add comprehensive tests
-3. Add the YAML type system
-4. Add conversion to/from JSON
-5. Add more advanced features
+1. ✅ Get the basic reader working
+2. ✅ Add comprehensive tests
+3. ✅ Add robust parameter handling
+4. ✅ Implement top-level sequence support
+5. ✅ Add special case handling
+6. Next steps:
+   - Add the YAML type system
+   - Add conversion to/from JSON
+   - Add inline YAML parsing function
+   - Add advanced type detection
+   - Implement streaming for large files
 
 ## Technical Notes
 
@@ -77,6 +84,8 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - Type detection is based on the YAML node type and content
 - We use vectors of YAML nodes to support multi-document YAML files
 - Reading top-level sequences treats each sequence item as a separate row
+- Robust parameter handling with proper error messages
+- Special case handling for non-map documents and empty results
 - DuckDB-specific syntax details:
   - Structs use dot notation (e.g., `person.name`) not arrow operators (`person->name`)
   - Lists are 1-indexed (e.g., `list[1]` for first element, not `list[0]`)
@@ -93,6 +102,7 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - Test cases in test/sql/ directory follow DuckDB's SQLLogicTest conventions
 - Tests cover basic functionality, complex structures, multi-document, and top-level sequences
 - Tests use actual files rather than inline YAML strings
+- Parameter tests verify correct behavior for all supported parameters
 
 ## Reminders for Conversation Continuity
 
@@ -119,3 +129,4 @@ They're using me as a technical partner to help implement and debug this extensi
 - Initial version: Created during first conversation about simplifying the implementation
 - Update 1: Added observations about the prompter, expanded technical notes about yaml-cpp integration, and added more detail on design decisions
 - Update 2: Updated based on implementation progress - added information about test file organization, DuckDB-specific syntax for structs and lists, handling of top-level sequences, and added potential future features
+- Update 3: Updated after implementing robust parameter handling and error handling - marked completed tasks, updated current status, and refined next steps

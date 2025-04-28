@@ -1,0 +1,49 @@
+# name: test/sql/yaml_parameter_errors.test
+# description: Tests for error handling in YAML reader parameters
+# group: [yaml]
+
+require yaml
+
+# Test with invalid parameter name
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', not_a_parameter=true);
+
+# Test with invalid parameter type (string instead of boolean)
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect='yes');
+
+# Test with invalid parameter type (string instead of integer)
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', maximum_object_size='large');
+
+# Test with duplicate parameters
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=true, auto_detect=false);
+
+# Test with multiple incorrect parameters
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', invalid1=true, invalid2='test');
+
+# Test with missing required parameter (file path)
+statement error
+SELECT * FROM read_yaml();
+
+# Test with invalid file path format (object instead of string)
+statement error
+SELECT * FROM read_yaml(123);
+
+# Test ignore_errors with invalid YAML
+statement ok
+SELECT COUNT(*) FROM read_yaml('test/yaml/invalid.yaml', ignore_errors=true);
+
+# Test valid parameter combinations
+statement ok
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=true, ignore_errors=false, multi_document=true, expand_root_sequence=true);
+
+# Test with all boolean parameters set to false
+statement ok
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=false, ignore_errors=false, multi_document=false, expand_root_sequence=false);
+
+# Test maximum_object_size with valid integer value
+statement ok
+SELECT * FROM read_yaml('test/yaml/simple.yaml', maximum_object_size=1048576);
