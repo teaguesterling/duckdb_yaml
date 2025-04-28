@@ -252,8 +252,8 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             auto globbed_files = fs.Glob(path);
             for (auto &file : globbed_files) {
                 // Skip directories
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(file.path)) {
+                    result.push_back(file.path);
                 }
             }
         } 
@@ -262,16 +262,16 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             // Get all .yaml files
             auto yaml_files = fs.Glob(path + "/*.yaml");
             for (auto &file : yaml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(file.path)) {
+                    result.push_back(file.path);
                 }
             }
             
             // Also get .yml files
             auto yml_files = fs.Glob(path + "/*.yml");
             for (auto &file : yml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(file.path)) {
+                    result.push_back(file.path);
                 }
             }
         }
@@ -565,7 +565,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
                     if (file.find('*') != string::npos || file.find('?') != string::npos) {
                         auto globbed = FileSystem::GetFileSystem(context).Glob(file);
                         if (!globbed.empty()) {
-                            file = globbed[0];
+                            file = globbed[0].path;
                         }
                     }
 
