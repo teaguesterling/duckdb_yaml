@@ -20,19 +20,19 @@ Invalid Input Error: Failed to cast value: Could not convert string 'large' to I
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=true, auto_detect=false);
 ----
-Parser Error: Duplicate parameter name
+Binder Error: Duplicate parameter name: auto_detect
 
 # Test with multiple incorrect parameters
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', invalid1=true, invalid2='test');
 ----
-Binder Error: Named parameter "invalid1" not found
+Invalid named parameter "invalid2" for function read_yaml
 
 # Test with missing required parameter (file path)
 statement error
-SELECT * FROM read_yaml();
+SELECT * FROM read_yaml(NULL);
 ----
-Binder Error: No arguments provided
+Binder Error: File path must be a string or list of strings
 
 # Test with invalid file path format (object instead of string)
 statement error

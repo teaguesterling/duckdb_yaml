@@ -462,23 +462,32 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
 
     YAMLReadOptions options;
 
+    // Check for duplicate parameters
+    std::unordered_set<std::string> seen_parameters;
+    for (auto& param : input.named_parameters) {
+        if (seen_parameters.find(param.first) != seen_parameters.end()) {
+            throw BinderException("Duplicate parameter name: " + param.first);
+        }
+        seen_parameters.insert(param.first);
+    }
+
     // Parse optional parameters
-    if (input.named_parameters.count("auto_detect")) {
+    if (seen_parameters.find("auto_detect") != seen_parameters.end()) {
         options.auto_detect_types = input.named_parameters["auto_detect"].GetValue<bool>();
     }
-    if (input.named_parameters.count("ignore_errors")) {
+    if (seen_parameters.find("ignore_errors") != seen_parameters.end()) {
         options.ignore_errors = input.named_parameters["ignore_errors"].GetValue<bool>();
     }
-    if (input.named_parameters.count("maximum_object_size")) {
+    if (seen_parameters.find("maximum_object_size") != seen_parameters.end()) {
         options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
         if (options.maximum_object_size <= 0) {
             throw BinderException("maximum_object_size must be a positive integer");
         }
     }
-    if (input.named_parameters.count("multi_document")) {
+    if (seen_parameters.find("multi_document") != seen_parameters.end()) {
         options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
     }
-    if (input.named_parameters.count("expand_root_sequence")) {
+    if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
         options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
     }
 
@@ -689,21 +698,33 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
 
     YAMLReadOptions options;
 
+    // Check for duplicate parameters
+    std::unordered_set<std::string> seen_parameters;
+    for (auto& param : input.named_parameters) {
+        if (seen_parameters.count(param.first)) {
+            throw BinderException("Duplicate parameter name: " + param.first);
+        }
+        seen_parameters.insert(param.first);
+    }
+
     // Parse optional parameters
-    if (input.named_parameters.count("auto_detect")) {
+    if (seen_parameters.find("auto_detect") != seen_parameters.end()) {
         options.auto_detect_types = input.named_parameters["auto_detect"].GetValue<bool>();
     }
-    if (input.named_parameters.count("ignore_errors")) {
+    if (seen_parameters.find("ignore_errors") != seen_parameters.end()) {
         options.ignore_errors = input.named_parameters["ignore_errors"].GetValue<bool>();
     }
-    if (input.named_parameters.count("maximum_object_size")) {
+    if (seen_parameters.find("maximum_object_size") != seen_parameters.end()) {
         options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
         if (options.maximum_object_size <= 0) {
             throw BinderException("maximum_object_size must be a positive integer");
         }
     }
-    if (input.named_parameters.count("multi_document")) {
+    if (seen_parameters.find("multi_document") != seen_parameters.end()) {
         options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
+    }
+    if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
+        options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
     }
 
     // Create bind data
