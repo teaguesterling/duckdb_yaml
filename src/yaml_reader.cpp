@@ -7,7 +7,7 @@
 #include "duckdb/main/extension_util.hpp"
 
 // This is a hack to deal with some weird inconsistencies between the result type of fs.GlobFiles
-#if (__GNUC__ < 5) || defined(__clang__) || defined(_WIN32) || defined(DUCKDB_WASM_VERSION)
+#if (__GNUC__ < 5) || !defined(__clang__) || defined(_WIN32) || defined(DUCKDB_WASM_VERSION)
 #define HACK_GLOB_PATH(x) x
 #else
 #define HACK_GLOB_PATH(x) x.path
