@@ -6,6 +6,13 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension_util.hpp"
 
+// This is a hack to deal with some weird inconsistencies between the result type of fs.GlobFiles
+#if (__GNUC__ >= 5) || defined(__clang__)
+#define HACK_GLOB_PATH(x) x.path
+#else
+#define HACK_GLOB_PATH(x) x
+#endif
+
 namespace duckdb {
 
 // Bind data structure for read_yaml
@@ -249,29 +256,29 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         
         // Handle glob patterns
         if (path.find('*') != string::npos || path.find('?') != string::npos) {
-            auto globbed_files = fs.Glob(path);
+            auto globbed_files = fs.GlobFiles(path, context);
             for (auto &file : globbed_files) {
                 // Skip directories
-                if (!fs.DirectoryExists(file.path)) {
-                    result.push_back(file.path);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
         } 
         // Handle directory
         else if (fs.DirectoryExists(path)) {
             // Get all .yaml files
-            auto yaml_files = fs.Glob(path + "/*.yaml");
+            auto yaml_files = fs.GlobFiles(path + "/*.yaml", context);
             for (auto &file : yaml_files) {
-                if (!fs.DirectoryExists(file.path)) {
-                    result.push_back(file.path);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
             
             // Also get .yml files
-            auto yml_files = fs.Glob(path + "/*.yml");
+            auto yml_files = fs.GlobFiles(path + "/*.yml", context);
             for (auto &file : yml_files) {
-                if (!fs.DirectoryExists(file.path)) {
-                    result.push_back(file.path);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
         }
