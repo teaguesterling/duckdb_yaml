@@ -81,6 +81,8 @@ John
 # Test with non-existent file without ignore_errors (should fail)
 statement error
 SELECT * FROM read_yaml(['test/yaml/simple.yaml', 'non_existent_file.yaml']);
+----
+IO Error: File does not exist: non_existent_file.yaml
 
 # Test with multi-document partial errors
 statement ok

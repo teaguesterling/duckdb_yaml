@@ -223,7 +223,7 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
 }
 
 // Helper functions for file globbing and file list handling
-vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value) {
+vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value, bool only_existing) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
     
@@ -238,7 +238,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             string file_path = file_value.ToString();
             if (fs.FileExists(file_path)) {
                 result.push_back(file_path);
-            } else {
+            } else if (!only_existing) {
                 throw IOException("File does not exist: " + file_path);
             }
         }
@@ -279,7 +279,7 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         else if (fs.FileExists(path)) {
             result.push_back(path);
         } 
-        else {
+        else if(!only_existing) {
             throw IOException("File or directory does not exist: " + path);
         }
     } 
@@ -495,16 +495,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
 
     // Get files using globbing
-    vector<string> files;
-    try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
-        if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
-        }
-        // With ignore_errors=true, continue with empty result
-    }
-
+    auto files = GlobFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
@@ -532,6 +523,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     result->yaml_docs = row_nodes;
 
     // Handle empty result set early
+    // TODO: This is very messy and could probably be drastically simplified
+    // or at the very least, moved into a helper function
     if (result->yaml_docs.empty()) {
         if (options.ignore_errors) {
             // With ignore_errors=true, return an empty table with a dummy structure
@@ -701,7 +694,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     // Check for duplicate parameters
     std::unordered_set<std::string> seen_parameters;
     for (auto& param : input.named_parameters) {
-        if (seen_parameters.count(param.first)) {
+        if (seen_parameters.find(param.first) != seen_parameters.end()) {
             throw BinderException("Duplicate parameter name: " + param.first);
         }
         seen_parameters.insert(param.first);
@@ -731,16 +724,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     auto result = make_uniq<YAMLReadBindData>(file_path, options);
 
     // Get files using globbing
-    vector<string> files;
-    try {
-        files = GlobFiles(context, path_value);
-    } catch (const std::exception &e) {
-        if (!options.ignore_errors) {
-            throw e; // Re-throw if not ignoring errors
-        }
-        // With ignore_errors=true, continue with empty result
-    }
-
+    auto files = GlobFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }

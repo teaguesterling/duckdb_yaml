@@ -148,9 +148,10 @@ private:
      * 
      * @param context Client context for the query
      * @param path_value File path, pattern, or list as a Value
+     * @param only_existing Remove any non-existant files, will raise exception otherwise
      * @return Vector of matching file paths
      */
-    static vector<string> GlobFiles(ClientContext &context, const Value &path_value);
+    static vector<string> GlobFiles(ClientContext &context, const Value &path_value, bool only_existing);
     
     /**
      * @brief Read a single YAML file and parse it
