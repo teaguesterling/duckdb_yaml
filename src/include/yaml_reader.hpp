@@ -100,7 +100,7 @@ private:
      * @param node YAML node to detect type from
      * @return Detected logical type
      */
-    static LogicalType DetectYAMLType(YAML::Node node);
+    static LogicalType DetectYAMLType(const YAML::Node &node);
 
     /**
      * @brief Convert YAML node to DuckDB value
@@ -109,7 +109,7 @@ private:
      * @param target_type Target logical type
      * @return Converted DuckDB value
      */
-    static Value YAMLNodeToValue(YAML::Node node, LogicalType target_type);
+    static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type);
     
     /**
      * @brief Parse multi-document YAML with error recovery
@@ -118,7 +118,7 @@ private:
      * @param ignore_errors Whether to ignore parsing errors
      * @return Vector of valid YAML nodes
      */
-    static vector<YAML::Node> ParseMultiDocumentYAML(const char* yaml_content, bool ignore_errors);
+    static vector<YAML::Node> ParseMultiDocumentYAML(const string &yaml_content, bool ignore_errors);
     
     /**
      * @brief Recover partial valid documents from YAML with syntax errors
@@ -126,7 +126,7 @@ private:
      * @param yaml_content YAML content to parse
      * @return Vector of valid YAML nodes
      */
-    static vector<YAML::Node> RecoverPartialYAMLDocuments(const char* yaml_content);
+    static vector<YAML::Node> RecoverPartialYAMLDocuments(const string &yaml_content);
     
     /**
      * @brief Extract row nodes from YAML documents
@@ -135,7 +135,7 @@ private:
      * @param expand_root_sequence Whether to expand top-level sequences into rows
      * @return Vector of YAML nodes representing rows
      */
-    static vector<YAML::Node> ExtractRowNodes(const vector<YAML::Node>& docs, bool expand_root_sequence);
+    static vector<YAML::Node> ExtractRowNodes(const vector<YAML::Node> &docs, bool expand_root_sequence);
     
     /**
      * @brief Get files matching a pattern or from a file list
