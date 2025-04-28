@@ -7,7 +7,7 @@ require yaml
 # Test auto_detect parameter set to false
 statement ok
 CREATE TABLE no_autodetect AS 
-SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=false);
+SELECT is_active, age, name FROM read_yaml('test/yaml/simple.yaml', auto_detect=false);
 
 # With auto_detect=false, everything is treated as VARCHAR
 query IIIIII

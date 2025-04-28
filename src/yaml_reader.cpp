@@ -6,6 +6,13 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension_util.hpp"
 
+// This is a hack to deal with some weird inconsistencies between the result type of fs.GlobFiles
+#if (__GNUC__ < 5) || defined(_WIN32)
+#define HACK_GLOB_PATH(x) x
+#else
+#define HACK_GLOB_PATH(x) x.path
+#endif
+
 namespace duckdb {
 
 // Bind data structure for read_yaml
@@ -252,8 +259,8 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             auto globbed_files = fs.Glob(path);
             for (auto &file : globbed_files) {
                 // Skip directories
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
         } 
@@ -262,16 +269,16 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
             // Get all .yaml files
             auto yaml_files = fs.Glob(path + "/*.yaml");
             for (auto &file : yaml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
             
             // Also get .yml files
             auto yml_files = fs.Glob(path + "/*.yml");
             for (auto &file : yml_files) {
-                if (!fs.DirectoryExists(file)) {
-                    result.push_back(file);
+                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
+                    result.push_back(HACK_GLOB_PATH(file));
                 }
             }
         }
@@ -565,7 +572,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
                     if (file.find('*') != string::npos || file.find('?') != string::npos) {
                         auto globbed = FileSystem::GetFileSystem(context).Glob(file);
                         if (!globbed.empty()) {
-                            file = globbed[0];
+                            file = globbed[0].path;
                         }
                     }
 
