@@ -2,6 +2,10 @@
 
 This extension allows DuckDB to read YAML files directly into tables. It provides a simple interface for accessing YAML data within SQL queries.
 
+## Meta Considerations
+
+At a more meta level, this extension is an exercise in having Claude.ai create an extension for me, using other extensions as examples, while I try to delay diving into the code myself for as long as possible. The inital chat I used to start this project is shared here. Eventually, I created a project with integrations into this GitHub repository, which prevents additional sharing, but I will add the chats to this repository for reference.
+
 ## Features
 
 - Read YAML files into DuckDB tables with `read_yaml`
@@ -24,6 +28,18 @@ LOAD yaml;
 #### Basic Usage
 
 ```sql
+-- Single file path
+SELECT * FROM read_yaml('data/config.yaml');
+
+-- Glob pattern (uses filesystem glob matching)
+SELECT * FROM read_yaml('data/*.yaml');
+
+-- List of files (processes all files in the array)
+SELECT * FROM read_yaml(['config1.yaml', 'config2.yaml', 'data/settings.yaml']);
+
+-- Directory path (reads all .yaml and .yml files in directory)
+SELECT * FROM read_yaml('data/configs/');
+
 -- Read from a file (creates a row per document or sequence item)
 SELECT * FROM read_yaml('path/to/file.yaml');
 
@@ -49,6 +65,14 @@ SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 -- Set maximum file size in bytes (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
 ```
+
+### Error Handling
+
+The YAML extension provides robust error handling capabilities:
+
+ * Use `ignore_errors=true` to continue processing despite errors in some files
+ * With `ignore_errors=true` and multi-document YAML, valid documents are still processed even if some have errors
+ * When providing a file list, parsing continues with the next file if an error occurs in one file
 
 ### Accessing YAML Data
 
