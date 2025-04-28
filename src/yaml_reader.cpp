@@ -701,7 +701,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     // Check for duplicate parameters
     std::unordered_set<std::string> seen_parameters;
     for (auto& param : input.named_parameters) {
-        if (seen_parameters.count(param.first)) {
+        if (seen_parameters.find(param.first) != seen_parameters.end()) {
             throw BinderException("Duplicate parameter name: " + param.first);
         }
         seen_parameters.insert(param.first);
