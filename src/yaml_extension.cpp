@@ -7,11 +7,6 @@
 #include "duckdb/main/extension_util.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 
-// Additional includes for file extension handling
-#include "duckdb/main/config.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-
 // OpenSSL linked through vcpkg
 #include <openssl/opensslv.h>
 
@@ -31,32 +26,26 @@ static void LoadInternal(DatabaseInstance &instance) {
     
     // Register YAML types
     YAMLTypes::Register(instance);
+
+    // Register a scalar function
+    auto yaml_scalar_function = ScalarFunction("yaml", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YamlScalarFun);
+    ExtensionUtil::RegisterFunction(instance, yaml_scalar_function);
+    
+    // Register OpenSSL version function
+    auto yaml_openssl_version = ScalarFunction("yaml_openssl_version", {LogicalType::VARCHAR}, LogicalType::VARCHAR, 
+                                             YamlOpenSSLVersionScalarFun);
+    ExtensionUtil::RegisterFunction(instance, yaml_openssl_version);
 }
 
 void YamlExtension::Load(DuckDB &db) {
     LoadInternal(*db.instance);
     
-    // Register YAML file extension handler
-    auto &config = DBConfig::GetConfig(*db.instance);
+    // Register file extensions for automatic handling with TableFunction
+    auto &fs = FileSystem::GetFileSystem(*db.instance);
     
-    // Create a file extension handler function for both .yaml and .yml
-    auto yaml_reader = [](ClientContext &context, const string &path) -> unique_ptr<TableRef> {
-        auto table_function = make_uniq<TableFunctionRef>();
-        vector<unique_ptr<ParsedExpression>> function_parameters;
-        
-        // Create the path parameter
-        function_parameters.push_back(make_uniq<ConstantExpression>(Value(path)));
-        
-        // Set the function name to read_yaml
-        table_function->function_name = "read_yaml";
-        table_function->expression_parameters = std::move(function_parameters);
-        
-        return std::move(table_function);
-    };
-    
-    // Register the file extension handlers
-    config.RegisterFileExtension("yaml", yaml_reader);
-    config.RegisterFileExtension("yml", yaml_reader);
+    // Register .yaml and .yml extensions to use read_yaml function
+    fs.RegisterSubstrait("yaml", "read_yaml");
+    fs.RegisterSubstrait("yml", "read_yaml");
 }
 
 std::string YamlExtension::Name() {
