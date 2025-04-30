@@ -7,46 +7,58 @@
 #include "duckdb/main/extension_util.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 
+// Additional includes for file extension handling
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 // OpenSSL linked through vcpkg
 #include <openssl/opensslv.h>
 
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
+#include "yaml_functions.hpp"
+#include "yaml_types.hpp"
 
 namespace duckdb {
-
-inline void YamlScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Yaml "+name.GetString()+" 🐥");
-        });
-}
-
-inline void YamlOpenSSLVersionScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Yaml " + name.GetString() +
-                                                     ", my linked OpenSSL version is " +
-                                                     OPENSSL_VERSION_TEXT );
-        });
-}
 
 static void LoadInternal(DatabaseInstance &instance) {
     // Register YAML reader
     YAMLReader::RegisterFunction(instance);
-
-    // Register a scalar function
-    auto yaml_scalar_function = ScalarFunction("yaml", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YamlScalarFun);
-    ExtensionUtil::RegisterFunction(instance, yaml_scalar_function);
+    
+    // Register YAML functions
+    YAMLFunctions::Register(instance);
+    
+    // Register YAML types
+    YAMLTypes::Register(instance);
 }
 
 void YamlExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
+    LoadInternal(*db.instance);
+    
+    // Register YAML file extension handler
+    auto &config = DBConfig::GetConfig(*db.instance);
+    
+    // Create a file extension handler function for both .yaml and .yml
+    auto yaml_reader = [](ClientContext &context, const string &path) -> unique_ptr<TableRef> {
+        auto table_function = make_uniq<TableFunctionRef>();
+        vector<unique_ptr<ParsedExpression>> function_parameters;
+        
+        // Create the path parameter
+        function_parameters.push_back(make_uniq<ConstantExpression>(Value(path)));
+        
+        // Set the function name to read_yaml
+        table_function->function_name = "read_yaml";
+        table_function->expression_parameters = std::move(function_parameters);
+        
+        return std::move(table_function);
+    };
+    
+    // Register the file extension handlers
+    config.RegisterFileExtension("yaml", yaml_reader);
+    config.RegisterFileExtension("yml", yaml_reader);
 }
+
 std::string YamlExtension::Name() {
 	return "yaml";
 }
