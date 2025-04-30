@@ -1,0 +1,51 @@
+# name: test/sql/yaml_reader/yaml_file_extension.test
+# description: Test automatic YAML file extension detection
+# group: [yaml]
+
+require yaml
+
+# Basic test - directly use file path in FROM clause
+query I
+SELECT name FROM 'test/yaml/simple.yaml';
+----
+John
+
+# Test with pattern (glob)
+query II
+SELECT id, name FROM 'test/yaml/multi_basic.yaml' ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob
+
+# Test direct table creation
+statement ok
+CREATE TABLE direct_yaml AS SELECT * FROM 'test/yaml/nested.yaml';
+
+query I
+SELECT person.name FROM direct_yaml;
+----
+John Doe
+
+# Test with directory glob pattern
+query I
+SELECT COUNT(*) > 0 FROM 'test/yaml/globs/*.yaml';
+----
+true
+
+# Test with WHERE filtering
+query I
+SELECT name FROM 'test/yaml/sequence_basic.yaml' WHERE age > 29;
+----
+John
+Bob
+
+# Test with aggregation
+query I
+SELECT COUNT(*) FROM 'test/yaml/sequence_basic.yaml';
+----
+3
+
+# Clean up
+statement ok
+DROP TABLE direct_yaml;
