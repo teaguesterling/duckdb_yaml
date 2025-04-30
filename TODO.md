@@ -12,6 +12,7 @@
 - [x] Error handling with ignore_errors parameter
 - [x] File globbing support
 - [x] File list support
+- [x] Direct file path support (e.g., SELECT * FROM 'file.yaml')
 - [ ] Explicit column type specification via 'columns' parameter
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Support for YAML anchors and aliases
@@ -52,6 +53,7 @@
 ## Documentation
 
 - [x] Basic README with usage examples
+- [x] Document direct file path usage
 - [ ] Comprehensive user guide
 - [ ] API reference
 - [ ] Example gallery
@@ -76,6 +78,7 @@
 - [ ] Improve granularity of error recovery
 
 ### Test Coverage
+- [x] Add tests for direct file path usage
 - [ ] Add tests for parameter type validation
 - [ ] Add tests for duplicate parameter detection
 - [ ] Expand tests for error recovery in various scenarios
