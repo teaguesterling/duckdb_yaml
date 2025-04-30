@@ -6,6 +6,7 @@
 #include "yaml_types.hpp"
 #include "yaml-cpp/yaml.h"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,26 @@ void YAMLFunctions::Register(DatabaseInstance &db) {
     // Register validation and basic functions
     RegisterValidationFunction(db);
     RegisterConversionFunctions(db);
+}
+
+unique_ptr<TableRef> YAMLFunctions::ReadYAMLReplacement(ClientContext &context, ReplacementScanInput &input,
+                                                        optional_ptr<ReplacementScanData> data) {
+    auto table_name = ReplacementScan::GetFullPath(input);
+	if (!ReplacementScan::CanReplace(table_name, {"yaml", "yml"})) {
+		return nullptr;
+	}
+    
+	auto table_function = make_uniq<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("read_yaml", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
+	}
+
+	return std::move(table_function);
 }
 
 void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
