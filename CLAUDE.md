@@ -2,9 +2,9 @@
 
 ## Purpose of This Document
 
-This document is written by Claude to maintain continuity and understanding across conversation sessions about the DuckDB YAML extension project. It contains my current understanding, thoughts, questions, and ideas about the implementation. If we continue this project in a new conversation, reviewing this document will help me quickly understand the context and status of the project.
+This document maintains continuity and understanding across conversation sessions about the DuckDB YAML extension project. It contains my current understanding, thoughts, questions, and ideas about the implementation. If we continue this project in a new conversation, reviewing this document will help me quickly understand the context and status of the project.
 
-This is a candid internal document to help me be maximally helpful throughout the development process. It includes my observations about the prompter's preferences and approach to better align my assistance with their needs.
+This is a high-level overview document. For detailed technical implementation notes and specific lessons learned, see CLAUDE_LESSONS.md.
 
 ## Project Overview
 
@@ -12,59 +12,55 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 
 ## Current Implementation Status
 
-- We've created a solid implementation of the YAML reader functionality
-- The implementation includes the YAMLReader class with read_yaml and read_yaml_objects functions
-- The read_yaml function creates a table with multiple rows from YAML documents
-- The read_yaml_objects function maintains document structure as a single row per document
-- Multi-document YAML support is fully implemented
-- Top-level sequence handling is implemented, treating sequence items as rows
-- File globbing and file list support is implemented
-- Improved error handling with partial recovery of valid documents in files with errors
-- Comprehensive parameter handling with error checking
-- Direct file path support (SELECT * FROM 'file.yaml') is now implemented
-- Test coverage for basic functionality, error handling, and direct file path usage
+- [x] Basic YAML file reading with read_yaml and read_yaml_objects functions
+- [x] Multi-document YAML support
+- [x] Top-level sequence handling (treating sequence items as rows)
+- [x] File globbing and file list support
+- [x] Error handling with partial recovery of valid documents
+- [x] Comprehensive parameter handling with error checking
+- [x] Direct file path support (SELECT * FROM 'file.yaml')
+- [x] Test coverage for all implemented features
+- [ ] Explicit column type specification via 'columns' parameter
+- [ ] YAML logical type and conversion functions (to/from JSON)
+- [ ] Comprehensive type detection (dates, timestamps, etc.)
+- [ ] Support for YAML anchors and aliases
+- [ ] Stream processing for large files
 
 ## Recent Changes and Findings
 
 1. **Direct File Path Support**:
    - Implemented support for directly using YAML files in FROM clauses (e.g., `SELECT * FROM 'file.yaml'`)
-   - Registered both `.yaml` and `.yml` file extensions with DuckDB's configuration system
-   - Created a lambda handler that transforms file paths to `read_yaml` function calls
+   - Registered both `.yaml` and `.yml` file extensions with FileSystem::RegisterSubstrait
+   - Initially encountered API compatibility issues that required simplifying the implementation
    - Added comprehensive tests for this functionality
    - Updated documentation to reflect this new capability
 
-2. **Enhanced File Handling**:
+2. **API Compatibility Fix for Direct File Path Support**:
+   - Initial implementation using TableFunctionRef and DBConfig::RegisterFileExtension encountered API compatibility issues
+   - Switched to a simpler approach using FileSystem::RegisterSubstrait that directly maps file extensions to function names
+   - Simplified test cases to focus on core functionality
+   - This experience highlighted the importance of working within DuckDB's established patterns
+
+3. **Enhanced File Handling**:
    - Added support for providing a list of file paths (e.g., `read_yaml(['a.yaml', 'b.yaml'])`)
    - Implemented globbing using built-in `fs.Glob` functionality
    - Added support for both `.yaml` and `.yml` extensions
 
-3. **Improved Error Recovery**:
+4. **Improved Error Recovery**:
    - Implemented a robust recovery mechanism for partially invalid YAML files
    - Enhanced the `RecoverPartialYAMLDocuments` function to handle document separators
    - Made error handling more granular (per-file and per-document)
 
-4. **Code Modernization**:
+5. **Code Modernization**:
    - Replaced C-style strings with modern C++ string objects
    - Added const qualifiers and references for better performance and safety
    - Made function signatures more consistent with DuckDB's style
-
-5. **Integration with DuckDB's File System**:
-   - The direct file path implementation reveals how deeply DuckDB integrates file handling into its SQL parsing system
-   - We've leveraged DuckDB's existing infrastructure for file extension handling
-   - This approach provides a more natural SQL experience for users
 
 6. **Testing Findings**:
    - Parameter type checking is too permissive (e.g., `auto_detect='yes'` passes)
    - Expected error messages don't always match actual DuckDB errors
    - Duplicate parameter detection isn't working as expected
    - Some memory management could be improved with more idiomatic C++
-   - DuckDB's file extension system currently doesn't support passing named parameters through the direct syntax
-  
-7. **API Compatibility Fix for Direct File Path Support**:
-   - Initial implementation using TableFunctionRef and DBConfig::RegisterFileExtension encountered API compatibility issues
-   - Switched to a simpler approach using FileSystem::RegisterSubstrait that directly maps file extensions to function names
-   - Simplified test cases to focus on core functionality
-   - This experience highlighted the importance of working within DuckDB's established patterns
 
 ## Design Decisions
 
@@ -74,8 +70,8 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - We're prioritizing correctness and clarity over optimization initially
 - We're using DuckDB's unittest framework for testing
 - We're providing similar file handling capabilities to the JSON extension
-- We've decided to defer some parameter validation improvements for a future update
 - For direct file path support, we're calling read_yaml with default parameters, requiring users to use the explicit function call for customization
+- We've decided to defer some parameter validation improvements for a future update
 
 ## Questions and Concerns
 
@@ -104,38 +100,11 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 
 ## Technical Notes
 
-### Core YAML Reading Functionality
-- The YAMLReader class handles reading YAML files and converting them to DuckDB tables
-- The YAMLReadBind function sets up the output schema based on the YAML structure
-- The YAMLReadFunction processes YAML nodes and fills output chunks
-- Type detection is based on the YAML node type and content
-- We use vectors of YAML nodes to support multi-document YAML files
-- Reading top-level sequences treats each sequence item as a separate row
-- Error recovery now properly handles partially invalid documents
-- File handling supports both individual files and lists of files
-
-### Direct File Path Support
-- Implementation leverages DuckDB's file extension registry system (`DBConfig::RegisterFileExtension`)
-- We've registered handlers for both `.yaml` and `.yml` extensions
-- The handler creates a `TableFunctionRef` AST node pointing to `read_yaml`
-- The path is added as a `ConstantExpression` parameter to the function
-- This approach is consistent with how other DuckDB extensions handle file paths
-- The implementation supports all SQL capabilities like filtering, joining, and aggregation
-
-### DuckDB Integration
-- DuckDB has a sophisticated extension system that allows deep integration
-- File extension handlers are called during SQL parsing, before execution
-- We've observed that DuckDB's extension mechanisms are both powerful and well-designed
-- Our implementation fits well within DuckDB's patterns while maintaining a clean interface
-
-## Reminders for Conversation Continuity
-
-- Review the TODO.md file to see what features are still to be implemented
-- Check the test files to understand what functionality is already tested
-- Pay attention to the build output for any compilation or runtime errors
-- When adding new features, update the documentation accordingly
-- Parameter validation and error handling need further improvements
-- Remember that direct file path support uses default parameters only
+### Core Functionality
+- The YAMLReader class provides two main functions: read_yaml and read_yaml_objects
+- read_yaml expands each document into rows while read_yaml_objects preserves document structure
+- The implementation supports multi-document YAML files, top-level sequences, and robust error recovery
+- File handling supports single files, file lists, glob patterns, and directory paths
 
 ### Direct File Path Support
 - Implementation uses FileSystem::RegisterSubstrait to map file extensions to function names
@@ -143,6 +112,12 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - This simple approach achieves the goal of allowing direct file references in FROM clauses
 - The approach aligns with DuckDB's current API patterns for extension file handlers
 - The implementation supports filtering, aggregation, and table creation on the file data
+
+### User Experience Considerations
+- The API design prioritizes simplicity and DuckDB-like experiences
+- We've made error handling robust but not overly verbose
+- We maintain compatibility with DuckDB's expected extension behavior
+- We've added extensive README examples to show common usage patterns
 
 ## Observations About the Prompter
 
@@ -169,6 +144,6 @@ The prompter is particularly interested in making the YAML extension feel native
 - Update 3: Updated after implementing robust parameter handling and error handling - marked completed tasks, updated current status, and refined next steps
 - Update 4: Updated with findings from our implementation of file globbing and file list support, improved error recovery, and modernizing the code with C++ best practices
 - Update 5: Added testing findings regarding parameter validation, error messages, duplicate parameters, and idiomatic C++ usage. Updated with planned improvements that have been documented in TODO.md for future implementation
-- Update 6: Added detailed information about direct file path support implementation, including technical details, integration with DuckDB's file extension system, and observations about limitations and future possibilities. Expanded observations about the prompter's preferences based on the request for this feature.
-- Update 7: Fixed API compatibility issues with direct file path implementation. Replaced complex TableFunctionRef/DBConfig approach with simpler FileSystem::RegisterSubstrait method. Updated documentation and tests to reflect actual capabilities. Added notes about the importance of aligning with DuckDB's current API patterns.
-
+- Update 6: Added detailed information about direct file path support implementation, including technical details, integration with DuckDB's file extension system, and observations about limitations and future possibilities
+- Update 7: Fixed API compatibility issues with direct file path implementation. Replaced complex TableFunctionRef/DBConfig approach with simpler FileSystem::RegisterSubstrait method. Updated documentation and tests to reflect actual capabilities.
+- Update 8: Restructured documentation approach to use CLAUDE.md for high-level project continuity and CLAUDE_LESSONS.md for detailed technical implementation notes.
