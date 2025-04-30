@@ -86,16 +86,8 @@ SELECT * FROM 'config.yml';
 -- Glob patterns work the same way
 SELECT * FROM 'data/*.yaml';
 
--- Directory paths will read all .yaml and .yml files
-SELECT * FROM 'config_dir/';
-
 -- You can use all DuckDB SQL capabilities
 SELECT name, age FROM 'people.yaml' WHERE age > 30;
-
--- Join data from multiple YAML files
-SELECT a.id, a.name, b.department 
-FROM 'users.yaml' a
-JOIN 'departments.yaml' b ON a.dept_id = b.id;
 
 -- Create tables directly
 CREATE TABLE config AS SELECT * FROM 'config.yaml';
