@@ -5,10 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
-
-// OpenSSL linked through vcpkg
-#include <openssl/opensslv.h>
+#include "duckdb/main/config.hpp"
 
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
@@ -26,26 +23,20 @@ static void LoadInternal(DatabaseInstance &instance) {
     
     // Register YAML types
     YAMLTypes::Register(instance);
-
-    // Register a scalar function
-    auto yaml_scalar_function = ScalarFunction("yaml", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YamlScalarFun);
-    ExtensionUtil::RegisterFunction(instance, yaml_scalar_function);
-    
-    // Register OpenSSL version function
-    auto yaml_openssl_version = ScalarFunction("yaml_openssl_version", {LogicalType::VARCHAR}, LogicalType::VARCHAR, 
-                                             YamlOpenSSLVersionScalarFun);
-    ExtensionUtil::RegisterFunction(instance, yaml_openssl_version);
 }
 
 void YamlExtension::Load(DuckDB &db) {
     LoadInternal(*db.instance);
     
-    // Register file extensions for automatic handling with TableFunction
-    auto &fs = FileSystem::GetFileSystem(*db.instance);
+    // Register YAML files as automatically recognized by DuckDB
+    auto &config = DBConfig::GetConfig(*db.instance);
     
-    // Register .yaml and .yml extensions to use read_yaml function
-    fs.RegisterSubstrait("yaml", "read_yaml");
-    fs.RegisterSubstrait("yml", "read_yaml");
+    // Add replacement scan for YAML files
+    config.replacement_scans.emplace_back(YAMLFunctions::ReadYAMLReplacement);
+    
+    // Also register file extensions using AddExtensionOption for backward compatibility
+    config.AddExtensionOption("yaml", "read_yaml");
+    config.AddExtensionOption("yml", "read_yaml");
 }
 
 std::string YamlExtension::Name() {
