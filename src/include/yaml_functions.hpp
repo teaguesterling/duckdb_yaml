@@ -7,8 +7,6 @@ namespace duckdb {
 class YAMLFunctions {
 public:
     static void Register(DatabaseInstance &db);
-    static unique_ptr<TableRef> YAMLFunctions::ReadYAMLReplacement(ClientContext &context, ReplacementScanInput &input,
-                                                                   optional_ptr<ReplacementScanData> data);
 
 private:
     // Register basic YAML validation function
