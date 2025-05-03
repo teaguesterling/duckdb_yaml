@@ -2,6 +2,69 @@
 
 This document contains detailed technical notes and lessons learned while developing the DuckDB YAML extension. It serves as a reference for specific implementation challenges, solutions, and insights that might be useful for future development.
 
+## DuckDB File System Integration (May 2025)
+
+### Problem Description
+My initial implementation of file reading functionality for the YAML extension did not fully leverage DuckDB's native file system abstraction layer. Instead, it used a mix of custom file handling code and DuckDB utilities, resulting in inconsistent resource management, suboptimal error handling, and potential compatibility issues across different environments where DuckDB might be deployed.
+
+### Solution
+PR #4 implemented a more robust approach that fully embraces DuckDB's file system abstraction. The implementation consistently uses DuckDB's file system functions for all operations: checking if files exist, opening files, reading content, and handling errors.
+
+```cpp
+// Proper use of DuckDB's file system abstraction
+auto &fs = FileSystem::GetFileSystem(context);
+
+// Using RAII pattern with file handles
+auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
+idx_t file_size = fs.GetFileSize(*handle);
+
+// Efficient file content reading
+string content(file_size, ' ');
+fs.Read(*handle, const_cast<char*>(content.c_str()), file_size);
+```
+
+Key components include:
+- Proper use of DuckDB's file system abstraction through FileSystem::GetFileSystem(context)
+- Using RAII pattern with file handles for automatic resource cleanup
+- Efficient file content reading using direct buffer allocation
+- Consistent error handling that follows DuckDB conventions
+
+### Key Insights
+1. **Native Abstractions**: DuckDB's file system layer provides a consistent interface across all platforms and deployment scenarios. Using this abstraction improves compatibility with different storage backends.
+
+2. **Resource Management**: The RAII pattern with file handles ensures resources are properly cleaned up even when exceptions occur.
+
+3. **Error Handling**: DuckDB has consistent error reporting mechanisms that should be used instead of custom exception types.
+
+4. **Parameter Validation**: All user inputs should be thoroughly validated before interacting with the file system.
+
+5. **Error Propagation**: Errors from lower-level operations should be properly wrapped with contextual information to make debugging easier.
+
+### Testing Considerations
+1. Test file paths with different formats (relative, absolute)
+2. Verify handling of edge cases:
+   - Non-existent files
+   - Permission issues
+   - Files exceeding the maximum size limit
+   - Empty files
+   - Files with invalid content
+3. Test with glob patterns, file lists, and directory inputs
+4. Ensure error messages are clear and actionable
+
+### Future Considerations
+1. **Streaming Processing**: For very large YAML files, implementing a streaming parser that doesn't load the entire file into memory would be valuable.
+
+2. **Progress Reporting**: Add mechanisms to report progress for large file operations.
+
+3. **Security Auditing**: Further review the file system interactions for potential security issues like path traversal vulnerabilities.
+
+4. **Performance Optimization**: Measure and optimize file reading performance, especially for large files or when processing many files.
+
+### References
+- DuckDB FileSystem API in src/include/duckdb/common/file_system.hpp
+- PR #4: File Reading Implementation
+- Similar patterns in DuckDB's JSON extension
+
 ## Direct File Path Support - API Compatibility Issue (May 2025)
 
 ### Problem Description

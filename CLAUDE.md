@@ -62,6 +62,17 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
    - Duplicate parameter detection isn't working as expected
    - Some memory management could be improved with more idiomatic C++
 
+6. **Recent Implementation Findings (File Reading)**:
+   - The final implementation of file reading in PR #4 demonstrates several best practices for DuckDB extensions:
+    1. **DuckDB File System Abstraction**: Properly uses `FileSystem::GetFileSystem(context)` to obtain file system instance, ensuring compatibility with DuckDB's virtual file system architecture.
+    2. **Resource Management**: Uses DuckDB's file handle pattern correctly, ensuring proper resource cleanup through RAII.
+    3. **Error Handling**: More consistent error messages that follow DuckDB's conventions for error reporting.
+    4. **Parameter Validation**: Improved validation steps for file paths and other parameters before attempting file operations.
+    5. **Multi-document Processing**: Refined approach to handling multi-document YAML files with better separation of concerns.
+    6. **Code Organization**: Better organization of related functionality into logical groups, making the code more maintainable.
+ 
+    The implementation demonstrates a good balance between utilizing DuckDB's native capabilities and extending them with YAML-specific functionality.
+
 ## Design Decisions
 
 - We're using yaml-cpp for parsing YAML files
@@ -147,3 +158,4 @@ The prompter is particularly interested in making the YAML extension feel native
 - Update 6: Added detailed information about direct file path support implementation, including technical details, integration with DuckDB's file extension system, and observations about limitations and future possibilities
 - Update 7: Fixed API compatibility issues with direct file path implementation. Replaced complex TableFunctionRef/DBConfig approach with simpler FileSystem::RegisterSubstrait method. Updated documentation and tests to reflect actual capabilities.
 - Update 8: Restructured documentation approach to use CLAUDE.md for high-level project continuity and CLAUDE_LESSONS.md for detailed technical implementation notes.
+- Update 9: After reviewing PR #4 for direct file reading implementation, noted important differences from my original approach
