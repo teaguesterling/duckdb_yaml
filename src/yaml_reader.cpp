@@ -6,13 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension_util.hpp"
 
-// This is a hack to deal with some weird inconsistencies between the result type of fs.GlobFiles
-#if (__GNUC__ < 5) || defined(_WIN32)
-#define HACK_GLOB_PATH(x) x
-#else
-#define HACK_GLOB_PATH(x) x.path
-#endif
-
 namespace duckdb {
 
 // Bind data structure for read_yaml
@@ -233,64 +226,50 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
 vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value, bool only_existing) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
-    
+
+    // Given a glob path, add any file results (ignoring directories)
+    auto globFileResults = [&result, &fs](const string& glob_path) {
+        for (auto &file : fs.Glob(glob_path)) {
+            if (!fs.DirectoryExists(file.path)) {
+                result.push_back(file.path);
+            }   
+        }
+    };
+
+    // Handle yaml path string based on existing file, directories, or glob path
+    auto dispatchYamlFileResult = [&result, &fs, &globFileResults, &only_existing](const string& yaml_path) {
+        // Single file
+        if (fs.FileExists(yaml_path)) {
+            result.push_back(yaml_path);
+        // Single directory
+        } else if (fs.DirectoryExists(yaml_path)) {
+            // .yaml files
+            globFileResults(fs.JoinPath(yaml_path, "*.yaml"));
+            globFileResults(fs.JoinPath(yaml_path, "*.yml"));
+        // Glob path
+        } else if (fs.HasGlob(yaml_path)) {
+            globFileResults(yaml_path);
+        // Don't fail if asking for "only existing"
+        } else if(!only_existing) {
+            throw IOException("File or directory does not exist: " + yaml_path);
+        }
+    };
+
     // Handle list of files
     if (path_value.type().id() == LogicalTypeId::LIST) {
         auto &file_list = ListValue::GetChildren(path_value);
         for (auto &file_value : file_list) {
-            if (file_value.type().id() != LogicalTypeId::VARCHAR) {
+            if (file_value.type().id() == LogicalTypeId::VARCHAR) {
+                dispatchYamlFileResult(file_value.ToString());
+            } else {
                 throw BinderException("File list must contain string values");
             }
-            
-            string file_path = file_value.ToString();
-            if (fs.FileExists(file_path)) {
-                result.push_back(file_path);
-            } else if (!only_existing) {
-                throw IOException("File does not exist: " + file_path);
-            }
         }
-    } 
     // Handle string path (file, glob pattern, or directory)
-    else if (path_value.type().id() == LogicalTypeId::VARCHAR) {
-        string path = path_value.ToString();
-        
-        // Handle glob patterns
-        if (path.find('*') != string::npos || path.find('?') != string::npos) {
-            auto globbed_files = fs.Glob(path);
-            for (auto &file : globbed_files) {
-                // Skip directories
-                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
-                    result.push_back(HACK_GLOB_PATH(file));
-                }
-            }
-        } 
-        // Handle directory
-        else if (fs.DirectoryExists(path)) {
-            // Get all .yaml files
-            auto yaml_files = fs.Glob(path + "/*.yaml");
-            for (auto &file : yaml_files) {
-                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
-                    result.push_back(HACK_GLOB_PATH(file));
-                }
-            }
-            
-            // Also get .yml files
-            auto yml_files = fs.Glob(path + "/*.yml");
-            for (auto &file : yml_files) {
-                if (!fs.DirectoryExists(HACK_GLOB_PATH(file))) {
-                    result.push_back(HACK_GLOB_PATH(file));
-                }
-            }
-        }
-        // Handle single file
-        else if (fs.FileExists(path)) {
-            result.push_back(path);
-        } 
-        else if(!only_existing) {
-            throw IOException("File or directory does not exist: " + path);
-        }
-    } 
-    else {
+    }  else if (path_value.type().id() == LogicalTypeId::VARCHAR) {
+        dispatchYamlFileResult(path_value.ToString());
+    // Handle invalid types
+    } else {
         throw BinderException("File path must be a string or list of strings");
     }
     
@@ -894,6 +873,26 @@ void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &da
 
     // Set the cardinality
     output.SetCardinality(count);
+}
+
+unique_ptr<TableRef> YAMLReader::ReadYAMLReplacement(ClientContext &context, ReplacementScanInput &input,
+                                                     optional_ptr<ReplacementScanData> data) {
+    auto table_name = ReplacementScan::GetFullPath(input);
+    if (!ReplacementScan::CanReplace(table_name, {"yaml", "yml"})) {
+        return nullptr;
+    }
+    
+	auto table_function = make_uniq<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("read_yaml", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
+	}
+
+	return std::move(table_function);
 }
 
 void YAMLReader::RegisterFunction(DatabaseInstance &db) {

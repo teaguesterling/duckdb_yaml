@@ -16,6 +16,12 @@ Claude.ai wrote 99% of the code in this project over the course of a weekend.
 
 ## Usage
 
+### Quickstart
+```sql
+LOAD yaml;
+FROM 'data/*.yml'
+```
+
 ### Loading the Extension
 
 ```sql
@@ -64,6 +70,32 @@ SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 -- Set maximum file size in bytes (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
 ```
+
+## Direct File Path Support
+
+The YAML extension supports directly using file paths in the `FROM` clause, similar to other DuckDB file formats like JSON, CSV, and Parquet.
+
+```sql
+-- These are equivalent:
+SELECT * FROM 'data.yaml';
+SELECT * FROM read_yaml('data.yaml');
+
+-- The extension supports both .yaml and .yml file extensions
+SELECT * FROM 'config.yml';
+
+-- Glob patterns work the same way
+SELECT * FROM 'data/*.yaml';
+
+-- You can use all DuckDB SQL capabilities
+SELECT name, age FROM 'people.yaml' WHERE age > 30;
+
+-- Create tables directly
+CREATE TABLE config AS SELECT * FROM 'config.yaml';
+```
+
+This allows for a more concise and natural SQL syntax when working with YAML files.
+
+Note: When using this direct syntax, the `read_yaml` function is used with default parameters. If you need to customize parameters like `auto_detect`, `ignore_errors`, etc., you should still use the `read_yaml` function explicitly.
 
 ### Error Handling
 

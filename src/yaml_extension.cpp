@@ -5,48 +5,39 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
-
-// OpenSSL linked through vcpkg
-#include <openssl/opensslv.h>
+#include "duckdb/main/config.hpp"
 
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
+//#include "yaml_types.hpp"
 
 namespace duckdb {
-
-inline void YamlScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Yaml "+name.GetString()+" 🐥");
-        });
-}
-
-inline void YamlOpenSSLVersionScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Yaml " + name.GetString() +
-                                                     ", my linked OpenSSL version is " +
-                                                     OPENSSL_VERSION_TEXT );
-        });
-}
 
 static void LoadInternal(DatabaseInstance &instance) {
     // Register YAML reader
     YAMLReader::RegisterFunction(instance);
-
-    // Register a scalar function
-    auto yaml_scalar_function = ScalarFunction("yaml", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YamlScalarFun);
-    ExtensionUtil::RegisterFunction(instance, yaml_scalar_function);
+    
+    // Register YAML functions
+    //YAMLFunctions::Register(instance);
+    
+    // Register YAML types
+    //YAMLTypes::Register(instance);
 }
 
 void YamlExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
+    LoadInternal(*db.instance);
+    
+    // Register YAML files as automatically recognized by DuckDB
+    auto &config = DBConfig::GetConfig(*db.instance);
+    
+    // Add replacement scan for YAML files
+    config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
+    
+    // Also register file extensions using AddExtensionOption for backward compatibility
+    //config.AddExtensionOption("yaml", "read_yaml");
+    //config.AddExtensionOption("yml", "read_yaml");
 }
+
 std::string YamlExtension::Name() {
 	return "yaml";
 }
