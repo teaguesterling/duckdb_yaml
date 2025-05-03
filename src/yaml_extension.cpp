@@ -9,8 +9,7 @@
 
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
-#include "yaml_functions.hpp"
-#include "yaml_types.hpp"
+//#include "yaml_types.hpp"
 
 namespace duckdb {
 
@@ -19,10 +18,10 @@ static void LoadInternal(DatabaseInstance &instance) {
     YAMLReader::RegisterFunction(instance);
     
     // Register YAML functions
-    YAMLFunctions::Register(instance);
+    //YAMLFunctions::Register(instance);
     
     // Register YAML types
-    YAMLTypes::Register(instance);
+    //YAMLTypes::Register(instance);
 }
 
 void YamlExtension::Load(DuckDB &db) {
@@ -32,11 +31,11 @@ void YamlExtension::Load(DuckDB &db) {
     auto &config = DBConfig::GetConfig(*db.instance);
     
     // Add replacement scan for YAML files
-    config.replacement_scans.emplace_back(YAMLFunctions::ReadYAMLReplacement);
+    config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
     
     // Also register file extensions using AddExtensionOption for backward compatibility
-    config.AddExtensionOption("yaml", "read_yaml");
-    config.AddExtensionOption("yml", "read_yaml");
+    //config.AddExtensionOption("yaml", "read_yaml");
+    //config.AddExtensionOption("yml", "read_yaml");
 }
 
 std::string YamlExtension::Name() {

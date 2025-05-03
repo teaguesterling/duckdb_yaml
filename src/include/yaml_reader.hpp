@@ -1,12 +1,34 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// yaml_reader.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
-#include "duckdb.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "yaml-cpp/yaml.h"
 #include <vector>
+#include "duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "yaml-cpp/yaml.h"
 
 namespace duckdb {
+
+class TableRef;
+struct ReplacementScanData;
 
 /**
  * @brief YAML Reader class for handling YAML files in DuckDB
@@ -19,6 +41,7 @@ namespace duckdb {
  * - Type auto-detection
  */
 class YAMLReader {
+
 public:
     // Structure to hold YAML read options
     struct YAMLReadOptions {
@@ -37,6 +60,19 @@ public:
      * @param db The database instance to register the functions with
      */
     static void RegisterFunction(DatabaseInstance &db);
+
+    /**
+     * @brief Replace a yaml file string with 'read_yaml'
+     * 
+     * Performs a ReadReplacement on any paths containing .yml or .yaml to 'read_yaml'
+     * 
+     * @param context Client context for the query
+     * @param input Input expression for replacement
+     * @param data Additional data for the replacement scan
+     */
+    static unique_ptr<TableRef> ReadYAMLReplacement(ClientContext &context, 
+                                                    ReplacementScanInput &input,
+                                                    optional_ptr<ReplacementScanData> data);
 
 private:
     /**

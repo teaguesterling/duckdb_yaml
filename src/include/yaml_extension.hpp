@@ -4,6 +4,8 @@
 
 namespace duckdb {
 
+const vector<string> yaml_extensions = {"yaml", "yml"};
+
 class YamlExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
