@@ -10,12 +10,10 @@ namespace duckdb {
 
 LogicalType YAMLTypes::YAMLType() {
     // Return VARCHAR type for YAML
-    // Note: We don't use SetAlias as it's not available in this DuckDB version
     return LogicalType::VARCHAR;
 }
 
 // Helper function to convert YAML node to JSON string
-// Note: yaml-cpp handles aliases automatically, so no explicit handling needed
 static std::string YAMLNodeToJSON(const YAML::Node &node) {
     if (!node) {
         return "null";
@@ -225,50 +223,7 @@ static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
     }
 }
 
-// Implementation of CastYAMLToJSON
-string_t YAMLTypes::CastYAMLToJSON(ClientContext &context, string_t yaml_str) {
-    if (yaml_str.GetSize() == 0) {
-        // Return empty string_t
-        return string_t();
-    }
-    
-    try {
-        // Check if the YAML string contains multiple documents
-        std::stringstream yaml_stream(yaml_str.GetString());
-        std::vector<YAML::Node> all_docs = YAML::LoadAll(yaml_stream);
-        
-        std::string json_str;
-        if (all_docs.size() == 0) {
-            json_str = "null";
-        } else if (all_docs.size() == 1) {
-            // Single document - convert directly to JSON
-            json_str = YAMLNodeToJSON(all_docs[0]);
-        } else {
-            // Multiple documents - convert to JSON array
-            json_str = "[";
-            for (size_t i = 0; i < all_docs.size(); i++) {
-                if (i > 0) {
-                    json_str += ",";
-                }
-                json_str += YAMLNodeToJSON(all_docs[i]);
-            }
-            json_str += "]";
-        }
-        
-        // Create a string_t from the JSON string
-        return StringVector::AddString(json_str.c_str(), json_str.length());
-    } catch (const std::exception &e) {
-        throw InvalidInputException("Error converting YAML to JSON: %s", e.what());
-    }
-}
-
-// Implementation of CastValueToYAML using YAML::Emitter
-string_t YAMLTypes::CastValueToYAML(ClientContext &context, Value value) {
-    std::string yaml_str = ValueToYAMLString(value);
-    return StringVector::AddString(yaml_str.c_str(), yaml_str.length());
-}
-
-// Cast YAML string to JSON
+// Cast YAML string to JSON - Vector-based function implementation
 static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
     // Extract the input vector
     auto &input_vector = args.data[0];
@@ -311,7 +266,7 @@ static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &
         });
 }
 
-// Convert Value to YAML using YAML::Emitter
+// Convert Value to YAML - Vector-based function implementation
 static void ValueToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
     // Extract the input vector
     auto &input_vector = args.data[0];
@@ -325,7 +280,7 @@ static void ValueToYAMLFunction(DataChunk &args, ExpressionState &state, Vector 
         });
 }
 
-// Convert JSON to YAML using YAML::Emitter
+// Convert JSON to YAML - Vector-based function implementation
 static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
     // Extract the input vector
     auto &input_vector = args.data[0];
@@ -361,23 +316,21 @@ static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 void YAMLTypes::Register(DatabaseInstance &db) {
-    // Register the YAML type
+    // Get the YAML type (which is VARCHAR)
     auto yaml_type = YAMLType();
     
-    // Register the YAML to JSON cast
+    // Register the YAML type alias in the catalog
+    ExtensionUtil::RegisterType(db, "YAML", yaml_type);
+    
+    // Register the scalar functions as before
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
     ExtensionUtil::RegisterFunction(db, yaml_to_json_fun);
     
-    // Register the JSON to YAML cast 
     auto json_to_yaml_fun = ScalarFunction("json_to_yaml", {LogicalType::JSON()}, yaml_type, JSONToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, json_to_yaml_fun);
     
-    // Register Value to YAML cast
     auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
-    
-    // Note: We don't register special casts in this version since the CastFunctionSet API is different
-    // The scalar functions should provide the necessary functionality
 }
 
 } // namespace duckdb
