@@ -21,7 +21,7 @@ static void LoadInternal(DatabaseInstance &instance) {
     //YAMLFunctions::Register(instance);
     
     // Register YAML types
-    //YAMLTypes::Register(instance);
+    YAMLTypes::Register(instance);
 }
 
 void YamlExtension::Load(DuckDB &db) {

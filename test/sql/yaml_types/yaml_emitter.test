@@ -1,0 +1,174 @@
+# name: test/sql/yaml_types/yaml_emitter.test
+# description: Test YAML emission using the YAML::Emitter
+# group: [yaml]
+
+require yaml
+
+# Test value_to_yaml function with emitter formatting
+statement ok
+CREATE TABLE test_values(v VARCHAR);
+
+statement ok
+INSERT INTO test_values VALUES 
+('simple string'),
+('needs "quotes"'), 
+('has: colon'), 
+('1234'), 
+('true'), 
+('null');
+
+# Test scalar value emission
+query I
+SELECT value_to_yaml(v) AS yaml_value FROM test_values ORDER BY v;
+----
+1234
+'has: colon'
+'needs "quotes"'
+'null'
+simple string
+'true'
+
+# Test boolean value emission
+query I
+SELECT value_to_yaml(true) AS yaml_bool;
+----
+true
+
+query I
+SELECT value_to_yaml(false) AS yaml_bool;
+----
+false
+
+# Test numeric value emission
+query I
+SELECT value_to_yaml(42) AS yaml_int;
+----
+42
+
+query I
+SELECT value_to_yaml(3.14159) AS yaml_float;
+----
+3.141590
+
+# Test NULL value emission
+query I
+SELECT value_to_yaml(NULL) AS yaml_null;
+----
+null
+
+# Test list value emission
+query I
+SELECT value_to_yaml([1, 2, 3]) AS yaml_list;
+----
+- 1
+- 2
+- 3
+
+query I
+SELECT value_to_yaml(['a', 'b', 'c']) AS yaml_list;
+----
+- a
+- b
+- c
+
+# Test nested list emission
+query I
+SELECT value_to_yaml([[1, 2], [3, 4]]) AS yaml_nested_list;
+----
+- - 1
+  - 2
+- - 3
+  - 4
+
+# Test struct value emission
+query I
+SELECT value_to_yaml({'name': 'John', 'age': 30}) AS yaml_struct;
+----
+name: John
+age: 30
+
+# Test nested struct emission
+query I
+SELECT value_to_yaml({'person': {'name': 'John', 'age': 30}, 'active': true}) AS yaml_nested_struct;
+----
+person:
+  name: John
+  age: 30
+active: true
+
+# Test complex mixed structure emission
+query I
+SELECT value_to_yaml({
+  'name': 'Product',
+  'price': 19.99,
+  'in_stock': true,
+  'tags': ['electronics', 'sale'],
+  'details': {'color': 'black', 'dimensions': {'width': 10, 'height': 20}}
+}) AS yaml_complex;
+----
+name: Product
+price: 19.990000
+in_stock: true
+tags:
+  - electronics
+  - sale
+details:
+  color: black
+  dimensions:
+    width: 10
+    height: 20
+
+# Test special character handling in strings
+query I
+SELECT value_to_yaml('Multi
+line
+string') AS yaml_multiline;
+----
+'Multi
+line
+string'
+
+query I
+SELECT value_to_yaml('String with "quotes" and ''apostrophes''') AS yaml_quotes;
+----
+'String with "quotes" and ''apostrophes'''
+
+# Test special strings that need quotes
+query I
+SELECT value_to_yaml('yes') AS yaml_keyword;
+----
+'yes'
+
+query I
+SELECT value_to_yaml('no') AS yaml_keyword;
+----
+'no'
+
+query I
+SELECT value_to_yaml('[]') AS yaml_symbol;
+----
+'[]'
+
+query I
+SELECT value_to_yaml('{}') AS yaml_symbol;
+----
+'{}'
+
+# Test conversion of struct with empty values
+query I
+SELECT value_to_yaml({'name': NULL, 'tags': [], 'details': {}}) AS yaml_with_empty;
+----
+name: null
+tags: []
+details: {}
+
+# Test round-trip conversion (Value -> YAML -> JSON -> YAML)
+query I
+SELECT json_to_yaml(json(value_to_yaml({'name': 'Test', 'value': 123}))) AS round_trip;
+----
+name: Test
+value: 123
+
+# Clean up
+statement ok
+DROP TABLE test_values;
