@@ -8,18 +8,69 @@
 
 namespace duckdb {
 
+// Forward declarations for utility functions
+namespace yaml_utils {
+
+// YAML parsing utilities
+std::vector<YAML::Node> ParseYAML(const std::string& yaml_str, bool multi_doc = true);
+std::string YAMLNodeToJSON(const YAML::Node& node);
+
+// YAML emission utilities
+enum class YAMLFormat { 
+    BLOCK,  // Multi-line, indented format
+    FLOW    // Inline, compact format similar to JSON
+};
+
+void ConfigureEmitter(YAML::Emitter& out, YAMLFormat format);
+std::string EmitYAML(const YAML::Node& node, YAMLFormat format = YAMLFormat::BLOCK);
+std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat format = YAMLFormat::BLOCK);
+
+// Value conversion utilities
+void EmitValueToYAML(YAML::Emitter& out, const Value& value);
+std::string ValueToYAMLString(const Value& value, YAMLFormat format = YAMLFormat::BLOCK);
+
+} // namespace yaml_utils
+
+//===--------------------------------------------------------------------===//
+// YAML Type Definition
+//===--------------------------------------------------------------------===//
+
 LogicalType YAMLTypes::YAMLType() {
     auto yaml_type = LogicalType(LogicalTypeId::VARCHAR);
     yaml_type.SetAlias("yaml");
     return yaml_type;
 }
 
-static bool IsYAMLType(const LogicalType &t) {
+static bool IsYAMLType(const LogicalType& t) {
     return t.id() == LogicalTypeId::VARCHAR && t.HasAlias() && t.GetAlias() == "yaml";
 }
 
-// Helper function to convert YAML node to JSON string
-static std::string YAMLNodeToJSON(const YAML::Node &node) {
+//===--------------------------------------------------------------------===//
+// YAML Utility Implementations
+//===--------------------------------------------------------------------===//
+
+namespace yaml_utils {
+
+std::vector<YAML::Node> ParseYAML(const std::string& yaml_str, bool multi_doc) {
+    if (yaml_str.empty()) {
+        return {};
+    }
+    
+    try {
+        std::stringstream yaml_stream(yaml_str);
+        if (multi_doc) {
+            return YAML::LoadAll(yaml_stream);
+        } else {
+            std::vector<YAML::Node> result;
+            result.push_back(YAML::Load(yaml_stream));
+            return result;
+        }
+    } catch (const std::exception& e) {
+        throw InvalidInputException("Error parsing YAML: %s", e.what());
+    }
+}
+
+std::string YAMLNodeToJSON(const YAML::Node& node) {
     if (!node) {
         return "null";
     }
@@ -113,27 +164,57 @@ static std::string YAMLNodeToJSON(const YAML::Node &node) {
     }
 }
 
-// Forward declaration for recursive emitter function
-static void EmitValueToYAML(YAML::Emitter &out, const Value &value);
-
-// Helper function to convert DuckDB Value to YAML string using YAML::Emitter
-static std::string ValueToYAMLString(const Value &value) {
-    YAML::Emitter out;
-    
-    // Configure emitter options
+void ConfigureEmitter(YAML::Emitter& out, YAMLFormat format) {
     out.SetIndent(2);
-    out.SetMapFormat(YAML::Block);
-    out.SetSeqFormat(YAML::Block);
-    
-    // Emit the value
-    EmitValueToYAML(out, value);
-    
-    // Return the resulting YAML string
+    if (format == YAMLFormat::FLOW) {
+        out.SetMapFormat(YAML::Flow);
+        out.SetSeqFormat(YAML::Flow);
+    } else {
+        out.SetMapFormat(YAML::Block);
+        out.SetSeqFormat(YAML::Block);
+    }
+}
+
+std::string EmitYAML(const YAML::Node& node, YAMLFormat format) {
+    YAML::Emitter out;
+    ConfigureEmitter(out, format);
+    out << node;
     return out.c_str();
 }
 
-// Recursive function to emit a Value to YAML
-static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
+std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat format) {
+    if (docs.empty()) {
+        return "";
+    }
+    
+    if (docs.size() == 1) {
+        return EmitYAML(docs[0], format);
+    }
+    
+    if (format == YAMLFormat::FLOW) {
+        // For inline format, emit as sequence for readability
+        YAML::Emitter out;
+        ConfigureEmitter(out, format);
+        out << YAML::BeginSeq;
+        for (const auto& doc : docs) {
+            out << doc;
+        }
+        out << YAML::EndSeq;
+        return out.c_str();
+    } else {
+        // For block format, emit as multiple documents
+        std::string result;
+        for (size_t i = 0; i < docs.size(); i++) {
+            if (i > 0) {
+                result += "\n---\n";
+            }
+            result += EmitYAML(docs[i], format);
+        }
+        return result;
+    }
+}
+
+void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
     if (value.IsNull()) {
         out << YAML::Null;
         return;
@@ -202,8 +283,8 @@ static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
             break;
         case LogicalTypeId::LIST: {
             out << YAML::BeginSeq;
-            auto &list_val = ListValue::GetChildren(value);
-            for (const auto &element : list_val) {
+            auto& list_val = ListValue::GetChildren(value);
+            for (const auto& element : list_val) {
                 EmitValueToYAML(out, element);
             }
             out << YAML::EndSeq;
@@ -211,8 +292,8 @@ static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
         }
         case LogicalTypeId::STRUCT: {
             out << YAML::BeginMap;
-            auto &struct_vals = StructValue::GetChildren(value);
-            auto &struct_names = StructType::GetChildTypes(value.type());
+            auto& struct_vals = StructValue::GetChildren(value);
+            auto& struct_names = StructType::GetChildTypes(value.type());
             for (size_t i = 0; i < struct_vals.size(); i++) {
                 out << YAML::Key << struct_names[i].first;
                 out << YAML::Value;
@@ -228,101 +309,91 @@ static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
     }
 }
 
-// Cast YAML string to JSON - Vector-based function implementation
-static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    // Extract the input vector
-    auto &input_vector = args.data[0];
-    
-    // Process the input vector
+std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
+    YAML::Emitter out;
+    ConfigureEmitter(out, format);
+    EmitValueToYAML(out, value);
+    return out.c_str();
+}
+
+} // namespace yaml_utils
+
+//===--------------------------------------------------------------------===//
+// YAML Vector Functions
+//===--------------------------------------------------------------------===//
+
+static void YAMLToJSONFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     UnaryExecutor::Execute<string_t, string_t>(
-        input_vector, result, args.size(),
+        args.data[0], result, args.size(),
         [&](string_t yaml_str) -> string_t {
             if (yaml_str.GetSize() == 0) {
                 return string_t();
             }
             
             try {
-                // Check if the YAML string contains multiple documents
-                std::stringstream yaml_stream(yaml_str.GetString());
-                std::vector<YAML::Node> all_docs = YAML::LoadAll(yaml_stream);
+                // Parse as multi-document YAML
+                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
-                if (all_docs.size() == 0) {
-                    std::string json_str = "null";
-                    return StringVector::AddString(result, json_str.c_str(), json_str.length());
-                } else if (all_docs.size() == 1) {
+                std::string json_str;
+                if (docs.empty()) {
+                    json_str = "null";
+                } else if (docs.size() == 1) {
                     // Single document - convert directly to JSON
-                    std::string json_str = YAMLNodeToJSON(all_docs[0]);
-                    return StringVector::AddString(result, json_str.c_str(), json_str.length());
+                    json_str = yaml_utils::YAMLNodeToJSON(docs[0]);
                 } else {
                     // Multiple documents - convert to JSON array
-                    std::string result_str = "[";
-                    for (size_t i = 0; i < all_docs.size(); i++) {
+                    json_str = "[";
+                    for (size_t i = 0; i < docs.size(); i++) {
                         if (i > 0) {
-                            result_str += ",";
+                            json_str += ",";
                         }
-                        result_str += YAMLNodeToJSON(all_docs[i]);
+                        json_str += yaml_utils::YAMLNodeToJSON(docs[i]);
                     }
-                    result_str += "]";
-                    return StringVector::AddString(result, result_str.c_str(), result_str.length());
+                    json_str += "]";
                 }
-            } catch (const std::exception &e) {
+                
+                return StringVector::AddString(result, json_str.c_str(), json_str.length());
+            } catch (const std::exception& e) {
                 throw InvalidInputException("Error converting YAML to JSON: %s", e.what());
             }
         });
 }
 
-// Convert Value to YAML - Vector-based function implementation
-static void ValueToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    // Extract the input vector
-    auto &input_vector = args.data[0];
-    
-    // Process the input vector
+static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     UnaryExecutor::Execute<Value, string_t>(
-        input_vector, result, args.size(),
+        args.data[0], result, args.size(),
         [&](Value value) -> string_t {
-            std::string yaml_str = ValueToYAMLString(value);
+            std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::BLOCK);
             return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
         });
 }
 
-// Convert JSON to YAML - Vector-based function implementation
-static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    // Extract the input vector
-    auto &input_vector = args.data[0];
-    
-    // Process the input vector
+static void JSONToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     UnaryExecutor::Execute<string_t, string_t>(
-        input_vector, result, args.size(),
+        args.data[0], result, args.size(),
         [&](string_t json_str) -> string_t {
             if (json_str.GetSize() == 0) {
                 return string_t();
             }
             
             try {
-                // Convert JSON to Value
-                Value json_val;
+                // Parse JSON using YAML parser
+                YAML::Node json_node = YAML::Load(json_str.GetString());
                 
-                // Try to parse JSON - in this version we'll just use the string directly
-                // since there's no simple JSON to Value conversion available
-                try {
-                    std::string json_string = json_str.GetString();
-                    json_val = Value(json_string);
-                } catch (const std::exception &e) {
-                    throw InvalidInputException("Error parsing JSON: %s", e.what());
-                }
-                
-                // Convert Value to YAML using YAML::Emitter
-                std::string yaml_str = ValueToYAMLString(json_val);
+                // Convert to YAML with block formatting
+                std::string yaml_str = yaml_utils::EmitYAML(json_node, yaml_utils::YAMLFormat::BLOCK);
                 return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
-            } catch (const std::exception &e) {
+            } catch (const std::exception& e) {
                 throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
             }
         });
 }
 
+//===--------------------------------------------------------------------===//
+// YAML Cast Functions
+//===--------------------------------------------------------------------===//
 
-// Cast from YAML to JSON
-static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool YAMLToJSONCast(Vector& source, Vector& result, idx_t count, CastParameters& parameters) {
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t yaml_str) -> string_t {
             if (yaml_str.GetSize() == 0) {
@@ -331,30 +402,29 @@ static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastPara
             
             try {
                 // Process as multi-document YAML
-                std::stringstream yaml_stream(yaml_str.GetString());
-                std::vector<YAML::Node> all_docs = YAML::LoadAll(yaml_stream);
+                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
                 std::string json_str;
-                if (all_docs.size() == 0) {
+                if (docs.empty()) {
                     json_str = "null";
-                } else if (all_docs.size() == 1) {
+                } else if (docs.size() == 1) {
                     // Single document - convert directly to JSON
-                    json_str = YAMLNodeToJSON(all_docs[0]);
+                    json_str = yaml_utils::YAMLNodeToJSON(docs[0]);
                 } else {
                     // Multiple documents - convert to JSON array
                     json_str = "[";
-                    for (size_t i = 0; i < all_docs.size(); i++) {
+                    for (size_t i = 0; i < docs.size(); i++) {
                         if (i > 0) {
                             json_str += ",";
                         }
-                        json_str += YAMLNodeToJSON(all_docs[i]);
+                        json_str += yaml_utils::YAMLNodeToJSON(docs[i]);
                     }
                     json_str += "]";
                 }
                 
                 return StringVector::AddString(result, json_str.c_str(), json_str.length());
-            } catch (const std::exception &e) {
-                // On error, return NULL
+            } catch (const std::exception& e) {
+                // On error, return empty string
                 return string_t();
             }
         });
@@ -362,8 +432,7 @@ static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastPara
     return true;
 }
 
-// Cast from JSON to YAML
-static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool JSONToYAMLCast(Vector& source, Vector& result, idx_t count, CastParameters& parameters) {
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t json_str) -> string_t {
             if (json_str.GetSize() == 0) {
@@ -371,23 +440,14 @@ static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastPara
             }
             
             try {
-                // Parse the JSON using YAML parser
+                // Parse JSON using YAML parser
                 YAML::Node json_node = YAML::Load(json_str.GetString());
                 
-                // Configure the emitter for clean YAML output
-                YAML::Emitter out;
-                out.SetIndent(2);
-                out.SetMapFormat(YAML::Block);
-                out.SetSeqFormat(YAML::Block);
-                
-                // Emit as properly formatted YAML
-                out << json_node;
-                std::string yaml_str = out.c_str();
-                
+                // Generate YAML with block formatting
+                std::string yaml_str = yaml_utils::EmitYAML(json_node, yaml_utils::YAMLFormat::BLOCK);
                 return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
-            } catch (const std::exception &e) {
-                // On error during conversion, return NULL
-                result.SetValue(count, Value(YAMLTypes::YAMLType()));
+            } catch (const std::exception& e) {
+                // On error, return empty string
                 return string_t();
             }
         });
@@ -395,9 +455,7 @@ static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastPara
     return true;
 }
 
-// Cast from VARCHAR to YAML
-static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-    // Basic pass-through with YAML formatting validation
+static bool VarcharToYAMLCast(Vector& source, Vector& result, idx_t count, CastParameters& parameters) {
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t str) -> string_t {
             if (str.GetSize() == 0) {
@@ -405,21 +463,14 @@ static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastP
             }
             
             try {
-                // Parse as YAML to validate and normalize
-                YAML::Node yaml_node = YAML::Load(str.GetString());
+                // Try to parse as multi-document YAML first
+                auto docs = yaml_utils::ParseYAML(str.GetString(), true);
                 
-                // Format correctly using YAML::Emitter
-                YAML::Emitter out;
-                out.SetIndent(2);
-                out.SetMapFormat(YAML::Block);
-                out.SetSeqFormat(YAML::Block);
-                
-                out << yaml_node;
-                std::string yaml_str = out.c_str();
-                
+                // Format as block-style YAML
+                std::string yaml_str = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::BLOCK);
                 return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
             } catch (...) {
-                result.SetValue(count, Value(YAMLTypes::YAMLType()));
+                // On parsing error, return empty string
                 return string_t();
             }
         });
@@ -427,9 +478,7 @@ static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastP
     return true;
 }
 
-// Cast from YAML to VARCHAR
-static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-    // Ensure proper YAML formatting for display
+static bool YAMLToVarcharCast(Vector& source, Vector& result, idx_t count, CastParameters& parameters) {
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t yaml_str) -> string_t {
             if (yaml_str.GetSize() == 0) {
@@ -437,20 +486,14 @@ static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
             }
             
             try {
-                // Parse and re-emit with proper formatting
-                YAML::Node yaml_node = YAML::Load(yaml_str.GetString());
+                // Parse as multi-document YAML
+                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
-                YAML::Emitter out;
-                out.SetIndent(2);
-                out.SetMapFormat(YAML::Block);
-                out.SetSeqFormat(YAML::Block);
-                
-                out << yaml_node;
-                std::string formatted_yaml = out.c_str();
-                
+                // Format using inline (flow) style for display purposes
+                std::string formatted_yaml = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::FLOW);
                 return StringVector::AddString(result, formatted_yaml.c_str(), formatted_yaml.length());
             } catch (...) {
-                // On error, pass through
+                // On error, pass through the original string
                 return yaml_str;
             }
         });
@@ -458,22 +501,26 @@ static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
     return true;
 }
 
-void YAMLTypes::Register(DatabaseInstance &db) {
-    // Get the YAML type (which is VARCHAR)
+//===--------------------------------------------------------------------===//
+// Registration
+//===--------------------------------------------------------------------===//
+
+void YAMLTypes::Register(DatabaseInstance& db) {
+    // Get the YAML type
     auto yaml_type = YAMLType();
     
     // Register the YAML type alias in the catalog
     ExtensionUtil::RegisterType(db, "yaml", yaml_type);
     
-    // Register YAML<->JSON cast function
+    // Register YAML<->JSON cast functions
     ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::JSON(), YAMLToJSONCast);
     ExtensionUtil::RegisterCastFunction(db, LogicalType::JSON(), yaml_type, JSONToYAMLCast);
 
-    // Register YAML<->VARCHAR cast function
+    // Register YAML<->VARCHAR cast functions
     ExtensionUtil::RegisterCastFunction(db, LogicalType::VARCHAR, yaml_type, VarcharToYAMLCast);
     ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::VARCHAR, YAMLToVarcharCast);
     
-    // Register the scalar functions as before
+    // Register scalar functions
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
     ExtensionUtil::RegisterFunction(db, yaml_to_json_fun);
     

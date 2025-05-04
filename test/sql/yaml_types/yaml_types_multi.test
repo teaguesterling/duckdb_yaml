@@ -4,6 +4,8 @@
 
 require yaml
 
+require json
+
 # Test with a complex multi-document YAML
 statement ok
 CREATE TABLE complex_yaml(y YAML);
