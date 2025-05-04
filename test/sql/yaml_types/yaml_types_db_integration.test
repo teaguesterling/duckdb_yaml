@@ -1,0 +1,188 @@
+# name: test/sql/yaml_types/yaml_types_db_integration.test
+# description: Test integration of YAML types with DuckDB database operations
+# group: [yaml]
+
+require yaml
+
+# Test creating table with YAML columns
+statement ok
+CREATE TABLE config_settings(
+    id INTEGER PRIMARY KEY,
+    name VARCHAR,
+    config YAML
+);
+
+# Insert YAML data
+statement ok
+INSERT INTO config_settings VALUES
+(1, 'Database', 'host: localhost
+port: 5432
+credentials:
+  username: dbuser
+  password: dbpass
+options:
+  pool_size: 10
+  timeout_ms: 3000'),
+(2, 'API', 'host: api.example.com
+port: 443
+ssl: true
+routes:
+  - path: /users
+    methods: [GET, POST]
+  - path: /products
+    methods: [GET]'),
+(3, 'Logging', 'level: info
+outputs:
+  - type: file
+    path: /var/log/app.log
+  - type: console');
+
+# Query data using YAML to JSON conversion
+query I
+SELECT name, yaml_to_json(config) AS config_json FROM config_settings WHERE id = 1;
+----
+Database	{"host":"localhost","port":5432,"credentials":{"username":"dbuser","password":"dbpass"},"options":{"pool_size":10,"timeout_ms":3000}}
+
+# Test using JSON functions after conversion
+query I
+SELECT 
+    name, 
+    json_extract_string(yaml_to_json(config), '$.host') AS host,
+    json_extract_int(yaml_to_json(config), '$.port') AS port
+FROM config_settings 
+ORDER BY id;
+----
+Database	localhost	5432
+API	api.example.com	443
+Logging	NULL	NULL
+
+# Test filtering based on converted YAML
+query I
+SELECT name FROM config_settings 
+WHERE json_extract_string(yaml_to_json(config), '$.host') = 'localhost';
+----
+Database
+
+# Test updating YAML values
+statement ok
+UPDATE config_settings 
+SET config = 'host: db.example.com
+port: 5432
+credentials:
+  username: dbuser
+  password: dbpass
+options:
+  pool_size: 20
+  timeout_ms: 5000'
+WHERE id = 1;
+
+# Verify update
+query I
+SELECT json_extract_string(yaml_to_json(config), '$.host') AS host,
+       json_extract_int(yaml_to_json(config), '$.options.pool_size') AS pool_size
+FROM config_settings 
+WHERE id = 1;
+----
+db.example.com	20
+
+# Test creating views with YAML conversion
+statement ok
+CREATE VIEW config_json_view AS
+SELECT 
+    id,
+    name,
+    yaml_to_json(config) AS config_json
+FROM config_settings;
+
+# Query from the view
+query II
+SELECT name, json_extract_string(config_json, '$.host') AS host
+FROM config_json_view
+WHERE id IN (1, 2)
+ORDER BY id;
+----
+Database	db.example.com
+API	api.example.com
+
+# Test joins with YAML data
+statement ok
+CREATE TABLE services(
+    id INTEGER PRIMARY KEY,
+    config_id INTEGER REFERENCES config_settings(id),
+    service_name VARCHAR
+);
+
+statement ok
+INSERT INTO services VALUES
+(1, 1, 'PostgreSQL'),
+(2, 2, 'REST API'),
+(3, 3, 'Logger');
+
+# Join and query YAML data
+query II
+SELECT 
+    s.service_name,
+    json_extract_string(yaml_to_json(c.config), '$.host') AS host
+FROM services s
+JOIN config_settings c ON s.config_id = c.id
+WHERE json_extract_string(yaml_to_json(c.config), '$.host') IS NOT NULL
+ORDER BY s.id;
+----
+PostgreSQL	db.example.com
+REST API	api.example.com
+
+# Test aggregation with YAML data
+statement ok
+CREATE TABLE metrics(
+    id INTEGER PRIMARY KEY,
+    timestamp TIMESTAMP,
+    data YAML
+);
+
+statement ok
+INSERT INTO metrics VALUES
+(1, '2023-01-01 10:00:00', 'server: server1
+metrics:
+  cpu: 45
+  memory: 60
+  disk: 30'),
+(2, '2023-01-01 11:00:00', 'server: server1
+metrics:
+  cpu: 65
+  memory: 70
+  disk: 30'),
+(3, '2023-01-01 10:00:00', 'server: server2
+metrics:
+  cpu: 30
+  memory: 50
+  disk: 25'),
+(4, '2023-01-01 11:00:00', 'server: server2
+metrics:
+  cpu: 40
+  memory: 55
+  disk: 25');
+
+# Aggregate using YAML data
+query IR
+SELECT 
+    json_extract_string(yaml_to_json(data), '$.server') AS server,
+    AVG(json_extract_int(yaml_to_json(data), '$.metrics.cpu')) AS avg_cpu
+FROM metrics
+GROUP BY json_extract_string(yaml_to_json(data), '$.server')
+ORDER BY server;
+----
+server1	55.0
+server2	35.0
+
+# Clean up
+statement ok
+DROP VIEW config_json_view;
+
+statement ok
+DROP TABLE services;
+
+statement ok
+DROP TABLE metrics;
+
+statement ok
+DROP TABLE config_settings;

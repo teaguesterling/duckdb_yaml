@@ -1,0 +1,46 @@
+# name: test/sql/yaml_types/yaml_integration.test
+# description: Test YAML type integration with DuckDB operations
+# group: [yaml]
+
+require yaml
+
+# Test filtering with YAML values
+statement ok
+CREATE TABLE yaml_data(id INTEGER, config YAML);
+
+statement ok
+INSERT INTO yaml_data VALUES 
+(1, 'environment: production'),
+(2, 'environment: staging'),
+(3, 'environment: development');
+
+# Filter based on YAML content via JSON conversion
+query I
+SELECT id FROM yaml_data 
+WHERE json_extract_string(yaml_to_json(config), '$.environment') = 'production';
+----
+1
+
+# Test joins with YAML data
+statement ok
+CREATE TABLE environments(env_name VARCHAR, features YAML);
+
+statement ok
+INSERT INTO environments VALUES
+('production', 'cache: true
+logging: minimal'),
+('staging', 'cache: true
+logging: detailed'),
+('development', 'cache: false
+logging: verbose');
+
+# Join tables using YAML content
+query II
+SELECT d.id, json_extract_string(yaml_to_json(e.features), '$.logging') AS log_level
+FROM yaml_data d
+JOIN environments e ON json_extract_string(yaml_to_json(d.config), '$.environment') = e.env_name
+ORDER BY d.id;
+----
+1	minimal
+2	detailed
+3	verbose
