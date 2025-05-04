@@ -16,8 +16,9 @@
 - [x] YAML logical type implementation (as VARCHAR alias)
 - [x] YAML to JSON conversion
 - [x] JSON to YAML conversion
-- [x] Value to YAML conversion (needs debugging)
-- [ ] Fix segfault in value_to_yaml function
+- [x] Value to YAML conversion (initial implementation)
+- [ ] Fix segfault in value_to_yaml function (critical issue)
+- [ ] Improve tests for multi-line YAML strings
 - [ ] Explicit column type specification via 'columns' parameter
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Stream processing for large files
@@ -80,7 +81,8 @@
 ## Known Issues and Planned Improvements
 
 ### Type System
-- [ ] Fix segfault in value_to_yaml function
+- [ ] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
+- [ ] Implement a safe fallback for value_to_yaml to avoid crashes
 - [ ] Improve type detection for specialized formats (timestamps, dates)
 - [ ] Add better support for YAML anchors and aliases
 
@@ -99,4 +101,7 @@
 - [x] Add tests for YAML type functionality
 - [x] Add tests for anchor/alias handling
 - [x] Add tests for YAML formatting
+- [ ] Update yaml_anchor_alias.test to use flow-style YAML for SQL parsing compatibility
+- [ ] Fix yaml_types_db_integration.test column count issues
+- [ ] Update yaml_integration.test to properly load JSON extension
 - [ ] Add tests for error recovery in various scenarios

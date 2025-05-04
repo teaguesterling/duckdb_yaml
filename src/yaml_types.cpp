@@ -215,105 +215,155 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
 }
 
 void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
-    if (value.IsNull()) {
-        out << YAML::Null;
-        return;
-    }
-    
-    switch (value.type().id()) {
-        case LogicalTypeId::VARCHAR: {
-            std::string str_val = value.GetValue<string>();
-            
-            // Check if the string needs special formatting
-            bool needs_quotes = false;
-            
-            if (str_val.empty()) {
-                needs_quotes = true;
-            } else {
-                // Check for special strings that could be interpreted as something else
-                if (str_val == "null" || str_val == "true" || str_val == "false" ||
-                    str_val == "yes" || str_val == "no" || str_val == "on" || str_val == "off" ||
-                    str_val == "~" || str_val == "") {
+    try {
+        if (value.IsNull()) {
+            out << YAML::Null;
+            return;
+        }
+        
+        switch (value.type().id()) {
+            case LogicalTypeId::VARCHAR: {
+                std::string str_val = value.GetValue<string>();
+                
+                // Check if the string needs special formatting
+                bool needs_quotes = false;
+                
+                if (str_val.empty()) {
                     needs_quotes = true;
-                }
-                
-                // Check if it looks like a number
-                try {
-                    size_t pos;
-                    std::stod(str_val, &pos);
-                    if (pos == str_val.size()) {
-                        needs_quotes = true; // It looks like a number
-                    }
-                } catch (...) {
-                    // Not a number
-                }
-                
-                // Check for special characters
-                for (char c : str_val) {
-                    if (c == ':' || c == '{' || c == '}' || c == '[' || c == ']' || 
-                        c == ',' || c == '&' || c == '*' || c == '#' || c == '?' || 
-                        c == '|' || c == '-' || c == '<' || c == '>' || c == '=' || 
-                        c == '!' || c == '%' || c == '@' || c == '\\' || c == '"' ||
-                        c == '\'' || c == '\n' || c == '\t' || c == ' ') {
+                } else {
+                    // Check for special strings that could be interpreted as something else
+                    if (str_val == "null" || str_val == "true" || str_val == "false" ||
+                        str_val == "yes" || str_val == "no" || str_val == "on" || str_val == "off" ||
+                        str_val == "~" || str_val == "") {
                         needs_quotes = true;
-                        break;
+                    }
+                    
+                    // Check if it looks like a number
+                    try {
+                        size_t pos;
+                        std::stod(str_val, &pos);
+                        if (pos == str_val.size()) {
+                            needs_quotes = true; // It looks like a number
+                        }
+                    } catch (...) {
+                        // Not a number
+                    }
+                    
+                    // Check for special characters
+                    for (char c : str_val) {
+                        if (c == ':' || c == '{' || c == '}' || c == '[' || c == ']' || 
+                            c == ',' || c == '&' || c == '*' || c == '#' || c == '?' || 
+                            c == '|' || c == '-' || c == '<' || c == '>' || c == '=' || 
+                            c == '!' || c == '%' || c == '@' || c == '\\' || c == '"' ||
+                            c == '\'' || c == '\n' || c == '\t' || c == ' ') {
+                            needs_quotes = true;
+                            break;
+                        }
                     }
                 }
+                
+                if (needs_quotes) {
+                    // Use single quoted style for most strings requiring quotes
+                    out << YAML::SingleQuoted << str_val;
+                } else {
+                    // Use plain style for strings that don't need quotes
+                    out << str_val;
+                }
+                break;
             }
-            
-            if (needs_quotes) {
-                // Use single quoted style for most strings requiring quotes
-                out << YAML::SingleQuoted << str_val;
-            } else {
-                // Use plain style for strings that don't need quotes
-                out << str_val;
+            case LogicalTypeId::BOOLEAN:
+                out << value.GetValue<bool>();
+                break;
+            case LogicalTypeId::INTEGER:
+            case LogicalTypeId::BIGINT:
+                try {
+                    out << value.GetValue<int64_t>();
+                } catch (...) {
+                    // If casting fails, convert to string as fallback
+                    out << YAML::SingleQuoted << value.ToString();
+                }
+                break;
+            case LogicalTypeId::FLOAT:
+            case LogicalTypeId::DOUBLE:
+                try {
+                    out << value.GetValue<double>();
+                } catch (...) {
+                    // If casting fails, convert to string as fallback
+                    out << YAML::SingleQuoted << value.ToString();
+                }
+                break;
+            case LogicalTypeId::LIST: {
+                try {
+                    out << YAML::BeginSeq;
+                    auto& list_val = ListValue::GetChildren(value);
+                    for (const auto& element : list_val) {
+                        EmitValueToYAML(out, element);
+                    }
+                    out << YAML::EndSeq;
+                } catch (...) {
+                    // If list processing fails, emit as string
+                    out << YAML::SingleQuoted << value.ToString();
+                }
+                break;
             }
-            break;
+            case LogicalTypeId::STRUCT: {
+                try {
+                    out << YAML::BeginMap;
+                    auto& struct_vals = StructValue::GetChildren(value);
+                    auto& struct_names = StructType::GetChildTypes(value.type());
+                    
+                    // Safety check for struct children
+                    if (struct_vals.size() != struct_names.size()) {
+                        throw std::runtime_error("Mismatch between struct values and names");
+                    }
+                    
+                    for (size_t i = 0; i < struct_vals.size(); i++) {
+                        out << YAML::Key << struct_names[i].first;
+                        out << YAML::Value;
+                        EmitValueToYAML(out, struct_vals[i]);
+                    }
+                    out << YAML::EndMap;
+                } catch (...) {
+                    // If struct processing fails, emit as string
+                    out << YAML::SingleQuoted << value.ToString();
+                }
+                break;
+            }
+            default:
+                // For types we don't handle specifically, convert to string
+                out << YAML::SingleQuoted << value.ToString();
+                break;
         }
-        case LogicalTypeId::BOOLEAN:
-            out << value.GetValue<bool>();
-            break;
-        case LogicalTypeId::INTEGER:
-        case LogicalTypeId::BIGINT:
-            out << value.GetValue<int64_t>();
-            break;
-        case LogicalTypeId::FLOAT:
-        case LogicalTypeId::DOUBLE:
-            out << value.GetValue<double>();
-            break;
-        case LogicalTypeId::LIST: {
-            out << YAML::BeginSeq;
-            auto& list_val = ListValue::GetChildren(value);
-            for (const auto& element : list_val) {
-                EmitValueToYAML(out, element);
-            }
-            out << YAML::EndSeq;
-            break;
+    } catch (...) {
+        // Last-resort fallback - if anything goes wrong, emit null
+        try {
+            out << YAML::Null;
+        } catch (...) {
+            // Prevent cascading exceptions
         }
-        case LogicalTypeId::STRUCT: {
-            out << YAML::BeginMap;
-            auto& struct_vals = StructValue::GetChildren(value);
-            auto& struct_names = StructType::GetChildTypes(value.type());
-            for (size_t i = 0; i < struct_vals.size(); i++) {
-                out << YAML::Key << struct_names[i].first;
-                out << YAML::Value;
-                EmitValueToYAML(out, struct_vals[i]);
-            }
-            out << YAML::EndMap;
-            break;
-        }
-        default:
-            // For types we don't handle specifically, convert to string
-            out << YAML::SingleQuoted << value.ToString();
-            break;
     }
 }
 
 std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
-    YAML::Emitter out;
-    ConfigureEmitter(out, format);
-    EmitValueToYAML(out, value);
-    return out.c_str();
+    try {
+        YAML::Emitter out;
+        ConfigureEmitter(out, format);
+        EmitValueToYAML(out, value);
+        
+        // Check if we have a valid YAML string
+        if (out.good() && out.c_str() != nullptr) {
+            return out.c_str();
+        } else {
+            // If emitter is in error state, return null as fallback
+            return "null";
+        }
+    } catch (const std::exception& e) {
+        // Handle known exceptions
+        return "null";
+    } catch (...) {
+        // Handle any other unexpected errors
+        return "null";
+    }
 }
 
 } // namespace yaml_utils
@@ -363,8 +413,17 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
     UnaryExecutor::Execute<Value, string_t>(
         args.data[0], result, args.size(),
         [&](Value value) -> string_t {
-            std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::BLOCK);
-            return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
+            try {
+                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::BLOCK);
+                return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
+            } catch (const std::exception& e) {
+                // If there's a known exception, return a descriptive message
+                std::string error_msg = "Error converting to YAML: " + std::string(e.what());
+                return StringVector::AddString(result, "null", 4);
+            } catch (...) {
+                // For unknown exceptions, just return null
+                return StringVector::AddString(result, "null", 4);
+            }
         });
 }
 

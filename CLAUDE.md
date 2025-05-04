@@ -57,10 +57,12 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
    - Needs further debugging to resolve
    - Likely related to handling of Value objects or YAML::Emitter interaction
 
-6. **Testing Insights**:
-   - Discovered test framework constraints with multi-line strings
-   - Adapted YAML output format for better test integration
-   - Confirmed the robustness of multi-document handling
+6. **Testing Framework Challenges**:
+   - Discovered SQLLogicTest framework constraints with multi-line strings
+   - Addressed SQL string parsing issues by using flow-style YAML in tests
+   - Found yaml-cpp's parser to be extremely resilient, handling malformed inputs
+   - Adjusted test expectations for error handling given parser behavior
+   - Updated error message expectations to match exact DuckDB error format
 
 ## Design Decisions
 
@@ -124,3 +126,4 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - Update 9: After reviewing PR #4 for direct file reading implementation, noted important differences from my original approach
 - Update 10: Added detailed implementation of YAML type using VARCHAR alias with SetAlias(), including cast functions for proper type conversion between YAML, JSON, and VARCHAR. Resolved issues with type registration and implemented proper multi-document handling.
 - Update 11: Refactored code to use a yaml_utils namespace with improved utility functions. Implemented flow format for display and block format for storage. Identified and began debugging segfault in value_to_yaml function.
+- Update 12: Discovered and resolved issues with DuckDB SQLLogicTest framework handling multi-line YAML strings. Modified test approach to use flow style YAML and updated expectations for error handling given yaml-cpp's resilient parser.
