@@ -9,7 +9,7 @@
 
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
-//#include "yaml_types.hpp"
+#include "yaml_types.hpp"
 
 namespace duckdb {
 

@@ -4,36 +4,28 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
 
 LogicalType YAMLTypes::YAMLType() {
-    // Return VARCHAR type with YAML alias
-    auto yaml_type = LogicalType::VARCHAR;
-    yaml_type.SetAlias("YAML");
-    return yaml_type;
+    // Return VARCHAR type for YAML
+    // Note: We don't use SetAlias as it's not available in this DuckDB version
+    return LogicalType::VARCHAR;
 }
 
-// Helper function to convert YAML node to JSON string with proper alias resolution
-static std::string YAMLNodeToJSON(const YAML::Node &node, bool resolve_aliases = true) {
+// Helper function to convert YAML node to JSON string
+// Note: yaml-cpp handles aliases automatically, so no explicit handling needed
+static std::string YAMLNodeToJSON(const YAML::Node &node) {
     if (!node) {
         return "null";
     }
     
-    // If resolving aliases is enabled and this is an alias node,
-    // process the node it refers to instead
-    YAML::Node target_node = node;
-    if (resolve_aliases && node.IsAlias()) {
-        target_node = node.Alias();
-    }
-    
-    switch (target_node.Type()) {
+    switch (node.Type()) {
         case YAML::NodeType::Null:
             return "null";
         case YAML::NodeType::Scalar: {
-            std::string value = target_node.Scalar();
+            std::string value = node.Scalar();
             
             // Try to detect if the scalar is a number, boolean, or string
             if (value == "true" || value == "yes" || value == "on") {
@@ -88,11 +80,11 @@ static std::string YAMLNodeToJSON(const YAML::Node &node, bool resolve_aliases =
         }
         case YAML::NodeType::Sequence: {
             std::string result = "[";
-            for (size_t i = 0; i < target_node.size(); i++) {
+            for (size_t i = 0; i < node.size(); i++) {
                 if (i > 0) {
                     result += ",";
                 }
-                result += YAMLNodeToJSON(target_node[i], resolve_aliases);
+                result += YAMLNodeToJSON(node[i]);
             }
             result += "]";
             return result;
@@ -100,7 +92,7 @@ static std::string YAMLNodeToJSON(const YAML::Node &node, bool resolve_aliases =
         case YAML::NodeType::Map: {
             std::string result = "{";
             bool first = true;
-            for (auto it = target_node.begin(); it != target_node.end(); ++it) {
+            for (auto it = node.begin(); it != node.end(); ++it) {
                 if (!first) {
                     result += ",";
                 }
@@ -108,7 +100,7 @@ static std::string YAMLNodeToJSON(const YAML::Node &node, bool resolve_aliases =
                 
                 // Key must be a string in JSON
                 std::string key = it->first.Scalar();
-                result += "\"" + key + "\":" + YAMLNodeToJSON(it->second, resolve_aliases);
+                result += "\"" + key + "\":" + YAMLNodeToJSON(it->second);
             }
             result += "}";
             return result;
@@ -233,9 +225,10 @@ static void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
     }
 }
 
-// Implementation of CastYAMLToJSON with alias resolution
+// Implementation of CastYAMLToJSON
 string_t YAMLTypes::CastYAMLToJSON(ClientContext &context, string_t yaml_str) {
     if (yaml_str.GetSize() == 0) {
+        // Return empty string_t
         return string_t();
     }
     
@@ -248,21 +241,22 @@ string_t YAMLTypes::CastYAMLToJSON(ClientContext &context, string_t yaml_str) {
         if (all_docs.size() == 0) {
             json_str = "null";
         } else if (all_docs.size() == 1) {
-            // Single document - convert directly to JSON with alias resolution
-            json_str = YAMLNodeToJSON(all_docs[0], true);
+            // Single document - convert directly to JSON
+            json_str = YAMLNodeToJSON(all_docs[0]);
         } else {
-            // Multiple documents - convert to JSON array with alias resolution
+            // Multiple documents - convert to JSON array
             json_str = "[";
             for (size_t i = 0; i < all_docs.size(); i++) {
                 if (i > 0) {
                     json_str += ",";
                 }
-                json_str += YAMLNodeToJSON(all_docs[i], true);
+                json_str += YAMLNodeToJSON(all_docs[i]);
             }
             json_str += "]";
         }
         
-        return StringVector::AddString(json_str);
+        // Create a string_t from the JSON string
+        return StringVector::AddString(json_str.c_str(), json_str.length());
     } catch (const std::exception &e) {
         throw InvalidInputException("Error converting YAML to JSON: %s", e.what());
     }
@@ -271,10 +265,10 @@ string_t YAMLTypes::CastYAMLToJSON(ClientContext &context, string_t yaml_str) {
 // Implementation of CastValueToYAML using YAML::Emitter
 string_t YAMLTypes::CastValueToYAML(ClientContext &context, Value value) {
     std::string yaml_str = ValueToYAMLString(value);
-    return StringVector::AddString(yaml_str);
+    return StringVector::AddString(yaml_str.c_str(), yaml_str.length());
 }
 
-// Cast YAML string to JSON with alias resolution
+// Cast YAML string to JSON
 static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
     // Extract the input vector
     auto &input_vector = args.data[0];
@@ -294,22 +288,22 @@ static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &
                 
                 if (all_docs.size() == 0) {
                     std::string json_str = "null";
-                    return StringVector::AddString(result, json_str);
+                    return StringVector::AddString(result, json_str.c_str(), json_str.length());
                 } else if (all_docs.size() == 1) {
-                    // Single document - convert directly to JSON with alias resolution
-                    std::string json_str = YAMLNodeToJSON(all_docs[0], true);
-                    return StringVector::AddString(result, json_str);
+                    // Single document - convert directly to JSON
+                    std::string json_str = YAMLNodeToJSON(all_docs[0]);
+                    return StringVector::AddString(result, json_str.c_str(), json_str.length());
                 } else {
-                    // Multiple documents - convert to JSON array with alias resolution
+                    // Multiple documents - convert to JSON array
                     std::string result_str = "[";
                     for (size_t i = 0; i < all_docs.size(); i++) {
                         if (i > 0) {
                             result_str += ",";
                         }
-                        result_str += YAMLNodeToJSON(all_docs[i], true);
+                        result_str += YAMLNodeToJSON(all_docs[i]);
                     }
                     result_str += "]";
-                    return StringVector::AddString(result, result_str);
+                    return StringVector::AddString(result, result_str.c_str(), result_str.length());
                 }
             } catch (const std::exception &e) {
                 throw InvalidInputException("Error converting YAML to JSON: %s", e.what());
@@ -327,7 +321,7 @@ static void ValueToYAMLFunction(DataChunk &args, ExpressionState &state, Vector 
         input_vector, result, args.size(),
         [&](Value value) -> string_t {
             std::string yaml_str = ValueToYAMLString(value);
-            return StringVector::AddString(result, yaml_str);
+            return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
         });
 }
 
@@ -345,13 +339,12 @@ static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
             }
             
             try {
-                // Convert JSON to Value using DuckDB's parser
-                Value json_val = Value::INVALID;
+                // Convert JSON to Value
+                Value json_val;
                 
-                // Try to parse JSON
+                // Try to parse JSON - in this version we'll just use the string directly
+                // since there's no simple JSON to Value conversion available
                 try {
-                    // We could use DuckDB's JSON functions here if available
-                    // For now, we'll use a basic approach to convert JSON to Value
                     std::string json_string = json_str.GetString();
                     json_val = Value(json_string);
                 } catch (const std::exception &e) {
@@ -360,7 +353,7 @@ static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
                 
                 // Convert Value to YAML using YAML::Emitter
                 std::string yaml_str = ValueToYAMLString(json_val);
-                return StringVector::AddString(result, yaml_str);
+                return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
             } catch (const std::exception &e) {
                 throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
             }
@@ -383,30 +376,8 @@ void YAMLTypes::Register(DatabaseInstance &db) {
     auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
     
-    // Register cast from VARCHAR to YAML and from YAML to JSON
-    auto &cast_functions = CastFunctionSet::GetCastFunctions(db);
-    
-    // Register cast from any VARCHAR to YAML
-    cast_functions.RegisterCastFunction(LogicalType::VARCHAR, yaml_type, 
-        [](Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-            // Simple pass-through cast since YAML is stored as VARCHAR
-            VectorOperations::Copy(source, result, count, 0, 0);
-            return true;
-        }, 0);
-    
-    // Register cast from YAML to JSON
-    cast_functions.RegisterCastFunction(yaml_type, LogicalType::JSON(), 
-        [](Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-            // Use our YAML to JSON conversion
-            DataChunk input_chunk;
-            input_chunk.Initialize(Allocator::DefaultAllocator(), {yaml_type}, 1);
-            input_chunk.data[0].Reference(source);
-            input_chunk.SetCardinality(count);
-            
-            ExpressionState state(parameters.context);
-            YAMLToJSONFunction(input_chunk, state, result);
-            return true;
-        }, 10);
+    // Note: We don't register special casts in this version since the CastFunctionSet API is different
+    // The scalar functions should provide the necessary functionality
 }
 
 } // namespace duckdb
