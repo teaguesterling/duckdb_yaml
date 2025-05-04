@@ -9,8 +9,13 @@
 namespace duckdb {
 
 LogicalType YAMLTypes::YAMLType() {
-    // Return VARCHAR type for YAML
-    return LogicalType::VARCHAR;
+    auto yaml_type = LogicalType(LogicalTypeId::VARCHAR);
+    yaml_type.SetAlias("yaml");
+    return yaml_type;
+}
+
+static bool IsYAMLType(const LogicalType &t) {
+    return t.id() == LogicalTypeId::VARCHAR && t.HasAlias() && t.GetAlias() == "yaml";
 }
 
 // Helper function to convert YAML node to JSON string
@@ -315,12 +320,158 @@ static void JSONToYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
         });
 }
 
+
+// Cast from YAML to JSON
+static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+    UnaryExecutor::Execute<string_t, string_t>(
+        source, result, count, [&](string_t yaml_str) -> string_t {
+            if (yaml_str.GetSize() == 0) {
+                return string_t();
+            }
+            
+            try {
+                // Process as multi-document YAML
+                std::stringstream yaml_stream(yaml_str.GetString());
+                std::vector<YAML::Node> all_docs = YAML::LoadAll(yaml_stream);
+                
+                std::string json_str;
+                if (all_docs.size() == 0) {
+                    json_str = "null";
+                } else if (all_docs.size() == 1) {
+                    // Single document - convert directly to JSON
+                    json_str = YAMLNodeToJSON(all_docs[0]);
+                } else {
+                    // Multiple documents - convert to JSON array
+                    json_str = "[";
+                    for (size_t i = 0; i < all_docs.size(); i++) {
+                        if (i > 0) {
+                            json_str += ",";
+                        }
+                        json_str += YAMLNodeToJSON(all_docs[i]);
+                    }
+                    json_str += "]";
+                }
+                
+                return StringVector::AddString(result, json_str.c_str(), json_str.length());
+            } catch (const std::exception &e) {
+                // On error, return NULL
+                return string_t();
+            }
+        });
+    
+    return true;
+}
+
+// Cast from JSON to YAML
+static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+    UnaryExecutor::Execute<string_t, string_t>(
+        source, result, count, [&](string_t json_str) -> string_t {
+            if (json_str.GetSize() == 0) {
+                return string_t();
+            }
+            
+            try {
+                // Parse the JSON using YAML parser
+                YAML::Node json_node = YAML::Load(json_str.GetString());
+                
+                // Configure the emitter for clean YAML output
+                YAML::Emitter out;
+                out.SetIndent(2);
+                out.SetMapFormat(YAML::Block);
+                out.SetSeqFormat(YAML::Block);
+                
+                // Emit as properly formatted YAML
+                out << json_node;
+                std::string yaml_str = out.c_str();
+                
+                return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
+            } catch (const std::exception &e) {
+                // On error during conversion, return NULL
+                result.SetValue(count, Value(YAMLTypes::YAMLType()));
+                return string_t();
+            }
+        });
+    
+    return true;
+}
+
+// Cast from VARCHAR to YAML
+static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+    // Basic pass-through with YAML formatting validation
+    UnaryExecutor::Execute<string_t, string_t>(
+        source, result, count, [&](string_t str) -> string_t {
+            if (str.GetSize() == 0) {
+                return string_t();
+            }
+            
+            try {
+                // Parse as YAML to validate and normalize
+                YAML::Node yaml_node = YAML::Load(str.GetString());
+                
+                // Format correctly using YAML::Emitter
+                YAML::Emitter out;
+                out.SetIndent(2);
+                out.SetMapFormat(YAML::Block);
+                out.SetSeqFormat(YAML::Block);
+                
+                out << yaml_node;
+                std::string yaml_str = out.c_str();
+                
+                return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
+            } catch (...) {
+                result.SetValue(count, Value(YAMLTypes::YAMLType()));
+                return string_t();
+            }
+        });
+    
+    return true;
+}
+
+// Cast from YAML to VARCHAR
+static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+    // Ensure proper YAML formatting for display
+    UnaryExecutor::Execute<string_t, string_t>(
+        source, result, count, [&](string_t yaml_str) -> string_t {
+            if (yaml_str.GetSize() == 0) {
+                return string_t();
+            }
+            
+            try {
+                // Parse and re-emit with proper formatting
+                YAML::Node yaml_node = YAML::Load(yaml_str.GetString());
+                
+                YAML::Emitter out;
+                out.SetIndent(2);
+                out.SetMapFormat(YAML::Block);
+                out.SetSeqFormat(YAML::Block);
+                
+                out << yaml_node;
+                std::string formatted_yaml = out.c_str();
+                
+                return StringVector::AddString(result, formatted_yaml.c_str(), formatted_yaml.length());
+            } catch (...) {
+                // On error, pass through
+                return yaml_str;
+            }
+        });
+    
+    return true;
+}
+
 void YAMLTypes::Register(DatabaseInstance &db) {
     // Get the YAML type (which is VARCHAR)
     auto yaml_type = YAMLType();
     
     // Register the YAML type alias in the catalog
-    ExtensionUtil::RegisterType(db, "YAML", yaml_type);
+    ExtensionUtil::RegisterType(db, "yaml", yaml_type);
+    
+    // Register YAML<->JSON cast function
+    ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::JSON(), YAMLToJSONCast);
+    ExtensionUtil::RegisterCastFunction(db, LogicalType::JSON(), yaml_type, JSONToYAMLCast);
+
+    // Register YAML<->VARCHAR cast function
+    ExtensionUtil::RegisterCastFunction(db, LogicalType::VARCHAR, yaml_type, VarcharToYAMLCast);
+    ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::VARCHAR, YAMLToVarcharCast);
     
     // Register the scalar functions as before
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
