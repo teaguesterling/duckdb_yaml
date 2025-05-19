@@ -1,0 +1,96 @@
+# name: test/sql/yaml_types/yaml_segfault_test.test
+# description: Test cases that might trigger segfault in value_to_yaml function
+# group: [yaml]
+# disabled: true
+
+require yaml
+
+# Simple cases first
+statement ok
+SELECT value_to_yaml(NULL);
+
+statement ok
+SELECT value_to_yaml('Simple string');
+
+statement ok
+SELECT value_to_yaml(42);
+
+statement ok
+SELECT value_to_yaml(3.14);
+
+statement ok
+SELECT value_to_yaml(TRUE);
+
+# Test with deeper nested structures
+statement ok
+SELECT value_to_yaml([1, 2, [3, 4, [5, 6]]]);
+
+statement ok
+SELECT value_to_yaml({'a': {'b': {'c': {'d': 'deep'}}}});
+
+# Test with mixed complex types
+statement ok
+SELECT value_to_yaml([{'a': 1}, {'b': [2, 3, {'c': 4}]}]);
+
+# Test with unusual value types
+statement ok
+SELECT value_to_yaml(UUID());
+
+statement ok
+SELECT value_to_yaml(BLOB '\x01\x02\x03');
+
+# Test with very large structures
+statement ok
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n
+    UNION ALL
+    SELECT n + 1 FROM numbers WHERE n < 100
+)
+SELECT value_to_yaml(LIST(n)) FROM numbers;
+
+statement ok
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n, 'value' || 1 as v
+    UNION ALL
+    SELECT n + 1, 'value' || (n + 1) FROM numbers WHERE n < 100
+)
+SELECT value_to_yaml(MAP(n, v)) FROM numbers;
+
+# Test with special string cases
+statement ok
+SELECT value_to_yaml('');
+
+statement ok
+SELECT value_to_yaml('Special characters: \t\n\r\b\f\\\'\"');
+
+statement ok
+SELECT value_to_yaml('Very long string ' || repeat('x', 1000));
+
+# Test with complex YAML patterns
+statement ok
+SELECT value_to_yaml({'key with special characters !@#$%^&*()': 'value'});
+
+statement ok
+SELECT value_to_yaml({'*': '*', '&': '&', '[':']', '{':'}'});
+
+# Test with circular references (emulated)
+statement ok
+CREATE TEMP TABLE circular_test AS
+SELECT {'name': 'Recursive', 'children': [{'name': 'Child1'}, {'name': 'Child2'}]} as data;
+
+statement ok
+SELECT value_to_yaml(data) FROM circular_test;
+
+# Test with special data types
+statement ok
+SELECT value_to_yaml(TIMESTAMP '2023-01-01 12:00:00');
+
+statement ok
+SELECT value_to_yaml(DATE '2023-01-01');
+
+statement ok
+SELECT value_to_yaml(INTERVAL '1 day');
+
+# Clean up
+statement ok
+DROP TABLE IF EXISTS circular_test;

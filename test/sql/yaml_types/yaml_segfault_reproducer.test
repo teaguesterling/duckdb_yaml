@@ -1,0 +1,969 @@
+# name: test/sql/yaml_types/yaml_segfault_reproducer.test
+# description: Progressive test cases to identify what triggers the segfault in value_to_yaml function
+# group: [yaml]
+# disabled: false
+
+require yaml
+
+# Enable debug mode for comparison
+statement ok
+SELECT yaml_debug_enable();
+
+# ===== PHASE 1: SIMPLE SCALAR VALUES =====
+
+# Test 1: Simple string
+query I
+SELECT value_to_yaml('Simple string');
+----
+Simple string
+
+query I
+SELECT yaml_debug_value_to_yaml('Simple string');
+----
+Simple string
+
+# Test 2: Number
+query I
+SELECT value_to_yaml(42);
+----
+42
+
+query I
+SELECT yaml_debug_value_to_yaml(42);
+----
+42
+
+# Test 3: Boolean
+query I
+SELECT value_to_yaml(TRUE);
+----
+true
+
+query I
+SELECT yaml_debug_value_to_yaml(TRUE);
+----
+true
+
+# Test 4: NULL
+query I
+SELECT value_to_yaml(NULL);
+----
+null
+
+query I
+SELECT yaml_debug_value_to_yaml(NULL);
+----
+null
+
+# ===== PHASE 2: SIMPLE ARRAYS =====
+
+# Test 5: Empty array
+query I
+SELECT value_to_yaml([]);
+----
+[]
+
+query I
+SELECT yaml_debug_value_to_yaml([]);
+----
+[]
+
+# Test 6: Array of simple scalars
+query I
+SELECT value_to_yaml([1, 2, 3]);
+----
+- 1
+- 2
+- 3
+
+query I
+SELECT yaml_debug_value_to_yaml([1, 2, 3]);
+----
+- 1
+- 2
+- 3
+
+# Test 7: Array with mixed types
+query I
+SELECT value_to_yaml([1, 'text', TRUE]);
+----
+- 1
+- text
+- true
+
+query I
+SELECT yaml_debug_value_to_yaml([1, 'text', TRUE]);
+----
+- 1
+- text
+- true
+
+# ===== PHASE 3: SIMPLE OBJECTS/MAPS =====
+
+# Test 8: Empty object
+query I
+SELECT value_to_yaml({});
+----
+{}
+
+query I
+SELECT yaml_debug_value_to_yaml({});
+----
+{}
+
+# Test 9: Simple object with scalar values
+query I
+SELECT value_to_yaml({'name': 'John', 'age': 30});
+----
+age: 30
+name: John
+
+query I
+SELECT yaml_debug_value_to_yaml({'name': 'John', 'age': 30});
+----
+age: 30
+name: John
+
+# Test 10: Object with mixed value types
+query I
+SELECT value_to_yaml({'name': 'John', 'active': TRUE, 'score': 85.5});
+----
+active: true
+name: John
+score: 85.5
+
+query I
+SELECT yaml_debug_value_to_yaml({'name': 'John', 'active': TRUE, 'score': 85.5});
+----
+active: true
+name: John
+score: 85.5
+
+# ===== PHASE 4: SINGLE-LEVEL NESTING =====
+
+# Test 11: Array containing object
+query I
+SELECT value_to_yaml([{'name': 'John'}]);
+----
+- name: John
+
+query I
+SELECT yaml_debug_value_to_yaml([{'name': 'John'}]);
+----
+- name: John
+
+# Test 12: Object containing array
+query I
+SELECT value_to_yaml({'numbers': [1, 2, 3]});
+----
+numbers:
+  - 1
+  - 2
+  - 3
+
+query I
+SELECT yaml_debug_value_to_yaml({'numbers': [1, 2, 3]});
+----
+numbers:
+  - 1
+  - 2
+  - 3
+
+# ===== PHASE 5: TWO-LEVEL NESTING =====
+
+# Test 13: Array of objects
+query I
+SELECT value_to_yaml([{'id': 1}, {'id': 2}]);
+----
+- id: 1
+- id: 2
+
+query I
+SELECT yaml_debug_value_to_yaml([{'id': 1}, {'id': 2}]);
+----
+- id: 1
+- id: 2
+
+# Test 14: Object with nested object
+query I
+SELECT value_to_yaml({'user': {'name': 'John', 'age': 30}});
+----
+user:
+  age: 30
+  name: John
+
+query I
+SELECT yaml_debug_value_to_yaml({'user': {'name': 'John', 'age': 30}});
+----
+user:
+  age: 30
+  name: John
+
+# Test 15: Object with array of objects
+query I
+SELECT value_to_yaml({'users': [{'id': 1}, {'id': 2}]});
+----
+users:
+  - id: 1
+  - id: 2
+
+query I
+SELECT yaml_debug_value_to_yaml({'users': [{'id': 1}, {'id': 2}]});
+----
+users:
+  - id: 1
+  - id: 2
+
+# ===== PHASE 6: THREE-LEVEL NESTING =====
+
+# Test 16: Nested objects (3 levels)
+query I
+SELECT value_to_yaml({'a': {'b': {'c': 'value'}}});
+----
+a:
+  b:
+    c: value
+
+query I
+SELECT yaml_debug_value_to_yaml({'a': {'b': {'c': 'value'}}});
+----
+a:
+  b:
+    c: value
+
+# Test 17: Nested arrays (3 levels)
+query I
+SELECT value_to_yaml([1, [2, [3, 4]]]);
+----
+- 1
+- - 2
+  - - 3
+    - 4
+
+query I
+SELECT yaml_debug_value_to_yaml([1, [2, [3, 4]]]);
+----
+- 1
+- - 2
+  - - 3
+    - 4
+
+# Test 18: Mixed nesting (object → array → object)
+query I
+SELECT value_to_yaml({'items': [{'id': 1}, {'id': 2}]});
+----
+items:
+  - id: 1
+  - id: 2
+
+query I
+SELECT yaml_debug_value_to_yaml({'items': [{'id': 1}, {'id': 2}]});
+----
+items:
+  - id: 1
+  - id: 2
+
+# ===== PHASE 7: COMPLEX MIXED STRUCTURES =====
+
+# Test 19: Complex mixed structure
+query I
+SELECT value_to_yaml({
+  'users': [
+    {'name': 'John', 'roles': ['admin', 'user']},
+    {'name': 'Jane', 'roles': ['user']}
+  ]
+});
+----
+users:
+  - name: John
+    roles:
+      - admin
+      - user
+  - name: Jane
+    roles:
+      - user
+
+query I
+SELECT yaml_debug_value_to_yaml({
+  'users': [
+    {'name': 'John', 'roles': ['admin', 'user']},
+    {'name': 'Jane', 'roles': ['user']}
+  ]
+});
+----
+users:
+  - name: John
+    roles:
+      - admin
+      - user
+  - name: Jane
+    roles:
+      - user
+
+# ===== PHASE 8: SPECIAL CASES =====
+
+# Test 20: Object with special characters in keys
+query I
+SELECT value_to_yaml({'key with spaces': 'value', 'special!@#': 123});
+----
+'key with spaces': value
+'special!@#': 123
+
+query I
+SELECT yaml_debug_value_to_yaml({'key with spaces': 'value', 'special!@#': 123});
+----
+'key with spaces': value
+'special!@#': 123
+
+# Test 21: String with special YAML characters
+query I
+SELECT value_to_yaml('String with: special {yaml} [characters]');
+----
+'String with: special {yaml} [characters]'
+
+query I
+SELECT yaml_debug_value_to_yaml('String with: special {yaml} [characters]');
+----
+'String with: special {yaml} [characters]'
+
+# Test 22: Very long string (reduced length for test readability)
+query I
+SELECT value_to_yaml('Very long ' || repeat('x', 20));
+----
+'Very long xxxxxxxxxxxxxxxxxxxx'
+
+query I
+SELECT yaml_debug_value_to_yaml('Very long ' || repeat('x', 20));
+----
+'Very long xxxxxxxxxxxxxxxxxxxx'
+
+# ===== PHASE 9: DEEP RECURSION =====
+
+# Test 23: Deeply nested objects (5 levels)
+query I
+SELECT value_to_yaml({'a': {'b': {'c': {'d': {'e': 'deep'}}}}});
+----
+a:
+  b:
+    c:
+      d:
+        e: deep
+
+query I
+SELECT yaml_debug_value_to_yaml({'a': {'b': {'c': {'d': {'e': 'deep'}}}}});
+----
+a:
+  b:
+    c:
+      d:
+        e: deep
+
+# Test 24: Deeply nested arrays (5 levels)
+query I
+SELECT value_to_yaml([1, [2, [3, [4, [5]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+
+query I
+SELECT yaml_debug_value_to_yaml([1, [2, [3, [4, [5]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+
+# ===== PHASE 10: RECURSIVE STRUCTS AND LIST GENERATION =====
+# Note: Using smaller numbers for test suite efficiency
+
+# Test 25: Generate a list with elements
+query I
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n
+    UNION ALL
+    SELECT n + 1 FROM numbers WHERE n < 10
+)
+SELECT value_to_yaml(LIST(n)) FROM numbers LIMIT 1;
+----
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+
+query I
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n
+    UNION ALL
+    SELECT n + 1 FROM numbers WHERE n < 10
+)
+SELECT yaml_debug_value_to_yaml(LIST(n)) FROM numbers LIMIT 1;
+----
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+
+# Test 26: Generate a struct with fields
+query I
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n, 'value' || 1 as v
+    UNION ALL
+    SELECT n + 1, 'value' || (n + 1) FROM numbers WHERE n < 10
+)
+SELECT value_to_yaml(MAP(n::VARCHAR, v)) FROM numbers LIMIT 1;
+----
+'1': value1
+'10': value10
+'2': value2
+'3': value3
+'4': value4
+'5': value5
+'6': value6
+'7': value7
+'8': value8
+'9': value9
+
+query I
+WITH RECURSIVE numbers AS (
+    SELECT 1 as n, 'value' || 1 as v
+    UNION ALL
+    SELECT n + 1, 'value' || (n + 1) FROM numbers WHERE n < 10
+)
+SELECT yaml_debug_value_to_yaml(MAP(n::VARCHAR, v)) FROM numbers LIMIT 1;
+----
+'1': value1
+'10': value10
+'2': value2
+'3': value3
+'4': value4
+'5': value5
+'6': value6
+'7': value7
+'8': value8
+'9': value9
+
+# ===== PHASE 11: MIXED COMPLEX TYPES WITH POTENTIAL MEMORY ISSUES =====
+
+# Test 27: Complex nested structure combining many elements
+query I
+WITH complex_data AS (
+    SELECT {
+        'metadata': {
+            'version': 2.0,
+            'is_valid': true
+        },
+        'users': [
+            {'id': 1, 'name': 'User 1', 'tags': ['active', 'premium']},
+            {'id': 2, 'name': 'User 2', 'tags': ['inactive']}
+        ],
+        'settings': {
+            'permissions': {
+                'read': ['user', 'admin'],
+                'write': ['admin'],
+                'execute': []
+            },
+            'limits': {
+                'max_connections': 100,
+                'timeout': 30,
+                'nested': {
+                    'level1': {
+                        'level2': {
+                            'level3': 'deep value'
+                        }
+                    }
+                }
+            }
+        }
+    } as data
+)
+SELECT value_to_yaml(data) FROM complex_data;
+----
+metadata:
+  is_valid: true
+  version: 2
+settings:
+  limits:
+    max_connections: 100
+    nested:
+      level1:
+        level2:
+          level3: deep value
+    timeout: 30
+  permissions:
+    execute: []
+    read:
+      - user
+      - admin
+    write:
+      - admin
+users:
+  - id: 1
+    name: User 1
+    tags:
+      - active
+      - premium
+  - id: 2
+    name: User 2
+    tags:
+      - inactive
+
+query I
+WITH complex_data AS (
+    SELECT {
+        'metadata': {
+            'version': 2.0,
+            'is_valid': true
+        },
+        'users': [
+            {'id': 1, 'name': 'User 1', 'tags': ['active', 'premium']},
+            {'id': 2, 'name': 'User 2', 'tags': ['inactive']}
+        ],
+        'settings': {
+            'permissions': {
+                'read': ['user', 'admin'],
+                'write': ['admin'],
+                'execute': []
+            },
+            'limits': {
+                'max_connections': 100,
+                'timeout': 30,
+                'nested': {
+                    'level1': {
+                        'level2': {
+                            'level3': 'deep value'
+                        }
+                    }
+                }
+            }
+        }
+    } as data
+)
+SELECT yaml_debug_value_to_yaml(data) FROM complex_data;
+----
+metadata:
+  is_valid: true
+  version: 2
+settings:
+  limits:
+    max_connections: 100
+    nested:
+      level1:
+        level2:
+          level3: deep value
+    timeout: 30
+  permissions:
+    execute: []
+    read:
+      - user
+      - admin
+    write:
+      - admin
+users:
+  - id: 1
+    name: User 1
+    tags:
+      - active
+      - premium
+  - id: 2
+    name: User 2
+    tags:
+      - inactive
+
+# ===== PHASE 12: EDGE CASES KNOWN TO CAUSE ISSUES =====
+
+# Test 28a: UUID handling
+query I
+SELECT value_to_yaml(UUID());
+----
+(regex:'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+query I
+SELECT yaml_debug_value_to_yaml(UUID());
+----
+(regex:'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+# Test 28b: BLOB handling
+query I
+SELECT value_to_yaml(BLOB '\x01\x02\x03');
+----
+(regex:'.+')
+
+query I
+SELECT yaml_debug_value_to_yaml(BLOB '\x01\x02\x03');
+----
+(regex:'.+')
+
+# Test 28c: Interval handling
+query I
+SELECT value_to_yaml(INTERVAL '1 day');
+----
+(regex:'.+')
+
+query I
+SELECT yaml_debug_value_to_yaml(INTERVAL '1 day');
+----
+(regex:'.+')
+
+# Test 29: Object with many nested objects and arrays
+query I
+WITH recursive_obj AS (
+    SELECT {
+        'a': [1, 2, {'b': [3, 4, {'c': [5, 6, {'d': [7, 8, {}]}]}]}]
+    } as obj
+)
+SELECT value_to_yaml(obj) FROM recursive_obj;
+----
+a:
+  - 1
+  - 2
+  - b:
+      - 3
+      - 4
+      - c:
+          - 5
+          - 6
+          - d:
+              - 7
+              - 8
+              - {}
+
+query I
+WITH recursive_obj AS (
+    SELECT {
+        'a': [1, 2, {'b': [3, 4, {'c': [5, 6, {'d': [7, 8, {}]}]}]}]
+    } as obj
+)
+SELECT yaml_debug_value_to_yaml(obj) FROM recursive_obj;
+----
+a:
+  - 1
+  - 2
+  - b:
+      - 3
+      - 4
+      - c:
+          - 5
+          - 6
+          - d:
+              - 7
+              - 8
+              - {}
+
+# Test 30: Deeply nested arrays (10 levels)
+query I
+SELECT value_to_yaml([1, [2, [3, [4, [5, [6, [7, [8, [9, [10]]]]]]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+        - - 6
+          - - 7
+            - - 8
+              - - 9
+                - - 10
+
+query I
+SELECT yaml_debug_value_to_yaml([1, [2, [3, [4, [5, [6, [7, [8, [9, [10]]]]]]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+        - - 6
+          - - 7
+            - - 8
+              - - 9
+                - - 10
+
+# ===== PHASE 13: EXTREME STRESS TESTS =====
+
+# Test 31: Deeply nested arrays (15 levels) - potential segfault trigger
+query I
+SELECT value_to_yaml([1, [2, [3, [4, [5, [6, [7, [8, [9, [10, [11, [12, [13, [14, [15]]]]]]]]]]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+        - - 6
+          - - 7
+            - - 8
+              - - 9
+                - - 10
+                  - - 11
+                    - - 12
+                      - - 13
+                        - - 14
+                          - - 15
+
+query I
+SELECT yaml_debug_value_to_yaml([1, [2, [3, [4, [5, [6, [7, [8, [9, [10, [11, [12, [13, [14, [15]]]]]]]]]]]]]]);
+----
+- 1
+- - 2
+  - - 3
+    - - 4
+      - - 5
+        - - 6
+          - - 7
+            - - 8
+              - - 9
+                - - 10
+                  - - 11
+                    - - 12
+                      - - 13
+                        - - 14
+                          - - 15
+
+# Test 32: Deeply nested objects (15 levels) - potential segfault trigger
+query I
+SELECT value_to_yaml({'a':{'b':{'c':{'d':{'e':{'f':{'g':{'h':{'i':{'j':{'k':{'l':{'m':{'n':{'o':'deep'}}}}}}}}}}}}}}});
+----
+a:
+  b:
+    c:
+      d:
+        e:
+          f:
+            g:
+              h:
+                i:
+                  j:
+                    k:
+                      l:
+                        m:
+                          n:
+                            o: deep
+
+query I
+SELECT yaml_debug_value_to_yaml({'a':{'b':{'c':{'d':{'e':{'f':{'g':{'h':{'i':{'j':{'k':{'l':{'m':{'n':{'o':'deep'}}}}}}}}}}}}}}});
+----
+a:
+  b:
+    c:
+      d:
+        e:
+          f:
+            g:
+              h:
+                i:
+                  j:
+                    k:
+                      l:
+                        m:
+                          n:
+                            o: deep
+
+# Test 33: Complex recursive structure with many levels of mixed types
+query I
+WITH complex_deep AS (
+    SELECT {
+        'level1': {
+            'array': [1, 2, 3],
+            'level2': {
+                'map': {'a': 1, 'b': 2},
+                'level3': {
+                    'mixed': [{'x': 1}, {'y': [2, 3]}, {'z': {'deep': true}}],
+                    'level4': {
+                        'deep_array': [
+                            [1, [2, [3, [4, [5]]]]],
+                            {'maps': [{'in': {'arrays': [1, 2, {'more': {'nesting': 'value'}}]}}]}
+                        ]
+                    }
+                }
+            }
+        }
+    } as data
+)
+SELECT value_to_yaml(data) FROM complex_deep;
+----
+level1:
+  array:
+    - 1
+    - 2
+    - 3
+  level2:
+    level3:
+      level4:
+        deep_array:
+          - - 1
+            - - 2
+              - - 3
+                - - 4
+                  - - 5
+          - maps:
+              - in:
+                  arrays:
+                    - 1
+                    - 2
+                    - more:
+                        nesting: value
+      mixed:
+        - x: 1
+        - y:
+            - 2
+            - 3
+        - z:
+            deep: true
+    map:
+      a: 1
+      b: 2
+
+query I
+WITH complex_deep AS (
+    SELECT {
+        'level1': {
+            'array': [1, 2, 3],
+            'level2': {
+                'map': {'a': 1, 'b': 2},
+                'level3': {
+                    'mixed': [{'x': 1}, {'y': [2, 3]}, {'z': {'deep': true}}],
+                    'level4': {
+                        'deep_array': [
+                            [1, [2, [3, [4, [5]]]]],
+                            {'maps': [{'in': {'arrays': [1, 2, {'more': {'nesting': 'value'}}]}}]}
+                        ]
+                    }
+                }
+            }
+        }
+    } as data
+)
+SELECT yaml_debug_value_to_yaml(data) FROM complex_deep;
+----
+level1:
+  array:
+    - 1
+    - 2
+    - 3
+  level2:
+    level3:
+      level4:
+        deep_array:
+          - - 1
+            - - 2
+              - - 3
+                - - 4
+                  - - 5
+          - maps:
+              - in:
+                  arrays:
+                    - 1
+                    - 2
+                    - more:
+                        nesting: value
+      mixed:
+        - x: 1
+        - y:
+            - 2
+            - 3
+        - z:
+            deep: true
+    map:
+      a: 1
+      b: 2
+
+# Test 34: Large number of nested elements in a single structure
+query I
+WITH RECURSIVE gen(n, val) AS (
+    SELECT 1, [1] UNION ALL
+    SELECT n+1, list_append(val, n+1) FROM gen WHERE n < 20
+),
+nested_gen AS (
+    SELECT n,
+    CASE 
+        WHEN n = 1 THEN val
+        WHEN n = 2 THEN [val]
+        WHEN n = 3 THEN [[val]]
+        WHEN n = 4 THEN [[[val]]]
+        WHEN n = 5 THEN [[[[val]]]]
+        ELSE [[[[[val]]]]]
+    END as nested_val
+    FROM gen
+)
+SELECT value_to_yaml(nested_val) FROM nested_gen WHERE n = 6 LIMIT 1;
+----
+- - - - - - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+
+query I
+WITH RECURSIVE gen(n, val) AS (
+    SELECT 1, [1] UNION ALL
+    SELECT n+1, list_append(val, n+1) FROM gen WHERE n < 20
+),
+nested_gen AS (
+    SELECT n,
+    CASE 
+        WHEN n = 1 THEN val
+        WHEN n = 2 THEN [val]
+        WHEN n = 3 THEN [[val]]
+        WHEN n = 4 THEN [[[val]]]
+        WHEN n = 5 THEN [[[[val]]]]
+        ELSE [[[[[val]]]]]
+    END as nested_val
+    FROM gen
+)
+SELECT yaml_debug_value_to_yaml(nested_val) FROM nested_gen WHERE n = 6 LIMIT 1;
+----
+- - - - - - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+
+# Disable debug mode
+statement ok
+SELECT yaml_debug_disable();

@@ -222,35 +222,29 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
     return row_nodes;
 }
 
-// Helper functions for file globbing and file list handling
-vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_value, bool only_existing) {
+// Helper function to get files from a Value (which can be a string or list of strings)
+vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_value, bool ignore_errors) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
 
-    // Given a glob path, add any file results (ignoring directories)
-    auto globFileResults = [&result, &fs](const string& glob_path) {
-        for (auto &file : fs.Glob(glob_path)) {
-            if (!fs.DirectoryExists(file.path)) {
-                result.push_back(file.path);
-            }   
-        }
-    };
-
-    // Handle yaml path string based on existing file, directories, or glob path
-    auto dispatchYamlFileResult = [&result, &fs, &globFileResults, &only_existing](const string& yaml_path) {
+    // Helper lambda to handle individual file paths
+    auto processPath = [&](const string& yaml_path) {
         // Single file
         if (fs.FileExists(yaml_path)) {
             result.push_back(yaml_path);
         // Single directory
         } else if (fs.DirectoryExists(yaml_path)) {
-            // .yaml files
-            globFileResults(fs.JoinPath(yaml_path, "*.yaml"));
-            globFileResults(fs.JoinPath(yaml_path, "*.yml"));
-        // Glob path
+            // Get all YAML files in directory
+            auto yaml_files = GetGlobFiles(context, fs.JoinPath(yaml_path, "*.yaml"));
+            auto yml_files = GetGlobFiles(context, fs.JoinPath(yaml_path, "*.yml"));
+            result.insert(result.end(), yaml_files.begin(), yaml_files.end());
+            result.insert(result.end(), yml_files.begin(), yml_files.end());
+        // Glob pattern
         } else if (fs.HasGlob(yaml_path)) {
-            globFileResults(yaml_path);
-        // Don't fail if asking for "only existing"
-        } else if(!only_existing) {
+            auto glob_files = GetGlobFiles(context, yaml_path);
+            result.insert(result.end(), glob_files.begin(), glob_files.end());
+        // Don't fail if ignore_errors is true
+        } else if (!ignore_errors) {
             throw IOException("File or directory does not exist: " + yaml_path);
         }
     };
@@ -260,18 +254,48 @@ vector<string> YAMLReader::GlobFiles(ClientContext &context, const Value &path_v
         auto &file_list = ListValue::GetChildren(path_value);
         for (auto &file_value : file_list) {
             if (file_value.type().id() == LogicalTypeId::VARCHAR) {
-                dispatchYamlFileResult(file_value.ToString());
+                processPath(file_value.ToString());
             } else {
                 throw BinderException("File list must contain string values");
             }
         }
     // Handle string path (file, glob pattern, or directory)
-    }  else if (path_value.type().id() == LogicalTypeId::VARCHAR) {
-        dispatchYamlFileResult(path_value.ToString());
+    } else if (path_value.type().id() == LogicalTypeId::VARCHAR) {
+        processPath(path_value.ToString());
     // Handle invalid types
     } else {
         throw BinderException("File path must be a string or list of strings");
     }
+
+    return result;
+}
+
+// Helper functions for file globbing and file list handling
+vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pattern) {
+    auto &fs = FileSystem::GetFileSystem(context);
+    vector<string> result;
+
+    // Given a glob path, add any file results (ignoring directories)
+    auto globFileResults = [&result, &fs](const string& glob_path) {
+        for (auto &file : fs.Glob(glob_path)) {
+            if (!fs.DirectoryExists(file.path)) {
+                result.push_back(file.path);
+            }
+        }
+    };
+
+    // Check if it's already a glob pattern
+    if (fs.HasGlob(pattern)) {
+        globFileResults(pattern);
+    } else if (fs.DirectoryExists(pattern)) {
+        // If it's a directory, look for YAML files inside
+        globFileResults(fs.JoinPath(pattern, "*.yaml"));
+        globFileResults(fs.JoinPath(pattern, "*.yml"));
+    } else {
+        // If it's not a directory or glob, pass it through as is
+        result.push_back(pattern);
+    }
+
     
     return result;
 }
@@ -480,8 +504,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     // Create bind data
     auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
 
-    // Get files using globbing
-    auto files = GlobFiles(context, path_value, options.ignore_errors);
+    // Get files using value processing
+    auto files = GetFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
@@ -647,7 +671,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     return std::move(result);
 }
 
-unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
+unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
                                                TableFunctionBindInput &input,
                                                vector<LogicalType> &return_types,
                                                vector<string> &names) {
@@ -709,8 +733,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadBind(ClientContext &context,
     // Create bind data
     auto result = make_uniq<YAMLReadBindData>(file_path, options);
 
-    // Get files using globbing
-    auto files = GlobFiles(context, path_value, options.ignore_errors);
+    // Get files using value processing
+    auto files = GetFiles(context, path_value, options.ignore_errors);
     if (files.empty() && !options.ignore_errors) {
         throw IOException("No YAML files found matching the input path");
     }
@@ -838,7 +862,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
     output.SetCardinality(count);
 }
 
-void YAMLReader::YAMLReadFunction(ClientContext &context, TableFunctionInput &data_p,
+void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionInput &data_p,
                                DataChunk &output) {
     auto &bind_data = (YAMLReadBindData &)*data_p.bind_data;
 
@@ -910,7 +934,7 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
     ExtensionUtil::RegisterFunction(db, read_yaml);
 
     // Register the object-based reader
-    TableFunction read_yaml_objects("read_yaml_objects", {LogicalType::ANY}, YAMLReadFunction, YAMLReadBind);
+    TableFunction read_yaml_objects("read_yaml_objects", {LogicalType::ANY}, YAMLReadObjectsFunction, YAMLReadObjectsBind);
     read_yaml_objects.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
     read_yaml_objects.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
     read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;

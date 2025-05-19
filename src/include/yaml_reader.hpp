@@ -39,6 +39,7 @@ struct ReplacementScanData;
  * - Top-level sequence handling
  * - Robust error recovery options
  * - Type auto-detection
+ * - Explicit column type specification
  */
 class YAMLReader {
 
@@ -50,6 +51,10 @@ public:
         size_t maximum_object_size = 16777216;  // 16MB default maximum file size
         bool multi_document = true;             // Whether to handle multi-document YAML files
         bool expand_root_sequence = true;       // Whether to expand top-level sequences into rows
+        
+        // User-specified column types
+        vector<string> column_names;            // User-provided column names
+        vector<LogicalType> column_types;       // User-provided column types
     };
 
     /**
@@ -82,6 +87,7 @@ private:
      * - Single files, file lists, glob patterns, and directory paths
      * - Error handling with ignore_errors parameter
      * - Auto-detection of column types
+     * - Explicit column type specification
      * 
      * @param context Client context for the query
      * @param input Bind input parameters
@@ -97,17 +103,17 @@ private:
     /**
      * @brief Execution function for read_yaml
      * 
-     * Processes rows from YAML documents
-     * 
-     * @param context Client context for the query
-     * @param data_p Function data from bind step
-     * @param output Output chunk to fill
+     * @param context Client context
+     * @param input Execution input data
+     * @param state Local state for the function
+     * @param output Output chunk to write results to
      */
-    static void YAMLReadRowsFunction(ClientContext &context, TableFunctionInput &data_p,
+    static void YAMLReadRowsFunction(ClientContext &context,
+                                  TableFunctionInput &input,
                                   DataChunk &output);
 
     /**
-     * @brief Bind function for read_yaml_objects that preserves document structure
+     * @brief Bind function for read_yaml_objects that returns each document as a column
      * 
      * @param context Client context for the query
      * @param input Bind input parameters
@@ -115,90 +121,158 @@ private:
      * @param names Names of columns to return
      * @return Function data for execution
      */
-    static unique_ptr<FunctionData> YAMLReadBind(ClientContext &context,
-                                              TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types,
-                                              vector<string> &names);
+    static unique_ptr<FunctionData> YAMLReadObjectsBind(ClientContext &context,
+                                                        TableFunctionBindInput &input,
+                                                        vector<LogicalType> &return_types,
+                                                        vector<string> &names);
 
     /**
      * @brief Execution function for read_yaml_objects
      * 
-     * @param context Client context for the query
-     * @param data_p Function data from bind step
-     * @param output Output chunk to fill
+     * @param context Client context
+     * @param input Execution input data
+     * @param state Local state for the function
+     * @param output Output chunk to write results to
      */
-    static void YAMLReadFunction(ClientContext &context, TableFunctionInput &data_p,
-                              DataChunk &output);
+    static void YAMLReadObjectsFunction(ClientContext &context,
+                                        TableFunctionInput &input,
+                                        DataChunk &output);
 
     /**
-     * @brief Detect logical type from YAML node
+     * @brief Get file paths from various input types (single file, list, glob, directory)
      * 
-     * @param node YAML node to detect type from
-     * @return Detected logical type
+     * @param context Client context for file operations
+     * @param file_path Input file path (can be a single file, list, glob pattern, or directory)
+     * @return vector<string> List of resolved file paths
+     */
+    static vector<string> GetFilePaths(ClientContext &context, const string &file_path);
+
+    /**
+     * @brief Get files from a Value (which can be a string or list of strings)
+     *
+     * @param context Client context for file operations
+     * @param path_value The input value containing file path(s)
+     * @param ignore_errors Whether to ignore missing files
+     * @return vector<string> List of resolved file paths
+     */
+    static vector<string> GetFiles(ClientContext &context, const Value &path_value, bool ignore_errors);
+
+    /**
+     * @brief Get files from a glob pattern
+     *
+     * @param context Client context for file operations
+     * @param pattern Glob pattern to match files
+     * @return vector<string> List of matching file paths
+     */
+    static vector<string> GetGlobFiles(ClientContext &context, const string &pattern);
+
+    /**
+     * @brief Get files from a file list
+     * 
+     * @param context Client context for file operations
+     * @param file_path Path to the file containing list of files
+     * @return vector<string> List of file paths from the list
+     */
+    static vector<string> GetFileList(ClientContext &context, const string &file_path);
+
+    /**
+     * @brief Detect column schema from a YAML document
+     * 
+     * @param node The YAML node to inspect
+     * @param names Output vector of column names
+     * @param types Output vector of column types
+     * @param options Read options
+     */
+    static void DetectSchema(const YAML::Node &node, vector<string> &names, 
+                           vector<LogicalType> &types, const YAMLReadOptions &options);
+
+    /**
+     * @brief Detect the type of a YAML node
+     * 
+     * @param node YAML node to inspect
+     * @return LogicalType The detected DuckDB type
      */
     static LogicalType DetectYAMLType(const YAML::Node &node);
 
     /**
-     * @brief Convert YAML node to DuckDB value
+     * @brief Convert a YAML node to a DuckDB value
      * 
      * @param node YAML node to convert
-     * @param target_type Target logical type
-     * @return Converted DuckDB value
+     * @param target_type Target type to convert to
+     * @return Value The converted value
      */
     static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type);
-    
+
     /**
-     * @brief Parse multi-document YAML with error recovery
-     * 
-     * @param yaml_content YAML content to parse
-     * @param ignore_errors Whether to ignore parsing errors
-     * @return Vector of valid YAML nodes
+     * @brief Read a YAML file and parse it into documents
+     *
+     * @param context Client context for file operations
+     * @param file_path Path to the YAML file
+     * @param options YAML read options
+     * @return vector<YAML::Node> Parsed YAML documents
+     */
+    static vector<YAML::Node> ReadYAMLFile(ClientContext &context, const string &file_path,
+                                          const YAMLReadOptions &options);
+
+    /**
+     * @brief Parse a multi-document YAML file with error recovery
+     *
+     * @param yaml_content The YAML content to parse
+     * @param ignore_errors Whether to attempt error recovery
+     * @return vector<YAML::Node> Successfully parsed documents
      */
     static vector<YAML::Node> ParseMultiDocumentYAML(const string &yaml_content, bool ignore_errors);
-    
-    /**
-     * @brief Recover partial valid documents from YAML with syntax errors
-     * 
-     * @param yaml_content YAML content to parse
-     * @return Vector of valid YAML nodes
-     */
-    static vector<YAML::Node> RecoverPartialYAMLDocuments(const string &yaml_content);
-    
+
     /**
      * @brief Extract row nodes from YAML documents
      * 
-     * @param docs Vector of YAML documents
-     * @param expand_root_sequence Whether to expand top-level sequences into rows
-     * @return Vector of YAML nodes representing rows
+     * @param docs The YAML documents to process
+     * @param expand_root_sequence Whether to expand top-level sequences
+     * @return vector<YAML::Node> Row nodes extracted from documents
      */
     static vector<YAML::Node> ExtractRowNodes(const vector<YAML::Node> &docs, bool expand_root_sequence);
-    
+
     /**
-     * @brief Get files matching a pattern or from a file list
+     * @brief Process a map node into columnar data
      * 
-     * Supports:
-     * - Single file paths
-     * - Glob patterns (*.yaml, etc.)
-     * - File lists
-     * - Directory paths (reads all .yaml and .yml files)
-     * 
-     * @param context Client context for the query
-     * @param path_value File path, pattern, or list as a Value
-     * @param only_existing Remove any non-existant files, will raise exception otherwise
-     * @return Vector of matching file paths
+     * @param node The map node to process
+     * @param output The output data chunk
+     * @param row_index The current row index
+     * @param names Column names
+     * @param types Column types
      */
-    static vector<string> GlobFiles(ClientContext &context, const Value &path_value, bool only_existing);
-    
+    static void ProcessMapNode(const YAML::Node &node, DataChunk &output, idx_t row_index,
+                              const vector<string> &names, const vector<LogicalType> &types);
+
     /**
-     * @brief Read a single YAML file and parse it
+     * @brief Process a non-map node into columnar data
      * 
-     * @param context Client context for the query
-     * @param file_path Path to the file
-     * @param options YAML read options
-     * @return Vector of YAML nodes
+     * @param node The node to process
+     * @param output The output data chunk
+     * @param row_index The current row index
+     * @param column_index The column index
+     * @param current_type The current column type
      */
-    static vector<YAML::Node> ReadYAMLFile(ClientContext &context, const string &file_path, 
-                                          const YAMLReadOptions &options);
+    static void ProcessNonMapNode(const YAML::Node &node, DataChunk &output, idx_t row_index,
+                                 idx_t column_index, const LogicalType &current_type);
+
+    /**
+     * @brief Attempt to recover partial documents from corrupted YAML
+     * 
+     * @param yaml_content The YAML content to recover from
+     * @return vector<YAML::Node> Recovered documents
+     */
+    static vector<YAML::Node> RecoverPartialYAMLDocuments(const string &yaml_content);
+
+    /**
+     * @brief Bind the columns parameter for explicit type specification
+     * 
+     * @param context Client context
+     * @param input Function bind input
+     * @param options YAML read options to update with column specifications
+     */
+    static void BindColumnTypes(ClientContext &context, TableFunctionBindInput &input, 
+                               YAMLReadOptions &options);
 };
 
 } // namespace duckdb

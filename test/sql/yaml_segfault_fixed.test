@@ -1,0 +1,83 @@
+# Test for fixed segfault in value_to_yaml functions
+require yaml
+
+# Enable debug mode
+query I
+SELECT yaml_debug_enable();
+----
+true
+
+# Test scalar values that previously caused segfaults
+query T
+SELECT yaml_debug_value_to_yaml(42);
+----
+42
+
+query T
+SELECT yaml_debug_value_to_yaml(0);
+----
+0
+
+query T
+SELECT yaml_debug_value_to_yaml(true);
+----
+true
+
+query T
+SELECT yaml_debug_value_to_yaml(false);
+----
+false
+
+query T
+SELECT yaml_debug_value_to_yaml(3.14);
+----
+3.14
+
+query T
+SELECT yaml_debug_value_to_yaml('hello');
+----
+hello
+
+query I
+SELECT yaml_debug_value_to_yaml(NULL);
+----
+NULL
+
+# Test with the regular function in debug mode
+query T
+SELECT value_to_yaml(42);
+----
+42
+
+# Switch to regular mode and test
+query I
+SELECT yaml_debug_disable();
+----
+false
+
+query T
+SELECT value_to_yaml(42);
+----
+42
+
+# Test complex types
+query T
+SELECT value_to_yaml([1, 2, 3]);
+----
+[1, 2, 3]
+
+query T
+SELECT value_to_yaml({'a': 1, 'b': 2});
+----
+{a: 1, b: 2}
+
+# Test that both functions produce the same output
+query I
+SELECT value_to_yaml(42) = yaml_debug_value_to_yaml(42);
+----
+true
+
+query I
+SELECT value_to_yaml('test') = yaml_debug_value_to_yaml('test');
+----
+true

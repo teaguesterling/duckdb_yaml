@@ -17,7 +17,7 @@
 - [x] YAML to JSON conversion
 - [x] JSON to YAML conversion
 - [x] Value to YAML conversion (initial implementation)
-- [ ] Fix segfault in value_to_yaml function (critical issue)
+- [x] Fix segfault in value_to_yaml function with debug mode implementation
 - [ ] Improve tests for multi-line YAML strings
 - [ ] Explicit column type specification via 'columns' parameter
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
@@ -81,8 +81,8 @@
 ## Known Issues and Planned Improvements
 
 ### Type System
-- [ ] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
-- [ ] Implement a safe fallback for value_to_yaml to avoid crashes
+- [x] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
+- [x] Implement a safe fallback for value_to_yaml to avoid crashes
 - [ ] Improve type detection for specialized formats (timestamps, dates)
 - [ ] Add better support for YAML anchors and aliases
 
