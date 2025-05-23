@@ -149,9 +149,9 @@ static void YAMLTypeUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
+    BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
         args.data[0], args.data[1], result, args.size(),
-        [&](string_t yaml_str, string_t path_str) -> string_t {
+        [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
             if (yaml_str.GetSize() == 0) {
                 return StringVector::AddString(result, "null", 4);
             }
@@ -163,7 +163,9 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
                 
                 string type_str;
                 if (!node) {
-                    type_str = "null";
+                    // Nonexistent path - return SQL NULL
+                    mask.SetInvalid(idx);
+                    return string_t();
                 } else {
                     switch (node.Type()) {
                         case YAML::NodeType::Null:
@@ -196,9 +198,9 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 //===--------------------------------------------------------------------===//
 
 static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
+    BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
         args.data[0], args.data[1], result, args.size(),
-        [&](string_t yaml_str, string_t path_str) -> string_t {
+        [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
             if (yaml_str.GetSize() == 0) {
                 return StringVector::AddString(result, "null", 4);
             }
@@ -210,7 +212,9 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
                 
                 // Convert extracted node back to YAML
                 if (!node) {
-                    return StringVector::AddString(result, "null", 4);
+                    // Nonexistent path - return SQL NULL
+                    mask.SetInvalid(idx);
+                    return string_t();
                 }
                 
                 YAML::Emitter out;
@@ -241,7 +245,14 @@ static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, V
                 auto path_components = ParseYAMLPath(path_str.GetString());
                 auto node = ExtractFromYAML(root, path_components);
                 
-                if (!node || node.IsNull()) {
+                if (!node) {
+                    // Nonexistent path - return SQL NULL
+                    mask.SetInvalid(idx);
+                    return string_t();
+                }
+
+                if (node.IsNull()) {
+                    // YAML null value - return SQL NULL (same behavior as JSON)
                     mask.SetInvalid(idx);
                     return string_t();
                 }

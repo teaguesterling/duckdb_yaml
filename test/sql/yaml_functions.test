@@ -70,7 +70,7 @@ object
 query T
 SELECT yaml_type('{name: John}', '$.nonexistent');
 ----
-null
+NULL
 
 # Test yaml_extract function
 query T
@@ -91,7 +91,7 @@ SELECT yaml_extract('{person: {name: John, age: 30}}', '$.person');
 query T
 SELECT yaml_extract('{name: John}', '$.nonexistent');
 ----
-~
+NULL
 
 # Test yaml_extract_string function
 query T
