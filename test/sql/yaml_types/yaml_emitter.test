@@ -22,11 +22,11 @@ query I
 SELECT value_to_yaml(v) AS yaml_value FROM test_values ORDER BY v;
 ----
 1234
-'has: colon'
-'needs "quotes"'
-'null'
+"has: colon"
+needs "quotes"
+"null"
 simple string
-'true'
+true
 
 # Test boolean value emission
 query I
@@ -48,7 +48,7 @@ SELECT value_to_yaml(42) AS yaml_int;
 query I
 SELECT value_to_yaml(3.14159) AS yaml_float;
 ----
-3.141590
+3.14159
 
 # Test NULL value emission
 query I

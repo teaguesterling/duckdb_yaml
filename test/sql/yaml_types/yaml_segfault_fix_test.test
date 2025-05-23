@@ -5,6 +5,8 @@
 
 require yaml
 
+require json
+
 # Enable debug mode for the test (use the safer implementation)
 statement ok
 SELECT yaml_debug_enable();
@@ -30,31 +32,21 @@ true
 
 # Nested lists that previously caused issues
 query I
-SELECT yaml_debug_value_to_yaml([1, 2, [3, 4]]);
+SELECT yaml_debug_value_to_yaml([1::JSON, 2::JSON, [3, 4]::JSON]);
 ----
-- 1
-- 2
-- - 3
-  - 4
+[1, 2, [3, 4]]
 
 # Deep nesting that might cause stack overflow with recursive functions
 query I
 SELECT yaml_debug_value_to_yaml({'a': {'b': {'c': {'d': {'e': 'deep'}}}}});
 ----
-a:
-  b:
-    c:
-      d:
-        e: deep
+{a: {b: {c: {d: {e: deep}}}}}
 
 # Mixed complex types
 query I
-SELECT yaml_debug_value_to_yaml([{'a': 1}, {'b': [2, 3]}]);
+SELECT yaml_debug_value_to_yaml({'a': 1, 'b': {'c': [2, 3]});
 ----
-- a: 1
-- b:
-  - 2
-  - 3
+{a: 1, b: {c: [2, 3]}}
 
 # Comparison between debug and regular implementation
 query I

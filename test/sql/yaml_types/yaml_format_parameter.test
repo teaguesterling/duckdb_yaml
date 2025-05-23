@@ -1,0 +1,100 @@
+# name: test/sql/yaml_types/yaml_format_parameter.test
+# description: Test YAML format parameter functionality
+# group: [yaml_types]
+
+require yaml
+
+statement ok
+PRAGMA enable_verification
+
+# Test default format (should be flow)
+query I
+SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_format;
+----
+{name: John, age: 30}
+
+# Test explicit flow format
+query I
+SELECT value_to_yaml({'name': 'John', 'age': 30}, 'flow') AS flow_format;
+----
+{name: John, age: 30}
+
+# Test explicit block format (should be multi-line for complex structures)
+query I
+SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]}, 'block') AS block_format;
+----
+name: John
+items:
+  - 1
+  - 2
+  - 3
+
+# Test NULL value handling
+query I
+SELECT value_to_yaml(NULL) AS null_value;
+----
+null
+
+# Test NULL format parameter (should default to flow)
+query I
+SELECT value_to_yaml({'a': 1}, NULL) AS null_format;
+----
+{a: 1}
+
+# Test json_to_yaml default format
+query I
+SELECT json_to_yaml('{"name": "John", "age": 30}') AS json_default;
+----
+{name: John, age: 30}
+
+# Test json_to_yaml with explicit flow format
+query I
+SELECT json_to_yaml('{"name": "John", "age": 30}', 'flow') AS json_flow;
+----
+{name: John, age: 30}
+
+# Test json_to_yaml with block format
+query I
+SELECT json_to_yaml('{"name": "John", "items": [1, 2, 3]}', 'block') AS json_block;
+----
+name: John
+items:
+  - 1
+  - 2
+  - 3
+
+# Test error handling for invalid format
+statement error
+SELECT value_to_yaml({'a': 1}, 'invalid');
+----
+Invalid format 'invalid'. Must be 'flow' or 'block'
+
+# Test error handling for invalid format in json_to_yaml
+statement error
+SELECT json_to_yaml('{"a": 1}', 'invalid');
+----
+Invalid format 'invalid'. Must be 'flow' or 'block'
+
+# Test with array values
+query I
+SELECT value_to_yaml([1, 2, 3]) AS array_flow;
+----
+[1, 2, 3]
+
+query I
+SELECT value_to_yaml([1, 2, 3], 'block') AS array_block;
+----
+- 1
+- 2
+- 3
+
+# Test with simple scalar values
+query I
+SELECT value_to_yaml('hello', 'flow') AS scalar_flow;
+----
+hello
+
+query I
+SELECT value_to_yaml('hello', 'block') AS scalar_block;
+----
+hello

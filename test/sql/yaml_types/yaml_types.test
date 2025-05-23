@@ -124,7 +124,7 @@ SELECT value_to_yaml(42) AS yaml_value;
 query I
 SELECT value_to_yaml(3.14) AS yaml_value;
 ----
-3.140000
+3.14
 
 query I
 SELECT value_to_yaml(TRUE) AS yaml_value;

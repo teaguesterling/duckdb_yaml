@@ -13,101 +13,101 @@ CREATE TABLE test_yaml AS SELECT
 
 # Test yaml_type function - unary version
 query I
-SELECT yaml_type(yaml_simple) FROM test_yaml;
+SELECT yaml_type(yaml_simple::YAML) FROM test_yaml;
 ----
 object
 
 query I
-SELECT yaml_type(yaml_array) FROM test_yaml;
+SELECT yaml_type(yaml_array::YAML) FROM test_yaml;
 ----
 array
 
 query I
-SELECT yaml_type(yaml_null) FROM test_yaml;
+SELECT yaml_type(yaml_null::YAML) FROM test_yaml;
 ----
 null
 
 # Test yaml_type function - binary version (with path)
 query I
-SELECT yaml_type(yaml_simple, '$.name') FROM test_yaml;
+SELECT yaml_type(yaml_simple::YAML, '$.name') FROM test_yaml;
 ----
 scalar
 
 query I
-SELECT yaml_type(yaml_simple, '$.address') FROM test_yaml;
+SELECT yaml_type(yaml_simple::YAML, '$.address') FROM test_yaml;
 ----
 object
 
 query I
-SELECT yaml_type(yaml_simple, '$.address.city') FROM test_yaml;
+SELECT yaml_type(yaml_simple::YAML, '$.address.city') FROM test_yaml;
 ----
 scalar
 
 query I
-SELECT yaml_type(yaml_array, '$[2]') FROM test_yaml;
+SELECT yaml_type(yaml_array::YAML, '$[2]') FROM test_yaml;
 ----
 array
 
 # Test yaml_extract function
 query I
-SELECT yaml_extract(yaml_simple, '$.name') FROM test_yaml;
+SELECT yaml_extract(yaml_simple::YAML, '$.name') FROM test_yaml;
 ----
 John
 
 query I
-SELECT yaml_extract(yaml_simple, '$.age') FROM test_yaml;
+SELECT yaml_extract(yaml_simple::YAML, '$.age') FROM test_yaml;
 ----
 30
 
 query I
-SELECT yaml_extract(yaml_simple, '$.address.city') FROM test_yaml;
+SELECT yaml_extract(yaml_simple::YAML, '$.address.city') FROM test_yaml;
 ----
 NYC
 
 query I
-SELECT yaml_extract(yaml_array, '$[0]') FROM test_yaml;
+SELECT yaml_extract(yaml_array::YAML, '$[0]') FROM test_yaml;
 ----
 1
 
 query I
-SELECT yaml_extract(yaml_array, '$[2]') FROM test_yaml;
+SELECT yaml_extract(yaml_array::YAML, '$[2]') FROM test_yaml;
 ----
 [3, 4]
 
 # Test yaml_extract_string function
 query I
-SELECT yaml_extract_string(yaml_simple, '$.name') FROM test_yaml;
+SELECT yaml_extract_string(yaml_simple::YAML, '$.name') FROM test_yaml;
 ----
 John
 
 query I
-SELECT yaml_extract_string(yaml_simple, '$.address') FROM test_yaml;
+SELECT yaml_extract_string(yaml_simple::YAML, '$.address') FROM test_yaml;
 ----
-{"city": "NYC", "zip": 10001}
+{city: NYC, zip: 10001}
 
 query I
-SELECT yaml_extract_string(yaml_simple, '$.missing') FROM test_yaml;
+SELECT yaml_extract_string(yaml_simple::YAML, '$.missing') FROM test_yaml;
 ----
 NULL
 
 # Test yaml_exists function
 query I
-SELECT yaml_exists(yaml_simple, '$.name') FROM test_yaml;
+SELECT yaml_exists(yaml_simple::YAML, '$.name') FROM test_yaml;
 ----
 true
 
 query I
-SELECT yaml_exists(yaml_simple, '$.missing') FROM test_yaml;
+SELECT yaml_exists(yaml_simple::YAML, '$.missing') FROM test_yaml;
 ----
 false
 
 query I
-SELECT yaml_exists(yaml_simple, '$.address.city') FROM test_yaml;
+SELECT yaml_exists(yaml_simple::YAML, '$.address.city') FROM test_yaml;
 ----
 true
 
 query I
-SELECT yaml_exists(yaml_array, '$[5]') FROM test_yaml;
+SELECT yaml_exists(yaml_array::YAML, '$[5]') FROM test_yaml;
 ----
 false
 

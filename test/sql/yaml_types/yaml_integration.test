@@ -4,6 +4,8 @@
 
 require yaml
 
+require json
+
 # Test filtering with YAML values
 statement ok
 CREATE TABLE yaml_data(id INTEGER, config YAML);
