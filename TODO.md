@@ -83,13 +83,13 @@
 
 ### Critical Issues
 
-**NULL Handling Inconsistency** (HIGH PRIORITY):
-- YAML functions differ from JSON functions in null handling behavior
-- JSON: `json_extract(obj, '$.nonexistent')` → SQL NULL (proper behavior)
-- YAML: `yaml_extract(obj, '$.nonexistent')` → '~' (YAML null string - inconsistent)
-- Should be fixed for consistency with DuckDB's JSON extension
-- Affects: yaml_extract, yaml_type (both should return SQL NULL for nonexistent paths)
-- Impact: Breaks expected SQL NULL semantics for missing data
+**NULL Handling Inconsistency** ✅ RESOLVED:
+- ✅ Fixed YAML functions to match JSON functions in null handling behavior
+- ✅ JSON: `json_extract(obj, '$.nonexistent')` → SQL NULL
+- ✅ YAML: `yaml_extract(obj, '$.nonexistent')` → SQL NULL (now consistent!)
+- ✅ Achieved consistency with DuckDB's JSON extension
+- ✅ Fixed: yaml_extract, yaml_type (both now return SQL NULL for nonexistent paths)
+- ✅ Restored proper SQL NULL semantics for missing data
 
 ### Type System
 - [x] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
