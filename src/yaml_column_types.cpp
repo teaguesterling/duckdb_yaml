@@ -1,6 +1,7 @@
 #include "yaml_reader.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
@@ -22,19 +23,24 @@ void YAMLReader::BindColumnTypes(ClientContext &context, TableFunctionBindInput 
         throw BinderException("columns parameter must be a struct (e.g., {name: 'VARCHAR', id: 'INTEGER'})");
     }
     
-    auto &struct_children = StructValue::GetChildren(columns_value);
-    if (struct_children.empty()) {
-        return; // Empty struct
-    }
-    
     // Clear any existing column specifications
     options.column_names.clear();
     options.column_types.clear();
     
-    // Extract column names and types from the struct
-    for (auto &child : struct_children) {
-        string column_name = child.first;
-        Value &type_value = child.second;
+    // Get child types and values from the struct
+    auto &child_types = StructType::GetChildTypes(columns_value.type());
+    
+    if (child_types.empty()) {
+        return; // Empty struct
+    }
+    
+    // Get struct values
+    auto &struct_values = StructValue::GetChildren(columns_value);
+    
+    // For each entry in the struct
+    for (idx_t i = 0; i < child_types.size(); i++) {
+        string column_name = child_types[i].first;
+        Value type_value = struct_values[i];
         
         if (type_value.IsNull()) {
             throw BinderException("Column type for '" + column_name + "' cannot be NULL");
@@ -45,13 +51,13 @@ void YAMLReader::BindColumnTypes(ClientContext &context, TableFunctionBindInput 
         }
         
         string type_name = type_value.GetValue<string>();
+
+        // Use DuckDB's built-in type parsing function (same as JSON extension)
         LogicalType col_type;
-        
-        // Parse the type name
         try {
-            col_type = LogicalType::FromString(type_name);
-        } catch (...) {
-            throw BinderException("Invalid type '" + type_name + "' for column '" + column_name + "'");
+            col_type = TransformStringToLogicalType(type_name, context);
+        } catch (const Exception &e) {
+            throw BinderException("Invalid type '" + type_name + "' for column '" + column_name + "': " + e.what());
         }
         
         options.column_names.push_back(column_name);

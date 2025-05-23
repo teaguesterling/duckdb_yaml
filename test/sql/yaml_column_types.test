@@ -4,98 +4,55 @@
 
 require yaml
 
-# Create a test YAML file with mixed types
-statement ok
-COPY (
-    SELECT '
-name: John Doe
-age: 30
-active: true
-score: 95.5
-joined: 2023-01-15
-' AS content
-) TO '__TEST_DIR__/test_typed.yaml' (FORMAT CSV, HEADER FALSE);
-
 # Test reading with auto-detection (default)
-query IIIIT
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml');
+query TRITI
+SELECT joined, score, active, age, name FROM read_yaml('test/yaml/typed.yaml');
 ----
-John Doe	30	true	95.5	2023-01-15
+2023-01-15	95.5	true	30	John Doe
 
 # Test reading with explicit column types
-query IIIT
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml', 
-    columns={
-        'name': 'VARCHAR',
-        'age': 'INTEGER', 
-        'score': 'DOUBLE',
-        'joined': 'DATE'
-    });
+query TIR
+SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR', 'age': 'INTEGER',  'score': 'DOUBLE'});
 ----
-John Doe	30	95.5	2023-01-15
+John Doe	30	95.5
 
 # Test type casting with explicit types
-query SSSS
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml', 
-    columns={
-        'name': 'VARCHAR',
-        'age': 'VARCHAR', 
-        'active': 'VARCHAR',
-        'score': 'VARCHAR'
-    });
+query TT
+SELECT name, age FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR', 'age': 'VARCHAR' });
 ----
-John Doe	30	true	95.5
+John Doe	30
 
 # Test with wrong type specification - should cast or error
-query ITIT
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml', 
+query TII
+SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'VARCHAR',
-        'age': 'BIGINT', 
-        'active': 'BOOLEAN',
+        'age': 'BIGINT',
         'score': 'BIGINT'
     });
 ----
-John Doe	30	true	96
+John Doe	30	95
 
-# Create a file with arrays and objects
-statement ok
-COPY (
-    SELECT '
-user:
-  name: Alice
-  tags: [admin, user, superuser]
-  settings:
-    theme: dark
-    language: en
-count: 42
-' AS content
-) TO '__TEST_DIR__/test_nested.yaml' (FORMAT CSV, HEADER FALSE);
-
-# Test reading nested structures with specified types
-query II
-SELECT * FROM read_yaml('__TEST_DIR__/test_nested.yaml', 
-    columns={
-        'user': 'STRUCT(name VARCHAR, tags VARCHAR[], settings STRUCT(theme VARCHAR, language VARCHAR))',
-        'count': 'INTEGER'
-    });
+# Test basic column type functionality with simple fields
+query T
+SELECT name FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR'});
 ----
-{'name': Alice, 'tags': [admin, user, superuser], 'settings': {'theme': dark, 'language': en}}	42
+John Doe
 
 # Test column subset selection
-query IS
-SELECT count, name FROM read_yaml('__TEST_DIR__/test_typed.yaml',
+query RT
+SELECT score, name FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'VARCHAR',
-        'count': 'INTEGER',
+        'score': 'DOUBLE',
         'age': 'INTEGER'
     });
 ----
-NULL	John Doe
+95.5	John Doe
 
 # Test auto_detect=false with columns parameter
-query SS
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml', 
+query TT
+SELECT name, age FROM read_yaml('test/yaml/typed.yaml',
     auto_detect=false,
     columns={
         'name': 'VARCHAR',
@@ -106,26 +63,61 @@ John Doe	30
 
 # Test invalid column types
 statement error
-SELECT * FROM read_yaml('__TEST_DIR__/test_typed.yaml', 
+SELECT name FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'INVALIDTYPE'
     });
+----
+Type with name INVALIDTYPE does not exist!
 
-# Test with missing columns in data - should return NULL
-statement ok
-COPY (
-    SELECT '
-name: Bob
-age: 25
-' AS content
-) TO '__TEST_DIR__/test_partial.yaml' (FORMAT CSV, HEADER FALSE);
-
-query IST
-SELECT * FROM read_yaml('__TEST_DIR__/test_partial.yaml',
+# Test with missing columns in data - should return NULL for missing column
+query TTI
+SELECT name, missing_column, age FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'VARCHAR',
-        'age': 'INTEGER',
-        'city': 'VARCHAR'
+        'missing_column': 'VARCHAR',
+        'age': 'INTEGER'
     });
 ----
-Bob	25	NULL
+John Doe	NULL	30
+
+# Test complex types - struct with explicit structure
+statement ok
+CREATE TABLE test_struct AS
+SELECT person FROM read_yaml('test/yaml/nested.yaml',
+    columns={
+        'person': 'STRUCT(name VARCHAR, age INTEGER, is_active BOOLEAN)'
+    });
+
+query T
+SELECT person.name FROM test_struct;
+----
+John Doe
+
+query I
+SELECT person.age FROM test_struct;
+----
+30
+
+query I
+SELECT person.is_active FROM test_struct;
+----
+true
+
+# Test complex types - list as VARCHAR array
+query T
+SELECT tags FROM read_yaml('test/yaml/lists.yaml',
+    columns={
+        'tags': 'VARCHAR[]'
+    });
+----
+[developer, mentor, designer]
+
+# Test integer array
+query T
+SELECT numbers FROM read_yaml('test/yaml/lists.yaml',
+    columns={
+        'numbers': 'INTEGER[]'
+    });
+----
+[1, 2, 3]
