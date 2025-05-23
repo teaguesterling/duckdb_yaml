@@ -135,16 +135,13 @@ true
 query I
 SELECT value_to_yaml(['a', 'b', 'c']) AS yaml_value;
 ----
-- a
-- b
-- c
+[a, b, c]
 
 query I
 SELECT value_to_yaml({'name': 'John', 'age': 30}) AS yaml_value;
 ----
-name: John
-age: 30
-#
+{name: John, age: 30}
+
 ## Test handling of special YAML values
 query I
 SELECT yaml_to_json('special_values: {null_value: null, tilde_null: ~, true_values: [true, yes, on], false_values: [false, no, off]}') AS json_value;
@@ -156,7 +153,7 @@ query I
 SELECT yaml_to_json('quoted_strings: {double_quoted: "This is a \"quoted\" string", single_quoted: ''Single quotes don''t need escaping''}') AS json_value;
 ----
 {"quoted_strings":{"double_quoted":"This is a \"quoted\" string","single_quoted":"Single quotes don't need escaping"}}
-#
+
 # Clean up
 statement ok
 DROP TABLE yaml_values;

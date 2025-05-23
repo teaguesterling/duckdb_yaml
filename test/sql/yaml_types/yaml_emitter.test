@@ -50,11 +50,27 @@ SELECT value_to_yaml(3.14159) AS yaml_float;
 ----
 3.14159
 
-# Test NULL value emission
+# Test NULL value emission (should return SQL NULL, following JSON extension semantics)
 query I
 SELECT value_to_yaml(NULL) AS yaml_null;
 ----
-null
+NULL
+
+# Test NULL values in nested structures (should emit YAML null representation '~')
+query I
+SELECT value_to_yaml({'name': 'John', 'age': NULL, 'active': true}) AS yaml_struct_with_null;
+----
+{name: John, age: ~, active: true}
+
+query I
+SELECT value_to_yaml([1, NULL, 3]) AS yaml_array_with_null;
+----
+[1, ~, 3]
+
+query I
+SELECT value_to_yaml({'data': [NULL, {'nested': NULL}]}) AS yaml_deeply_nested_null;
+----
+{data: [~, {nested: ~}]}
 
 # Test list value emission
 query I

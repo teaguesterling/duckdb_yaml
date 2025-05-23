@@ -221,6 +221,8 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
 
 void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
     try {
+        // Handle NULL values within data structures (emit YAML null '~')
+        // Note: Top-level NULL inputs are handled at the function level following SQL semantics
         if (value.IsNull()) {
             out << YAML::Null;
             return;
