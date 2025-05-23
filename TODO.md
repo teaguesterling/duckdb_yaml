@@ -18,8 +18,9 @@
 - [x] JSON to YAML conversion
 - [x] Value to YAML conversion (initial implementation)
 - [x] Fix segfault in value_to_yaml function with debug mode implementation
-- [ ] Improve tests for multi-line YAML strings
-- [ ] Explicit column type specification via 'columns' parameter
+- [x] Improve tests for multi-line YAML strings (resolved using flow-style)
+- [x] Explicit column type specification via 'columns' parameter
+- [x] Complete YAML scalar function suite (13 functions with 59 test assertions)
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Stream processing for large files
 
@@ -38,8 +39,8 @@
 - [ ] Enhance read_yaml_objects to optionally return YAML type
 - [ ] Column specification for complex YAML structures
 - [ ] Schema extraction helpers
-- [ ] YAML validation functions
-- [ ] YAML extraction functions (similar to JSON functions)
+- [x] YAML validation functions (yaml_valid)
+- [x] YAML extraction functions (yaml_extract, yaml_extract_string, yaml_exists, yaml_type)
 - [ ] YAML path expressions
 - [ ] YAML modification functions
 - [ ] YAML output functions
@@ -74,11 +75,21 @@
 - [x] Improve function documentation
 - [x] Consistent error handling
 - [x] Reduce code duplication
-- [ ] Add more comprehensive tests
+- [x] Add more comprehensive tests (59 assertions for scalar functions)
 - [ ] Optimize memory usage
 - [ ] Improve performance for large files
 
 ## Known Issues and Planned Improvements
+
+### Critical Issues
+
+**NULL Handling Inconsistency** (HIGH PRIORITY):
+- YAML functions differ from JSON functions in null handling behavior
+- JSON: `json_extract(obj, '$.nonexistent')` → SQL NULL (proper behavior)
+- YAML: `yaml_extract(obj, '$.nonexistent')` → '~' (YAML null string - inconsistent)
+- Should be fixed for consistency with DuckDB's JSON extension
+- Affects: yaml_extract, yaml_type (both should return SQL NULL for nonexistent paths)
+- Impact: Breaks expected SQL NULL semantics for missing data
 
 ### Type System
 - [x] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
