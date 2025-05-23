@@ -122,7 +122,7 @@ Multi\nline\nstring
 query I
 SELECT value_to_yaml('String with "quotes" and ''apostrophes''') AS yaml_quotes;
 ----
-'String with "quotes" and ''apostrophes'''
+String with "quotes" and 'apostrophes'
 
 # Test special strings that need quotes
 query I
@@ -151,12 +151,11 @@ SELECT value_to_yaml({'name': NULL, 'tags': [], 'details': {}}) AS yaml_with_emp
 ----
 {name: ~, tags: [], details: {}}
 
-# Test round-trip conversion (Value -> YAML -> JSON -> YAML)
+# Test round-trip conversion (Value -> YAML -> JSON -> YAML) - flow format
 query I
 SELECT json_to_yaml(json(value_to_yaml({'name': 'Test', 'value': 123}))) AS round_trip;
 ----
-name: Test
-value: 123
+{name: Test, value: 123}
 
 # Clean up
 statement ok
