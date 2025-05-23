@@ -72,29 +72,22 @@ SELECT value_to_yaml({'data': [NULL, {'nested': NULL}]}) AS yaml_deeply_nested_n
 ----
 {data: [~, {nested: ~}]}
 
-# Test list value emission
+# Test list value emission (flow format)
 query I
 SELECT value_to_yaml([1, 2, 3]) AS yaml_list;
 ----
-- 1
-- 2
-- 3
+[1, 2, 3]
 
 query I
 SELECT value_to_yaml(['a', 'b', 'c']) AS yaml_list;
 ----
-- a
-- b
-- c
+[a, b, c]
 
-# Test nested list emission
+# Test nested list emission (flow format)
 query I
 SELECT value_to_yaml([[1, 2], [3, 4]]) AS yaml_nested_list;
 ----
-- - 1
-  - 2
-- - 3
-  - 4
+[[1, 2], [3, 4]]
 
 # Test struct value emission
 query I
@@ -107,10 +100,7 @@ age: 30
 query I
 SELECT value_to_yaml({'person': {'name': 'John', 'age': 30}, 'active': true}) AS yaml_nested_struct;
 ----
-person:
-  name: John
-  age: 30
-active: true
+{person: {name: John, age: 30}, active: true}
 
 # Test complex mixed structure emission
 query I

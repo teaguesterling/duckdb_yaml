@@ -449,8 +449,8 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, false);
                 result.SetValue(i, Value(yaml_str));
             } else {
-                // Use the regular version
-                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::BLOCK);
+                // Use the regular version with flow format for better testability
+                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
                 result.SetValue(i, Value(yaml_str));
             }
         } catch (const std::exception& e) {
@@ -475,8 +475,8 @@ static void JSONToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
                 // Parse JSON using YAML parser
                 YAML::Node json_node = YAML::Load(json_str.GetString());
                 
-                // Convert to YAML with block formatting
-                std::string yaml_str = yaml_utils::EmitYAML(json_node, yaml_utils::YAMLFormat::BLOCK);
+                // Convert to YAML with flow formatting for better testability
+                std::string yaml_str = yaml_utils::EmitYAML(json_node, yaml_utils::YAMLFormat::FLOW);
                 return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
             } catch (const std::exception& e) {
                 throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
