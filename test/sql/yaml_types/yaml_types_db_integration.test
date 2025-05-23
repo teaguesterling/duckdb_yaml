@@ -3,6 +3,7 @@
 # group: [yaml]
 
 require yaml
+require json
 
 # Test creating table with YAML columns
 statement ok
@@ -38,7 +39,7 @@ outputs:
   - type: console');
 
 # Query data using YAML to JSON conversion
-query I
+query TT
 SELECT name, yaml_to_json(config) AS config_json FROM config_settings WHERE id = 1;
 ----
 Database	{"host":"localhost","port":5432,"credentials":{"username":"dbuser","password":"dbpass"},"options":{"pool_size":10,"timeout_ms":3000}}

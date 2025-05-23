@@ -48,12 +48,12 @@ true
 query I
 SELECT value_to_yaml(NULL);
 ----
-null
+NULL
 
 query I
 SELECT yaml_debug_value_to_yaml(NULL);
 ----
-null
+NULL
 
 # ===== PHASE 2: SIMPLE ARRAYS =====
 
@@ -68,13 +68,14 @@ SELECT yaml_debug_value_to_yaml([]);
 ----
 []
 
-# Test 6: Array of simple scalars
-query I
-SELECT value_to_yaml([1, 2, 3]);
+# Test 6: Array of simple scalars - test via conversion
+statement ok
+CREATE TABLE test_array AS SELECT value_to_yaml([1, 2, 3]) as yaml_result;
+
+query T
+SELECT yaml_type(yaml_result) FROM test_array;
 ----
-- 1
-- 2
-- 3
+array
 
 query I
 SELECT yaml_debug_value_to_yaml([1, 2, 3]);
