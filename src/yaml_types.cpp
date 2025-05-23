@@ -228,8 +228,27 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
         
         switch (value.type().id()) {
             case LogicalTypeId::VARCHAR: {
+                // Check if this is a JSON type (VARCHAR with JSON alias)
+                if (value.type().IsJSONType()) {
+                    try {
+                        // Get the JSON string representation
+                        std::string json_str = value.GetValue<string>();
+
+                        // Parse JSON using YAML parser (yaml-cpp can parse JSON)
+                        YAML::Node json_node = YAML::Load(json_str);
+
+                        // Emit the parsed structure as YAML
+                        out << json_node;
+                    } catch (...) {
+                        // If JSON parsing fails, emit as quoted string
+                        out << YAML::SingleQuoted << value.ToString();
+                    }
+                    break;
+                }
+
+                // Handle regular VARCHAR
                 std::string str_val = value.GetValue<string>();
-                
+
                 // Check if the string needs special formatting
                 bool needs_quotes = false;
                 
