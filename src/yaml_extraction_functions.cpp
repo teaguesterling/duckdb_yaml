@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
@@ -227,13 +228,11 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &result_mask = FlatVector::Validity(result);
-    
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
+    BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
         args.data[0], args.data[1], result, args.size(),
-        [&](string_t yaml_str, string_t path_str, idx_t row) -> string_t {
+        [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
             if (yaml_str.GetSize() == 0) {
-                result_mask.SetInvalid(row);
+                mask.SetInvalid(idx);
                 return string_t();
             }
             
@@ -243,7 +242,7 @@ static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, V
                 auto node = ExtractFromYAML(root, path_components);
                 
                 if (!node || node.IsNull()) {
-                    result_mask.SetInvalid(row);
+                    mask.SetInvalid(idx);
                     return string_t();
                 }
                 

@@ -1,0 +1,306 @@
+# name: test/sql/yaml_functions.test
+# description: Test YAML scalar functions
+# group: [yaml]
+
+require yaml
+
+# Test yaml_valid function
+query T
+SELECT yaml_valid('name: John');
+----
+true
+
+query T
+SELECT yaml_valid('invalid: [unclosed');
+----
+false
+
+query T
+SELECT yaml_valid('');
+----
+false
+
+query T
+SELECT yaml_valid(NULL);
+----
+NULL
+
+# Test yaml_type function (single parameter)
+query T
+SELECT yaml_type('name: John');
+----
+object
+
+query T
+SELECT yaml_type('[1, 2, 3]');
+----
+array
+
+query T
+SELECT yaml_type('42');
+----
+scalar
+
+query T
+SELECT yaml_type('true');
+----
+scalar
+
+query T
+SELECT yaml_type('null');
+----
+null
+
+# Test yaml_type function (with path)
+query T
+SELECT yaml_type('{name: John, age: 30}', '$.name');
+----
+scalar
+
+query T
+SELECT yaml_type('{person: {name: John}, tags: [dev, mentor]}', '$.tags');
+----
+array
+
+query T
+SELECT yaml_type('{person: {name: John}, tags: [dev, mentor]}', '$.person');
+----
+object
+
+query T
+SELECT yaml_type('{name: John}', '$.nonexistent');
+----
+null
+
+# Test yaml_extract function
+query T
+SELECT yaml_extract('name: John', '$.name');
+----
+John
+
+query T
+SELECT yaml_extract('{person: {name: John, age: 30}, tags: [dev, mentor]}', '$.tags');
+----
+[dev, mentor]
+
+query T
+SELECT yaml_extract('{person: {name: John, age: 30}}', '$.person');
+----
+{name: John, age: 30}
+
+query T
+SELECT yaml_extract('{name: John}', '$.nonexistent');
+----
+~
+
+# Test yaml_extract_string function
+query T
+SELECT yaml_extract_string('name: John', '$.name');
+----
+John
+
+query T
+SELECT yaml_extract_string('{person: {name: John, age: 30}, tags: [dev, mentor]}', '$.person.name');
+----
+John
+
+query T
+SELECT yaml_extract_string('{age: 30}', '$.age');
+----
+30
+
+query T
+SELECT yaml_extract_string('{active: true}', '$.active');
+----
+true
+
+# Non-scalar values should be returned as YAML strings
+query T
+SELECT yaml_extract_string('{person: {name: John, age: 30}}', '$.person');
+----
+{name: John, age: 30}
+
+query T
+SELECT yaml_extract_string('{tags: [dev, mentor]}', '$.tags');
+----
+[dev, mentor]
+
+query T
+SELECT yaml_extract_string('{name: John}', '$.nonexistent');
+----
+NULL
+
+# Test yaml_exists function
+query T
+SELECT yaml_exists('name: John', '$.name');
+----
+true
+
+query T
+SELECT yaml_exists('name: John', '$.age');
+----
+false
+
+query T
+SELECT yaml_exists('{person: {name: John, age: 30}}', '$.person.name');
+----
+true
+
+query T
+SELECT yaml_exists('{person: {name: John, age: 30}}', '$.person.nonexistent');
+----
+false
+
+query T
+SELECT yaml_exists('{tags: [dev, mentor]}', '$.tags');
+----
+true
+
+# Test yaml_to_json function
+query T
+SELECT yaml_to_json('name: John');
+----
+{"name":"John"}
+
+query T
+SELECT yaml_to_json('{name: John, age: 30}');
+----
+{"name":"John","age":30}
+
+query T
+SELECT yaml_to_json('[1, 2, 3]');
+----
+[1,2,3]
+
+# Test json_to_yaml function
+query T
+SELECT json_to_yaml('{"name":"John"}');
+----
+{name: John}
+
+query T
+SELECT json_to_yaml('{"name":"John","age":30}');
+----
+{name: John, age: 30}
+
+query T
+SELECT json_to_yaml('[1,2,3]');
+----
+[1, 2, 3]
+
+# Test value_to_yaml function
+query T
+SELECT value_to_yaml('hello');
+----
+hello
+
+query T
+SELECT value_to_yaml(42);
+----
+42
+
+query T
+SELECT value_to_yaml(true);
+----
+true
+
+statement ok
+CREATE TABLE test_struct AS SELECT value_to_yaml({'name': 'John', 'age': 30}) as yaml_result;
+
+query T
+SELECT yaml_extract_string(yaml_result, '$.name') FROM test_struct;
+----
+John
+
+query T
+SELECT yaml_extract_string(yaml_result, '$.age') FROM test_struct;
+----
+30
+
+statement ok
+CREATE TABLE test_array AS SELECT value_to_yaml([1, 2, 3]) as yaml_result;
+
+query T
+SELECT yaml_type(yaml_result) FROM test_array;
+----
+array
+
+# Test with NULL values
+query T
+SELECT yaml_extract('name: null', '$.name');
+----
+~
+
+query T
+SELECT yaml_extract_string('name: null', '$.name');
+----
+NULL
+
+query T
+SELECT yaml_type('name: null', '$.name');
+----
+null
+
+# Test error cases - some functions throw errors for invalid paths
+query T
+SELECT yaml_exists('name: John', 'invalid_path');
+----
+false
+
+statement error
+SELECT yaml_extract('name: John', 'no_dollar');
+----
+YAML path must start with '$'
+
+statement error
+SELECT yaml_extract_string('name: John', 'bad_path');
+----
+YAML path must start with '$'
+
+# Test debug functions
+query T
+SELECT yaml_debug_is_enabled();
+----
+false
+
+statement ok
+SELECT yaml_debug_enable();
+
+query T
+SELECT yaml_debug_is_enabled();
+----
+true
+
+query T
+SELECT yaml_debug_value_to_yaml({'name': 'John'});
+----
+{name: John}
+
+statement ok
+SELECT yaml_debug_disable();
+
+query T
+SELECT yaml_debug_is_enabled();
+----
+false
+
+# Test integration with read_yaml
+statement ok
+CREATE TABLE yaml_data AS 
+SELECT value_to_yaml(person) as yaml_person 
+FROM read_yaml('test/yaml/nested.yaml');
+
+query T
+SELECT yaml_extract_string(yaml_person, '$.name') FROM yaml_data;
+----
+John Doe
+
+query T
+SELECT yaml_type(yaml_person, '$.age') FROM yaml_data;
+----
+scalar
+
+query T
+SELECT yaml_exists(yaml_person, '$.is_active') FROM yaml_data;
+----
+true
