@@ -3,10 +3,12 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "yaml-cpp/yaml.h"
+#include <algorithm>
 
 namespace duckdb {
 
@@ -375,7 +377,7 @@ std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
         YAML::Emitter out;
         ConfigureEmitter(out, format);
         EmitValueToYAML(out, value);
-        
+
         // Check if we have a valid YAML string
         if (out.good() && out.c_str() != nullptr) {
             return out.c_str();
@@ -451,6 +453,57 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
             } else {
                 // Use the regular version with flow format for better testability
                 std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
+                result.SetValue(i, Value(yaml_str));
+            }
+        } catch (const std::exception& e) {
+            // If there's a known exception, return a descriptive message
+            result.SetValue(i, Value("null"));
+        } catch (...) {
+            // For unknown exceptions, just return null
+            result.SetValue(i, Value("null"));
+        }
+    }
+}
+
+static void ValueToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+    auto& style_input = args.data[1];
+
+    // Process each row
+    for (idx_t i = 0; i < args.size(); i++) {
+        try {
+            // Extract the value from the input vector
+            Value value = input.GetValue(i);
+            Value style_struct = style_input.GetValue(i);
+
+            // Determine the style from the struct parameter
+            yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
+            if (!style_struct.IsNull()) {
+                // Extract 'style' field from struct
+                auto struct_value = StructValue::GetChildren(style_struct);
+
+                if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
+                    std::string style_str = struct_value[0].ToString();
+                    std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
+
+                    if (style_str == "block") {
+                        format = yaml_utils::YAMLFormat::BLOCK;
+                    } else if (style_str == "flow") {
+                        format = yaml_utils::YAMLFormat::FLOW;
+                    } else {
+                        // Invalid style string - throw error
+                        throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str);
+                    }
+                }
+            }
+
+            // If YAMLDebug is enabled, use the safer version
+            if (YAMLDebug::IsDebugModeEnabled()) {
+                std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
+                result.SetValue(i, Value(yaml_str));
+            } else {
+                // Use the regular version with specified style
+                std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
                 result.SetValue(i, Value(yaml_str));
             }
         } catch (const std::exception& e) {
@@ -662,9 +715,16 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     auto json_to_yaml_fun = ScalarFunction("json_to_yaml", {LogicalType::JSON()}, yaml_type, JSONToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, json_to_yaml_fun);
     
-    auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
-    ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
-    
+    // Register value_to_yaml function set with overloads
+    ScalarFunctionSet value_to_yaml_set("value_to_yaml");
+    value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY}, yaml_type, ValueToYAMLFunction));
+
+    // Style struct-based parameter: {'style': 'block'/'flow'}
+    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
+    value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY, style_struct}, yaml_type, ValueToYAMLWithStyleFunction));
+
+    ExtensionUtil::RegisterFunction(db, value_to_yaml_set);
+
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);
     ExtensionUtil::RegisterFunction(db, yaml_debug_enable_fun);
