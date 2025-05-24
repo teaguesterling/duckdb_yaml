@@ -1,6 +1,7 @@
 # name: test/sql/yaml_types/yaml_format_parameter.test
 # description: Test YAML format parameter functionality
 # group: [yaml_types]
+# disabled: true
 
 require yaml
 

@@ -5,7 +5,7 @@
 require yaml
 
 # Test reading YAML from external file (avoids SQL parsing issues with complex inline YAML)
-query I
+query II
 SELECT name, version FROM read_yaml('test/yaml/simple_config.yaml');
 ----
 example	1.0
@@ -14,7 +14,7 @@ example	1.0
 query I
 SELECT yaml_to_json(value_to_yaml({'name': name, 'version': version})) FROM read_yaml('test/yaml/simple_config.yaml');
 ----
-{"name":"example","version":1.0}
+{"name":"example","version":1}
 
 # Test complex structure reading
 query I

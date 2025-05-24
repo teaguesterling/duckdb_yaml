@@ -3,6 +3,7 @@
 # group: [yaml]
 
 require yaml
+
 require json
 
 # Test creating table with YAML columns
@@ -45,11 +46,11 @@ SELECT name, yaml_to_json(config) AS config_json FROM config_settings WHERE id =
 Database	{"host":"localhost","port":5432,"credentials":{"username":"dbuser","password":"dbpass"},"options":{"pool_size":10,"timeout_ms":3000}}
 
 # Test using JSON functions after conversion
-query I
-SELECT 
-    name, 
+query III
+SELECT
+    name,
     json_extract_string(yaml_to_json(config), '$.host') AS host,
-    json_extract_int(yaml_to_json(config), '$.port') AS port
+    json_extract(yaml_to_json(config), '$.port')::INTEGER AS port
 FROM config_settings 
 ORDER BY id;
 ----
@@ -78,9 +79,9 @@ options:
 WHERE id = 1;
 
 # Verify update
-query I
+query II
 SELECT json_extract_string(yaml_to_json(config), '$.host') AS host,
-       json_extract_int(yaml_to_json(config), '$.options.pool_size') AS pool_size
+       json_extract(yaml_to_json(config), '$.options.pool_size')::INTEGER AS pool_size
 FROM config_settings 
 WHERE id = 1;
 ----
@@ -167,7 +168,7 @@ metrics:
 query IR
 SELECT 
     json_extract_string(yaml_to_json(data), '$.server') AS server,
-    AVG(json_extract_int(yaml_to_json(data), '$.metrics.cpu')) AS avg_cpu
+    AVG(json_extract(yaml_to_json(data), '$.metrics.cpu')::INTEGER) AS avg_cpu
 FROM metrics
 GROUP BY json_extract_string(yaml_to_json(data), '$.server')
 ORDER BY server;

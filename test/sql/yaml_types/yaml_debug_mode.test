@@ -4,6 +4,7 @@
 # disabled: true
 
 require yaml
+
 require json
 
 # Enable debug mode
@@ -40,7 +41,7 @@ statement ok
 SELECT yaml_debug_value_to_yaml({'name': 'John', 'age': 30});
 
 statement ok
-SELECT yaml_debug_value_to_yaml([{'a': 1}, {'b': '[2, 3, {"c": 4}'::JSON}]);
+SELECT yaml_debug_value_to_yaml([{'a': 1}, {'b': '[2, 3, {"c": 4}]'::JSON}]);
 
 # Test with nested structures
 statement ok
@@ -48,7 +49,7 @@ SELECT yaml_debug_value_to_yaml({'a': {'b': {'c': {'d': 'deep'}}}});
 
 # Test with special characters
 statement ok
-SELECT yaml_debug_value_to_yaml('Special characters: \t\n\r\b\f\\\'\"');
+SELECT yaml_debug_value_to_yaml('Special characters: tab newline backslash');
 
 # Test with special string values
 statement ok

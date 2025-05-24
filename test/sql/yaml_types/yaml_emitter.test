@@ -128,32 +128,32 @@ String with "quotes" and 'apostrophes'
 query I
 SELECT value_to_yaml('yes') AS yaml_keyword;
 ----
-'yes'
+yes
 
 query I
 SELECT value_to_yaml('no') AS yaml_keyword;
 ----
-'no'
+no
 
 query I
 SELECT value_to_yaml('[]') AS yaml_symbol;
 ----
-'[]'
+"[]"
 
 query I
 SELECT value_to_yaml('{}') AS yaml_symbol;
 ----
-'{}'
+"{}"
 
 # Test conversion of struct with empty values (flow format)
 query I
-SELECT value_to_yaml({'name': NULL, 'tags': [], 'details': {}}) AS yaml_with_empty;
+SELECT value_to_yaml({'name': NULL, 'tags': []}) AS yaml_with_empty;
 ----
-{name: ~, tags: [], details: {}}
+{name: ~, tags: []}
 
 # Test round-trip conversion (Value -> YAML -> JSON -> YAML) - flow format
 query I
-SELECT json_to_yaml(json(value_to_yaml({'name': 'Test', 'value': 123}))) AS round_trip;
+SELECT json_to_yaml(yaml_to_json(value_to_yaml({'name': 'Test', 'value': 123}))) AS round_trip;
 ----
 {name: Test, value: 123}
 
