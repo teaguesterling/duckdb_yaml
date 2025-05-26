@@ -40,7 +40,7 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
 
 // Value conversion utilities
 void EmitValueToYAML(YAML::Emitter& out, const Value& value);
-std::string ValueToYAMLString(const Value& value, YAMLFormat format = YAMLFormat::BLOCK);
+std::string ValueToYAMLString(const Value& value, YAMLFormat format);
 
 } // namespace yaml_utils
 
@@ -66,6 +66,17 @@ static bool IsYAMLType(const LogicalType& t) {
 //===--------------------------------------------------------------------===//
 
 namespace yaml_utils {
+
+// Initialize default format to FLOW for better compatibility with SQLLogicTest
+YAMLFormat YAMLSettings::default_format = YAMLFormat::FLOW;
+
+YAMLFormat YAMLSettings::GetDefaultFormat() {
+    return default_format;
+}
+
+void YAMLSettings::SetDefaultFormat(YAMLFormat format) {
+    default_format = format;
+}
 
 std::vector<YAML::Node> ParseYAML(const std::string& yaml_str, bool multi_doc) {
     if (yaml_str.empty()) {
@@ -524,7 +535,7 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, false);
                 result.SetValue(i, Value(yaml_str));
             } else {
-                // Use the regular version with flow format for better testability
+                // Use the regular version with flow format for consistent YAML objects
                 std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
                 result.SetValue(i, Value(yaml_str));
             }
@@ -549,7 +560,7 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
         Value style_struct = style_input.GetValue(i);
 
         // Determine the style from the struct parameter (input validation - let errors propagate)
-        yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
+        yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat(); // use default setting
         if (!style_struct.IsNull()) {
             // Extract 'style' field from struct
             const auto struct_value = StructValue::GetChildren(style_struct);
@@ -577,6 +588,35 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
             } else {
                 // Use the regular version with specified style
                 std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+                result.SetValue(i, Value(yaml_str));
+            }
+        } catch (const std::exception& e) {
+            // Only catch YAML generation errors, return null for data conversion issues
+            result.SetValue(i, Value("null"));
+        } catch (...) {
+            // For unknown YAML generation exceptions, return null
+            result.SetValue(i, Value("null"));
+        }
+    }
+}
+
+static void FormatYAMLSingleParamFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+
+    // Process each row
+    for (idx_t i = 0; i < args.size(); i++) {
+        // Extract the value from the input vector
+        Value value = input.GetValue(i);
+
+        // YAML generation using default format
+        try {
+            if (YAMLDebug::IsDebugModeEnabled()) {
+                auto format = yaml_utils::YAMLSettings::GetDefaultFormat();
+                std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
+                result.SetValue(i, Value(yaml_str));
+            } else {
+                // Use the regular version with default format
+                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLSettings::GetDefaultFormat());
                 result.SetValue(i, Value(yaml_str));
             }
         } catch (const std::exception& e) {
@@ -746,6 +786,41 @@ static void YAMLDebugValueToYAMLFunction(DataChunk& args, ExpressionState& state
     }
 }
 
+// Default style management functions
+static void YAMLSetDefaultStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+
+    for (idx_t i = 0; i < args.size(); i++) {
+        Value style_value = input.GetValue(i);
+
+        if (style_value.IsNull()) {
+            throw InvalidInputException("YAML style cannot be NULL");
+        }
+
+        auto style_str = style_value.ToString();
+        std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
+
+        if (style_str == "block") {
+            yaml_utils::YAMLSettings::SetDefaultFormat(yaml_utils::YAMLFormat::BLOCK);
+        } else if (style_str == "flow") {
+            yaml_utils::YAMLSettings::SetDefaultFormat(yaml_utils::YAMLFormat::FLOW);
+        } else {
+            throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str.c_str());
+        }
+
+        result.SetValue(i, Value(style_str));
+    }
+}
+
+static void YAMLGetDefaultStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto current_format = yaml_utils::YAMLSettings::GetDefaultFormat();
+    std::string format_name = (current_format == yaml_utils::YAMLFormat::BLOCK) ? "block" : "flow";
+
+    result.SetVectorType(VectorType::CONSTANT_VECTOR);
+    auto result_data = ConstantVector::GetData<string_t>(result);
+    result_data[0] = StringVector::AddString(result, format_name.c_str(), format_name.length());
+}
+
 void YAMLTypes::Register(DatabaseInstance& db) {
     // Get the YAML type
     auto yaml_type = YAMLType();
@@ -770,9 +845,16 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
 
     // Register format_yaml function (returns VARCHAR for display/formatting)
+    ScalarFunctionSet format_yaml_functions("format_yaml");
+
+    // Single parameter version - uses default format
+    format_yaml_functions.AddFunction(ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLSingleParamFunction));
+
+    // Two parameter version - explicit style
     auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
-    auto format_yaml_fun = ScalarFunction("format_yaml", {LogicalType::ANY, style_struct}, LogicalType::VARCHAR, FormatYAMLFunction);
-    ExtensionUtil::RegisterFunction(db, format_yaml_fun);
+    format_yaml_functions.AddFunction(ScalarFunction({LogicalType::ANY, style_struct}, LogicalType::VARCHAR, FormatYAMLFunction));
+
+    ExtensionUtil::RegisterFunction(db, format_yaml_functions);
 
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);
@@ -786,6 +868,13 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     
     auto yaml_debug_value_to_yaml_fun = ScalarFunction("yaml_debug_value_to_yaml", {LogicalType::ANY}, yaml_type, YAMLDebugValueToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, yaml_debug_value_to_yaml_fun);
+
+    // Register default style management functions
+    auto yaml_set_default_style_fun = ScalarFunction("yaml_set_default_style", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLSetDefaultStyleFunction);
+    ExtensionUtil::RegisterFunction(db, yaml_set_default_style_fun);
+
+    auto yaml_get_default_style_fun = ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
+    ExtensionUtil::RegisterFunction(db, yaml_get_default_style_fun);
 }
 
 } // namespace duckdb
