@@ -85,9 +85,72 @@ SELECT id, info FROM read_yaml('__TEST_DIR__/nested_output.yaml') ORDER BY id;
 1	{'name': Alice, 'details': {'age': 25, 'active': true}}
 2	{'name': Bob, 'details': {'age': 30, 'active': false}}
 
+# Test layout parameter with sequence layout
+statement ok
+CREATE TABLE layout_test (id INTEGER, name VARCHAR);
+
+statement ok
+INSERT INTO layout_test VALUES (1, 'First'), (2, 'Second');
+
+# Test sequence layout with flow style
+statement ok
+COPY (SELECT * FROM layout_test) TO '__TEST_DIR__/sequence_flow.yaml' (FORMAT yaml, LAYOUT sequence, STYLE flow);
+
+# Test sequence layout with block style
+statement ok
+COPY (SELECT * FROM layout_test) TO '__TEST_DIR__/sequence_block.yaml' (FORMAT yaml, LAYOUT sequence, STYLE block);
+
+# Test document layout (default) with flow style
+statement ok
+COPY (SELECT * FROM layout_test) TO '__TEST_DIR__/document_flow.yaml' (FORMAT yaml, LAYOUT document, STYLE flow);
+
+# Verify sequence layout files can be read back
+query II
+SELECT id, name FROM read_yaml('__TEST_DIR__/sequence_flow.yaml') ORDER BY id;
+----
+1	First
+2	Second
+
+query II
+SELECT id, name FROM read_yaml('__TEST_DIR__/sequence_block.yaml') ORDER BY id;
+----
+1	First
+2	Second
+
+# Test error handling for invalid layout
+statement error
+COPY (SELECT * FROM layout_test) TO '__TEST_DIR__/invalid_layout.yaml' (FORMAT yaml, LAYOUT invalid);
+----
+Invalid YAML layout 'invalid'. Valid options are 'sequence' or 'document'.
+
+# Test document separator with multiple rows
+statement ok
+CREATE TABLE separator_test (id INTEGER, data VARCHAR);
+
+statement ok
+INSERT INTO separator_test VALUES (1, 'First'), (2, 'Second'), (3, 'Third');
+
+# Test that block style with document layout uses --- separators
+statement ok
+COPY (SELECT id, data FROM separator_test) TO '__TEST_DIR__/doc_separator_block.yaml' (FORMAT yaml, LAYOUT document, STYLE block);
+
+# Verify we can read multi-document YAML back
+query II
+SELECT id, data FROM read_yaml('__TEST_DIR__/doc_separator_block.yaml') ORDER BY id;
+----
+1	First
+2	Second
+3	Third
+
+statement ok
+DROP TABLE separator_test;
+
 # Clean up test tables
 statement ok
 DROP TABLE test_data;
 
 statement ok
 DROP TABLE nested_test;
+
+statement ok
+DROP TABLE layout_test;

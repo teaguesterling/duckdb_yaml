@@ -45,6 +45,9 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
 void EmitValueToYAML(YAML::Emitter& out, const Value& value);
 std::string ValueToYAMLString(const Value& value, YAMLFormat format);
 
+// Format with style and layout logic
+std::string FormatPerStyleAndLayout(const Value& value, YAMLFormat format, const std::string& layout);
+
 } // namespace yaml_utils
 
 // Forward declaration for debug helper
@@ -481,6 +484,29 @@ std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
     }
 }
 
+std::string FormatPerStyleAndLayout(const Value& value, YAMLFormat format, const std::string& layout) {
+    std::string final_layout = layout;
+
+    // Infer layout from style if not explicitly provided
+    if (final_layout.empty()) {
+        final_layout = (format == YAMLFormat::FLOW) ? "document" : "sequence";
+    }
+
+    if (final_layout == "sequence") {
+        // Wrap value in a list/array structure
+        // For single values, create a single-element array
+        YAML::Node sequence_node(YAML::NodeType::Sequence);
+        sequence_node.push_back(ValueToYAMLNode(value));
+        return EmitYAML(sequence_node, format);
+    } else if (final_layout == "document") {
+        // For document layout, emit the value as-is (individual documents will be separated externally)
+        return ValueToYAMLString(value, format);
+    } else {
+        // Fallback to regular formatting
+        return ValueToYAMLString(value, format);
+    }
+}
+
 } // namespace yaml_utils
 
 //===--------------------------------------------------------------------===//
@@ -540,6 +566,8 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 
         // Validate known parameter names
         if (param_name == "style") {
+            // Valid parameter, will be processed in execution function
+        } else if (param_name == "layout") {
             // Valid parameter, will be processed in execution function
         } else {
             throw BinderException("Unknown parameter '%s' for format_yaml", param_name);
@@ -663,7 +691,7 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
                 result.SetValue(i, Value(yaml_str));
             } else {
-                // Use the regular version with specified parameters
+                // Format the value as YAML with the specified style
                 std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
                 result.SetValue(i, Value(yaml_str));
             }
@@ -677,6 +705,59 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
     }
 }
 
+static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+
+    // Get target layout and style from the last two arguments
+    Value target_layout_value = args.data[args.ColumnCount() - 2].GetValue(0);
+    Value target_style_value = args.data[args.ColumnCount() - 1].GetValue(0);
+
+    string target_layout = StringUtil::Lower(target_layout_value.ToString());
+    string target_style = StringUtil::Lower(target_style_value.ToString());
+
+    // Determine YAML format from target style
+    yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
+    if (target_style == "block") {
+        format = yaml_utils::YAMLFormat::BLOCK;
+    } else if (target_style == "flow") {
+        format = yaml_utils::YAMLFormat::FLOW;
+    }
+
+    // Process each row with post-processing
+    for (idx_t i = 0; i < args.size(); i++) {
+        Value value = input.GetValue(i);
+
+        try {
+            // Get the base YAML (always using document layout internally)
+            std::string yaml_str = yaml_utils::FormatPerStyleAndLayout(value, format, "document");
+
+            // Apply post-processing based on target layout
+            if (target_layout == "sequence") {
+                // Apply sequence transformation: prepend '- ' and indent continuation lines
+                if (!yaml_str.empty()) {
+                    yaml_str = "- " + yaml_str;
+
+                    // Add 2 spaces of indentation to continuation lines
+                    size_t pos = yaml_str.find('\n');
+                    while (pos != std::string::npos && pos + 1 < yaml_str.length()) {
+                        yaml_str.insert(pos + 1, "  ");
+                        pos = yaml_str.find('\n', pos + 3);
+                    }
+                }
+            } else if (target_layout == "document" && i > 0 && target_style == "block") {
+                // For document layout with block style, prepend document separator for all rows after the first
+                yaml_str = "---\n" + yaml_str;
+            }
+            // For document layout with flow style, no separator needed
+
+            result.SetValue(i, Value(yaml_str));
+        } catch (const std::exception& e) {
+            result.SetValue(i, Value("null"));
+        } catch (...) {
+            result.SetValue(i, Value("null"));
+        }
+    }
+}
 
 
 //===--------------------------------------------------------------------===//
@@ -898,6 +979,12 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
     format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
     ExtensionUtil::RegisterFunction(db, format_yaml_fun);
+
+    // Register copy_format_yaml function for COPY TO post-processing (no bind function needed, simpler interface)
+    auto copy_format_yaml_fun = ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
+    copy_format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+    copy_format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
+    ExtensionUtil::RegisterFunction(db, copy_format_yaml_fun);
 
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);

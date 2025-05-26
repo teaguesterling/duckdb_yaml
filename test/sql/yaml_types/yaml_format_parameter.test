@@ -82,3 +82,9 @@ query I
 SELECT format_yaml('hello', style:='block') AS scalar_block;
 ----
 hello
+
+# Test that layout parameter is not supported by format_yaml
+statement error
+SELECT format_yaml({'a': 1}, layout:='sequence');
+----
+Unknown parameter 'layout' for format_yaml

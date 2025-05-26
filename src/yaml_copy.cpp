@@ -11,6 +11,36 @@
 
 namespace duckdb {
 
+// Helper function to post-process YAML output based on layout
+static std::string PostProcessYAMLForLayout(const std::string& yaml_str, const std::string& layout, const std::string& style) {
+    if (layout.empty() || layout == "document") {
+        return yaml_str; // No transformation needed
+    }
+
+    if (layout == "sequence") {
+        if (yaml_str.empty()) {
+            return yaml_str;
+        }
+
+        std::string result = yaml_str;
+        // Prepend '- ' to the beginning
+        if (!result.empty()) {
+            result = "- " + result;
+        }
+
+        // Add 2 spaces of indentation to continuation lines (lines after the first)
+        size_t pos = result.find('\n');
+        while (pos != std::string::npos && pos + 1 < result.length()) {
+            result.insert(pos + 1, "  ");
+            pos = result.find('\n', pos + 3); // Skip the inserted spaces
+        }
+
+        return result;
+    }
+
+    return yaml_str; // Fallback
+}
+
 static void ThrowYAMLCopyParameterException(const string &loption) {
     throw BinderException("COPY (FORMAT YAML) parameter %s expects a single argument.", loption);
 }
@@ -22,6 +52,7 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 
     // Parse YAML-specific options, creating options for the CSV writer
     string yaml_style = ""; // Default to empty, will use global default
+    string yaml_layout = ""; // Default to empty, will infer from style
     case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"yaml"}}};
     
     for (const auto &kv : copied_info.options) {
@@ -34,6 +65,15 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
             auto lowercase_style = StringUtil::Lower(yaml_style);
             if (lowercase_style != "block" && lowercase_style != "flow") {
                 throw BinderException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", yaml_style.c_str());
+            }
+        } else if (loption == "layout") {
+            if (kv.second.size() != 1) {
+                ThrowYAMLCopyParameterException(loption);
+            }
+            yaml_layout = StringValue::Get(kv.second.back());
+            auto lowercase_layout = StringUtil::Lower(yaml_layout);
+            if (lowercase_layout != "sequence" && lowercase_layout != "document") {
+                throw BinderException("Invalid YAML layout '%s'. Valid options are 'sequence' or 'document'.", yaml_layout.c_str());
             }
         } else if (loption == "compression" || loption == "encoding" || loption == "per_thread_output" ||
                    loption == "file_size_bytes" || loption == "use_tmp_file" || loption == "overwrite_or_ignore" ||
@@ -87,8 +127,31 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
         format_yaml_children.emplace_back(std::move(style_value));
     }
 
-    // Create format_yaml function call
-    select_node.select_list.emplace_back(make_uniq<FunctionExpression>("format_yaml", std::move(format_yaml_children)));
+    // For COPY TO, always use layout=document internally to avoid array wrapping
+    // The actual layout transformation will be handled via post-processing
+    auto internal_layout_value = make_uniq<ConstantExpression>("document");
+    internal_layout_value->SetAlias("layout");
+    format_yaml_children.emplace_back(std::move(internal_layout_value));
+
+    // Add the target layout and style as additional parameters for post-processing
+    if (!yaml_layout.empty()) {
+        auto target_layout_value = make_uniq<ConstantExpression>(yaml_layout);
+        format_yaml_children.emplace_back(std::move(target_layout_value));
+    } else {
+        auto target_layout_value = make_uniq<ConstantExpression>("document");  // Default
+        format_yaml_children.emplace_back(std::move(target_layout_value));
+    }
+
+    if (!yaml_style.empty()) {
+        auto target_style_value = make_uniq<ConstantExpression>(yaml_style);
+        format_yaml_children.emplace_back(std::move(target_style_value));
+    } else {
+        auto target_style_value = make_uniq<ConstantExpression>("flow");  // Default
+        format_yaml_children.emplace_back(std::move(target_style_value));
+    }
+
+    // Create copy_format_yaml function call (we'll register this function to handle post-processing)
+    select_node.select_list.emplace_back(make_uniq<FunctionExpression>("copy_format_yaml", std::move(format_yaml_children)));
 
     // Now we can just use the CSV writer with YAML content
     copied_info.format = "csv";
