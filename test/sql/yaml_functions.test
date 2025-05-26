@@ -4,6 +4,8 @@
 
 require yaml
 
+require json
+
 # Test yaml_valid function
 query T
 SELECT yaml_valid('name: John');

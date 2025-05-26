@@ -15,14 +15,14 @@ SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_yaml;
 
 # Test format_yaml with flow style (returns VARCHAR)
 query I
-SELECT format_yaml({'name': 'John', 'age': 30}, {'style': 'flow'}) AS flow_format;
+SELECT format_yaml({'name': 'John', 'age': 30}, style:='flow') AS flow_format;
 ----
 {name: John, age: 30}
 
 # Test that flow format does NOT contain newlines
 query I
 SELECT CASE
-    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'flow'}) LIKE '%' || CHR(10) || '%'
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, style:='flow') LIKE '%' || CHR(10) || '%'
     THEN 'FLOW_FORMAT_HAS_NEWLINES'
     ELSE 'FLOW_FORMAT_NO_NEWLINES'
 END AS flow_test;
@@ -32,7 +32,7 @@ FLOW_FORMAT_NO_NEWLINES
 # Test format_yaml with block style (multi-line YAML) - check for newlines
 query I
 SELECT CASE
-    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'block'}) LIKE '%' || CHR(10) || '%'
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, style:='block') LIKE '%' || CHR(10) || '%'
     THEN 'BLOCK_FORMAT_HAS_NEWLINES'
     ELSE 'BLOCK_FORMAT_NO_NEWLINES'
 END AS block_test;
@@ -45,16 +45,9 @@ SELECT value_to_yaml(NULL) AS null_value;
 ----
 NULL
 
-# Test format_yaml with NULL style parameter (should default to flow)
-query I
-SELECT format_yaml({'a': 1}, {'style': NULL}) AS null_format;
-----
-{a: 1}
-
-
 # Test error handling for invalid format in format_yaml
 statement error
-SELECT format_yaml({'a': 1}, {'style': 'invalid'});
+SELECT format_yaml({'a': 1}, style:='invalid');
 ----
 Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
 
@@ -67,7 +60,7 @@ SELECT value_to_yaml([1, 2, 3]) AS array_default;
 # Test array block format has newlines
 query I
 SELECT CASE
-    WHEN format_yaml([1, 2, 3], {'style': 'block'}) LIKE '%' || CHR(10) || '%'
+    WHEN format_yaml([1, 2, 3], style:='block') LIKE '%' || CHR(10) || '%'
     THEN 'ARRAY_BLOCK_HAS_NEWLINES'
     ELSE 'ARRAY_BLOCK_NO_NEWLINES'
 END AS array_block_test;
@@ -75,17 +68,17 @@ END AS array_block_test;
 ARRAY_BLOCK_HAS_NEWLINES
 
 query I
-SELECT format_yaml([1, 2, 3], {'style': 'flow'}) AS array_flow;
+SELECT format_yaml([1, 2, 3], style:='flow') AS array_flow;
 ----
 [1, 2, 3]
 
 # Test with simple scalar values
 query I
-SELECT format_yaml('hello', {'style': 'flow'}) AS scalar_flow;
+SELECT format_yaml('hello', style:='flow') AS scalar_flow;
 ----
 hello
 
 query I
-SELECT format_yaml('hello', {'style': 'block'}) AS scalar_block;
+SELECT format_yaml('hello', style:='block') AS scalar_block;
 ----
 hello

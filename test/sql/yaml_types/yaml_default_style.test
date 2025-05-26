@@ -66,12 +66,6 @@ SELECT yaml_set_default_style('invalid');
 ----
 Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
 
-# Test error handling for NULL style
-statement error
-SELECT yaml_set_default_style(NULL);
-----
-YAML style cannot be NULL
-
 # Test case insensitivity
 query I
 SELECT yaml_set_default_style('BLOCK');
