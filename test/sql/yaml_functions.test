@@ -174,17 +174,17 @@ SELECT yaml_to_json('[1, 2, 3]');
 
 # Test json_to_yaml function
 query T
-SELECT json_to_yaml('{"name":"John"}');
+SELECT value_to_yaml('{"name":"John"}'::JSON);
 ----
 {name: John}
 
 query T
-SELECT json_to_yaml('{"name":"John","age":30}');
+SELECT value_to_yaml('{"name":"John","age":30}'::JSON);
 ----
 {name: John, age: 30}
 
 query T
-SELECT json_to_yaml('[1,2,3]');
+SELECT value_to_yaml('[1,2,3]'::JSON);
 ----
 [1, 2, 3]
 

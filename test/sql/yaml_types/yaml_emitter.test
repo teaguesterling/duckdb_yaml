@@ -153,7 +153,7 @@ SELECT value_to_yaml({'name': NULL, 'tags': []}) AS yaml_with_empty;
 
 # Test round-trip conversion (Value -> YAML -> JSON -> YAML) - flow format
 query I
-SELECT json_to_yaml(yaml_to_json(value_to_yaml({'name': 'Test', 'value': 123}))) AS round_trip;
+SELECT value_to_yaml(yaml_to_json(value_to_yaml({'name': 'Test', 'value': 123}::JSON))) AS round_trip;
 ----
 {name: Test, value: 123}
 

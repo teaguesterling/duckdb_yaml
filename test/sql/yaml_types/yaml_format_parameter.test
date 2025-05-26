@@ -51,11 +51,6 @@ SELECT format_yaml({'a': 1}, {'style': NULL}) AS null_format;
 ----
 {a: 1}
 
-# Test json_to_yaml default format
-query I
-SELECT json_to_yaml('{"name": "John", "age": 30}') AS json_default;
-----
-{name: John, age: 30}
 
 # Test error handling for invalid format in format_yaml
 statement error

@@ -576,73 +576,6 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
     }
 }
 
-static void JSONToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto& input = args.data[0];
-
-    // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
-        try {
-            // Extract the JSON value
-            Value json_value = input.GetValue(i);
-
-            if (json_value.IsNull()) {
-                result.SetValue(i, Value());
-                continue;
-            }
-
-            // Use the same code path as value_to_yaml for consistency
-            std::string yaml_str = yaml_utils::ValueToYAMLString(json_value, yaml_utils::YAMLFormat::FLOW);
-            result.SetValue(i, Value(yaml_str));
-        } catch (const std::exception& e) {
-            throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
-        }
-    }
-}
-
-static void JSONToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto& input = args.data[0];
-    auto& style_input = args.data[1];
-
-    // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
-        try {
-            // Extract the value from the input vector
-            Value json_value = input.GetValue(i);
-            Value style_struct = style_input.GetValue(i);
-
-            if (json_value.IsNull()) {
-                result.SetValue(i, Value());
-                continue;
-            }
-
-            // Determine the style from the struct parameter
-            yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
-            if (!style_struct.IsNull()) {
-                // Extract 'style' field from struct
-                auto struct_value = StructValue::GetChildren(style_struct);
-
-                if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
-                    std::string style_str = struct_value[0].ToString();
-                    std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
-
-                    if (style_str == "block") {
-                        format = yaml_utils::YAMLFormat::BLOCK;
-                    } else if (style_str == "flow") {
-                        format = yaml_utils::YAMLFormat::FLOW;
-                    } else {
-                        throw InvalidInputException("Invalid format '%s'. Must be 'flow' or 'block'", style_str.c_str());
-                    }
-                }
-            }
-
-            // Use the same code path as value_to_yaml for consistency
-            std::string yaml_str = yaml_utils::ValueToYAMLString(json_value, format);
-            result.SetValue(i, Value(yaml_str));
-        } catch (const std::exception& e) {
-            throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
-        }
-    }
-}
 
 //===--------------------------------------------------------------------===//
 // YAML Cast Functions
@@ -819,21 +752,12 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
     ExtensionUtil::RegisterFunction(db, yaml_to_json_fun);
     
-    // Register json_to_yaml function set with overloads
-    ScalarFunctionSet json_to_yaml_set("json_to_yaml");
-    json_to_yaml_set.AddFunction(ScalarFunction({LogicalType::JSON()}, yaml_type, JSONToYAMLFunction));
-
-    // Style struct-based parameter: {'style': 'block'/'flow'}
-    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
-    json_to_yaml_set.AddFunction(ScalarFunction({LogicalType::JSON(), style_struct}, yaml_type, JSONToYAMLWithStyleFunction));
-
-    ExtensionUtil::RegisterFunction(db, json_to_yaml_set);
-    
     // Register value_to_yaml function (single parameter, returns YAML type)
     auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
 
     // Register format_yaml function (returns VARCHAR for display/formatting)
+    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
     auto format_yaml_fun = ScalarFunction("format_yaml", {LogicalType::ANY, style_struct}, LogicalType::VARCHAR, FormatYAMLFunction);
     ExtensionUtil::RegisterFunction(db, format_yaml_fun);
 

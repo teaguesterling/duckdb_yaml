@@ -86,27 +86,27 @@ SELECT y::JSON AS json_val FROM yaml_values ORDER BY y;
 
 # Test JSON to YAML function
 query I
-SELECT json_to_yaml('{"name":"John"}') AS yaml_value;
+SELECT value_to_yaml('{"name":"John"}'::JSON) AS yaml_value;
 ----
 {name: John}
 
 query I
-SELECT json_to_yaml('{"age":30}') AS yaml_value;
+SELECT value_to_yaml('{"age":30}'::JSON) AS yaml_value;
 ----
 {age: 30}
 
 query I
-SELECT json_to_yaml('{"is_valid":true}') AS yaml_value;
+SELECT value_to_yaml('{"is_valid":true}'::JSON) AS yaml_value;
 ----
 {is_valid: true}
 
 query I
-SELECT json_to_yaml('{"data":[1,2,3]}')::VARCHAR AS yaml_value;
+SELECT value_to_yaml('{"data":[1,2,3]}'::JSON)::VARCHAR AS yaml_value;
 ----
 {data: [1, 2, 3]}
 
 query I
-SELECT json_to_yaml('{"person":{"name":"John","age":30}}')::VARCHAR AS yaml_value;
+SELECT value_to_yaml('{"person":{"name":"John","age":30}}'::JSON)::VARCHAR AS yaml_value;
 ----
 {person: {name: John, age: 30}}
 
