@@ -2,6 +2,7 @@
 #include "yaml_debug.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -481,6 +482,112 @@ std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
 } // namespace yaml_utils
 
 //===--------------------------------------------------------------------===//
+// YAML Function Bind Data
+//===--------------------------------------------------------------------===//
+
+struct FormatYAMLBindData : public FunctionData {
+    yaml_utils::YAMLFormat style = yaml_utils::YAMLFormat::FLOW;
+    string orient = "document";  // document/sequence/objects/mapping
+    idx_t indent = 2;
+    string quote = "auto";       // auto/always/never/single/double
+
+    unique_ptr<FunctionData> Copy() const override {
+        auto result = make_uniq<FormatYAMLBindData>();
+        result->style = style;
+        result->orient = orient;
+        result->indent = indent;
+        result->quote = quote;
+        return std::move(result);
+    }
+
+    bool Equals(const FunctionData &other_p) const override {
+        auto &other = other_p.Cast<FormatYAMLBindData>();
+        return style == other.style && orient == other.orient &&
+               indent == other.indent && quote == other.quote;
+    }
+};
+
+//===--------------------------------------------------------------------===//
+// YAML Named Parameter Bind Function
+//===--------------------------------------------------------------------===//
+
+static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+    if (arguments.empty()) {
+        throw InvalidInputException("format_yaml requires at least one argument");
+    }
+
+    auto bind_data = make_uniq<FormatYAMLBindData>();
+
+    // Set default style from global settings
+    bind_data->style = yaml_utils::YAMLSettings::GetDefaultFormat();
+
+    // Process parameters (arguments beyond the first one)
+    for (idx_t i = 1; i < arguments.size(); i++) {
+        auto &child = arguments[i];
+        string param_name = StringUtil::Lower(child->GetAlias());
+
+        // Check if this is a struct parameter (used by COPY TO) or named parameter (direct calls)
+        if (param_name.empty()) {
+            // This could be a struct parameter from COPY TO, we'll handle it at runtime
+            // For now, just skip validation - the actual parameter processing happens in the function
+            continue;
+        }
+
+        // Extract parameter value (must be a constant for named parameters)
+        if (child->type != ExpressionType::VALUE_CONSTANT) {
+            throw BinderException("format_yaml parameter '%s' must be a constant value", param_name);
+        }
+
+        auto &constant = child->Cast<ConstantExpression>();
+        if (constant.value.IsNull()) {
+            throw BinderException("format_yaml parameter '%s' cannot be NULL", param_name);
+        }
+
+        // Process specific parameters
+        if (param_name == "style") {
+            string style_str = StringUtil::Lower(constant.value.ToString());
+            if (style_str == "block") {
+                bind_data->style = yaml_utils::YAMLFormat::BLOCK;
+            } else if (style_str == "flow") {
+                bind_data->style = yaml_utils::YAMLFormat::FLOW;
+            } else {
+                throw BinderException("Invalid style '%s'. Valid options are 'flow' or 'block'.", style_str);
+            }
+        } else if (param_name == "orient") {
+            string orient_str = StringUtil::Lower(constant.value.ToString());
+            if (orient_str == "document" || orient_str == "sequence" ||
+                orient_str == "objects" || orient_str == "mapping") {
+                bind_data->orient = orient_str;
+            } else {
+                throw BinderException("Invalid orient '%s'. Valid options are 'document', 'sequence', 'objects', or 'mapping'.", orient_str);
+            }
+        } else if (param_name == "indent") {
+            if (constant.value.type() != LogicalType::INTEGER && constant.value.type() != LogicalType::BIGINT) {
+                throw BinderException("Parameter 'indent' must be an integer");
+            }
+            auto indent_val = constant.value.GetValue<int64_t>();
+            if (indent_val < 0 || indent_val > 20) {
+                throw BinderException("Parameter 'indent' must be between 0 and 20");
+            }
+            bind_data->indent = static_cast<idx_t>(indent_val);
+        } else if (param_name == "quote") {
+            string quote_str = StringUtil::Lower(constant.value.ToString());
+            if (quote_str == "auto" || quote_str == "always" || quote_str == "never" ||
+                quote_str == "single" || quote_str == "double") {
+                bind_data->quote = quote_str;
+            } else {
+                throw BinderException("Invalid quote '%s'. Valid options are 'auto', 'always', 'never', 'single', or 'double'.", quote_str);
+            }
+        } else {
+            throw BinderException("Unknown parameter '%s' for format_yaml", param_name);
+        }
+    }
+
+    return std::move(bind_data);
+}
+
+//===--------------------------------------------------------------------===//
 // YAML Vector Functions
 //===--------------------------------------------------------------------===//
 
@@ -551,42 +658,52 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
 
 static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     auto& input = args.data[0];
-    auto& style_input = args.data[1];
+    yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
+
+    // Check if we have a second parameter (struct with style info from COPY TO)
+    if (args.ColumnCount() > 1) {
+        auto& params_vec = args.data[1];
+        for (idx_t i = 0; i < args.size(); i++) {
+            Value params_value = params_vec.GetValue(i);
+
+            // If we have a struct parameter, extract style from it
+            if (!params_value.IsNull() && params_value.type().id() == LogicalTypeId::STRUCT) {
+                auto struct_values = StructValue::GetChildren(params_value);
+
+                // Look for 'style' field in the struct
+                auto struct_type = params_value.type();
+                auto& child_types = StructType::GetChildTypes(struct_type);
+
+                for (idx_t j = 0; j < child_types.size(); j++) {
+                    if (child_types[j].first == "style") {
+                        string style_str = StringUtil::Lower(struct_values[j].ToString());
+                        if (style_str == "block") {
+                            format = yaml_utils::YAMLFormat::BLOCK;
+                        } else if (style_str == "flow") {
+                            format = yaml_utils::YAMLFormat::FLOW;
+                        } else {
+                            throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str);
+                        }
+                        break;
+                    }
+                }
+            }
+            break; // We only need to check the first row for parameters
+        }
+    }
 
     // Process each row
     for (idx_t i = 0; i < args.size(); i++) {
         // Extract the value from the input vector
         Value value = input.GetValue(i);
-        Value style_struct = style_input.GetValue(i);
 
-        // Determine the style from the struct parameter (input validation - let errors propagate)
-        yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat(); // use default setting
-        if (!style_struct.IsNull()) {
-            // Extract 'style' field from struct
-            const auto struct_value = StructValue::GetChildren(style_struct);
-
-            if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
-                auto style_str = struct_value[0].ToString();
-                std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
-
-                if (style_str == "block") {
-                    format = yaml_utils::YAMLFormat::BLOCK;
-                } else if (style_str == "flow") {
-                    format = yaml_utils::YAMLFormat::FLOW;
-                } else {
-                    // Invalid style string - throw error (let it propagate)
-                    throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str.c_str());
-                }
-            }
-        }
-
-        // YAML generation (catch only YAML generation errors)
+        // YAML generation using determined parameters
         try {
             if (YAMLDebug::IsDebugModeEnabled()) {
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
                 result.SetValue(i, Value(yaml_str));
             } else {
-                // Use the regular version with specified style
+                // Use the regular version with specified parameters
                 std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
                 result.SetValue(i, Value(yaml_str));
             }
@@ -600,34 +717,6 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
     }
 }
 
-static void FormatYAMLSingleParamFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto& input = args.data[0];
-
-    // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
-        // Extract the value from the input vector
-        Value value = input.GetValue(i);
-
-        // YAML generation using default format
-        try {
-            if (YAMLDebug::IsDebugModeEnabled()) {
-                auto format = yaml_utils::YAMLSettings::GetDefaultFormat();
-                std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
-                result.SetValue(i, Value(yaml_str));
-            } else {
-                // Use the regular version with default format
-                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLSettings::GetDefaultFormat());
-                result.SetValue(i, Value(yaml_str));
-            }
-        } catch (const std::exception& e) {
-            // Only catch YAML generation errors, return null for data conversion issues
-            result.SetValue(i, Value("null"));
-        } catch (...) {
-            // For unknown YAML generation exceptions, return null
-            result.SetValue(i, Value("null"));
-        }
-    }
-}
 
 
 //===--------------------------------------------------------------------===//
@@ -844,17 +933,10 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
     ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
 
-    // Register format_yaml function (returns VARCHAR for display/formatting)
-    ScalarFunctionSet format_yaml_functions("format_yaml");
-
-    // Single parameter version - uses default format
-    format_yaml_functions.AddFunction(ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLSingleParamFunction));
-
-    // Two parameter version - explicit style
-    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
-    format_yaml_functions.AddFunction(ScalarFunction({LogicalType::ANY, style_struct}, LogicalType::VARCHAR, FormatYAMLFunction));
-
-    ExtensionUtil::RegisterFunction(db, format_yaml_functions);
+    // Register format_yaml function with named parameters (returns VARCHAR for display/formatting)
+    auto format_yaml_fun = ScalarFunction("format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLFunction, FormatYAMLBind);
+    format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
+    ExtensionUtil::RegisterFunction(db, format_yaml_fun);
 
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);

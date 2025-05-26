@@ -53,7 +53,7 @@ FLOW_FORMAT_NO_NEWLINES
 # Test that value_to_yaml always uses flow format regardless of default
 query I
 SELECT CASE
-    WHEN value_to_yaml({'name': 'John', 'items': [1, 2, 3]}) LIKE '%' || CHR(10) || '%'
+    WHEN value_to_yaml({'name': 'John', 'items': [1, 2, 3]})::VARCHAR LIKE '%' || CHR(10) || '%'
     THEN 'VALUE_TO_YAML_HAS_NEWLINES'
     ELSE 'VALUE_TO_YAML_NO_NEWLINES'
 END AS value_to_yaml_test;

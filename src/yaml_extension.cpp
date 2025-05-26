@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -27,6 +28,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 
     // Register YAML types
     YAMLTypes::Register(instance);
+
+    // Register YAML copy function
+    auto yaml_copy_function = GetYAMLCopyFunction();
+    ExtensionUtil::RegisterFunction(instance, yaml_copy_function);
 }
 
 void YamlExtension::Load(DuckDB &db) {

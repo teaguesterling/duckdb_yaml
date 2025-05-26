@@ -1,0 +1,93 @@
+# name: test/sql/yaml_copy_to.test
+# description: Test YAML COPY TO functionality
+# group: [yaml]
+
+require yaml
+
+# Create a test table
+statement ok
+CREATE TABLE test_data (id INTEGER, name VARCHAR, score DOUBLE);
+
+statement ok
+INSERT INTO test_data VALUES 
+    (1, 'Alice', 95.5),
+    (2, 'Bob', 87.2),
+    (3, 'Charlie', 92.0);
+
+# Test basic COPY TO YAML (uses default style)
+statement ok
+COPY (SELECT * FROM test_data) TO '__TEST_DIR__/basic_output.yaml' (FORMAT yaml);
+
+# Test COPY TO YAML with explicit flow style
+statement ok
+COPY (SELECT * FROM test_data) TO '__TEST_DIR__/flow_output.yaml' (FORMAT yaml, STYLE flow);
+
+# Test COPY TO YAML with explicit block style
+statement ok
+COPY (SELECT * FROM test_data) TO '__TEST_DIR__/block_output.yaml' (FORMAT yaml, STYLE block);
+
+# Verify the files were created and can be read back
+# Note: read_yaml returns columns in struct field order (score, name, id)
+query III
+SELECT * FROM read_yaml('__TEST_DIR__/basic_output.yaml') ORDER BY id;
+----
+95.5	Alice	1
+87.200000000000003	Bob	2
+92	Charlie	3
+
+query III
+SELECT * FROM read_yaml('__TEST_DIR__/flow_output.yaml') ORDER BY id;
+----
+95.5	Alice	1
+87.200000000000003	Bob	2
+92	Charlie	3
+
+query III
+SELECT * FROM read_yaml('__TEST_DIR__/block_output.yaml') ORDER BY id;
+----
+95.5	Alice	1
+87.200000000000003	Bob	2
+92	Charlie	3
+
+# Test error handling for invalid style
+statement error
+COPY (SELECT * FROM test_data) TO '__TEST_DIR__/invalid_style.yaml' (FORMAT yaml, STYLE invalid);
+----
+Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
+
+# Test COPY TO with subset of columns
+statement ok
+COPY (SELECT name, score FROM test_data WHERE id <= 2) TO '__TEST_DIR__/subset_output.yaml' (FORMAT yaml, STYLE flow);
+
+# Verify subset output
+query TI
+SELECT name, score FROM read_yaml('__TEST_DIR__/subset_output.yaml') ORDER BY name;
+----
+Alice	95.5
+Bob	87.2
+
+# Test with complex nested data
+statement ok
+CREATE TABLE nested_test (id INTEGER, info STRUCT(name VARCHAR, details STRUCT(age INTEGER, active BOOLEAN)));
+
+statement ok
+INSERT INTO nested_test VALUES 
+    (1, {'name': 'Alice', 'details': {'age': 25, 'active': true}}),
+    (2, {'name': 'Bob', 'details': {'age': 30, 'active': false}});
+
+statement ok
+COPY (SELECT * FROM nested_test) TO '__TEST_DIR__/nested_output.yaml' (FORMAT yaml, STYLE block);
+
+# Verify nested data roundtrip
+query IT
+SELECT id, info FROM read_yaml('__TEST_DIR__/nested_output.yaml') ORDER BY id;
+----
+1	{'name': Alice, 'details': {'age': 25, 'active': true}}
+2	{'name': Bob, 'details': {'age': 30, 'active': false}}
+
+# Clean up test tables
+statement ok
+DROP TABLE test_data;
+
+statement ok
+DROP TABLE nested_test;

@@ -22,6 +22,7 @@ set(EXTENSION_SOURCES
   src/yaml_column_types.cpp
   src/yaml_functions.cpp
   src/yaml_extraction_functions.cpp
+  src/yaml_copy.cpp
 )
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
