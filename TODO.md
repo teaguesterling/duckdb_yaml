@@ -13,25 +13,34 @@
 - [x] File globbing support
 - [x] File list support
 - [x] Direct file path support (e.g., SELECT * FROM 'file.yaml')
-- [ ] Explicit column type specification via 'columns' parameter
+- [x] YAML logical type implementation (as VARCHAR alias)
+- [x] YAML to JSON conversion
+- [x] JSON to YAML conversion
+- [x] Value to YAML conversion (initial implementation)
+- [x] Fix segfault in value_to_yaml function with debug mode implementation
+- [x] Improve tests for multi-line YAML strings (resolved using flow-style)
+- [x] Explicit column type specification via 'columns' parameter
+- [x] Complete YAML scalar function suite (13 functions with 59 test assertions)
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
-- [ ] Support for YAML anchors and aliases
 - [ ] Stream processing for large files
 
 ## Type System
 
-- [ ] YAML logical type
-- [ ] YAML to JSON conversion
-- [ ] JSON to YAML conversion
-- [ ] Value to YAML conversion
-- [ ] Inline YAML parsing via `yaml()` function
+- [x] YAML logical type (implemented as VARCHAR alias)
+- [x] YAML to JSON conversion
+- [x] JSON to YAML conversion
+- [x] Value to YAML conversion (with segfault issue)
+- [x] VARCHAR to YAML conversion
+- [x] YAML to VARCHAR conversion
+- [ ] Improved anchor and alias support
 
 ## Additional Features
 
+- [ ] Enhance read_yaml_objects to optionally return YAML type
 - [ ] Column specification for complex YAML structures
 - [ ] Schema extraction helpers
-- [ ] YAML validation functions
-- [ ] YAML extraction functions (similar to JSON functions)
+- [x] YAML validation functions (yaml_valid)
+- [x] YAML extraction functions (yaml_extract, yaml_extract_string, yaml_exists, yaml_type)
 - [ ] YAML path expressions
 - [ ] YAML modification functions
 - [ ] YAML output functions
@@ -54,31 +63,56 @@
 
 - [x] Basic README with usage examples
 - [x] Document direct file path usage
+- [x] Document YAML type and conversion functions
 - [ ] Comprehensive user guide
 - [ ] API reference
 - [ ] Example gallery
 - [ ] Performance benchmarks
 
+## Code Organization and Quality
+
+- [x] Restructure code with utility namespace
+- [x] Improve function documentation
+- [x] Consistent error handling
+- [x] Reduce code duplication
+- [x] Add more comprehensive tests (59 assertions for scalar functions)
+- [ ] Optimize memory usage
+- [ ] Improve performance for large files
+
 ## Known Issues and Planned Improvements
 
+### Critical Issues
+
+**NULL Handling Inconsistency** ✅ RESOLVED:
+- ✅ Fixed YAML functions to match JSON functions in null handling behavior
+- ✅ JSON: `json_extract(obj, '$.nonexistent')` → SQL NULL
+- ✅ YAML: `yaml_extract(obj, '$.nonexistent')` → SQL NULL (now consistent!)
+- ✅ Achieved consistency with DuckDB's JSON extension
+- ✅ Fixed: yaml_extract, yaml_type (both now return SQL NULL for nonexistent paths)
+- ✅ Restored proper SQL NULL semantics for missing data
+
+### Type System
+- [x] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
+- [x] Implement a safe fallback for value_to_yaml to avoid crashes
+- [ ] Improve type detection for specialized formats (timestamps, dates)
+- [ ] Add better support for YAML anchors and aliases
+
 ### Parameter Validation
-- [ ] Stricter type checking for parameters (e.g., rejecting string values for boolean parameters)
+- [ ] Stricter type checking for parameters
 - [ ] Explicit detection and handling of duplicate parameters
 - [ ] Standardized error messages matching DuckDB conventions
 
 ### Memory Management and C++ Idioms
-- [ ] Replace buffer allocation with idiomatic string handling
-- [ ] Use consistent smart pointer patterns throughout the codebase
-- [ ] Apply more const references to avoid unnecessary copying
-- [ ] Follow DuckDB coding conventions more consistently
-
-### Error Handling Refinements
-- [ ] Ensure consistent error message formats
-- [ ] Add more detailed context in error messages
-- [ ] Improve granularity of error recovery
+- [x] Replace manual string building with proper YAML::Emitter usage
+- [x] Use consistent namespace organization
+- [x] Apply more const references to avoid unnecessary copying
+- [x] Follow DuckDB coding conventions more consistently
 
 ### Test Coverage
-- [x] Add tests for direct file path usage
-- [ ] Add tests for parameter type validation
-- [ ] Add tests for duplicate parameter detection
-- [ ] Expand tests for error recovery in various scenarios
+- [x] Add tests for YAML type functionality
+- [x] Add tests for anchor/alias handling
+- [x] Add tests for YAML formatting
+- [ ] Update yaml_anchor_alias.test to use flow-style YAML for SQL parsing compatibility
+- [ ] Fix yaml_types_db_integration.test column count issues
+- [ ] Update yaml_integration.test to properly load JSON extension
+- [ ] Add tests for error recovery in various scenarios

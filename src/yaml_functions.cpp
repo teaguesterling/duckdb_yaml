@@ -16,25 +16,6 @@ void YAMLFunctions::Register(DatabaseInstance &db) {
     RegisterConversionFunctions(db);
 }
 
-unique_ptr<TableRef> YAMLFunctions::ReadYAMLReplacement(ClientContext &context, ReplacementScanInput &input,
-                                                        optional_ptr<ReplacementScanData> data) {
-    auto table_name = ReplacementScan::GetFullPath(input);
-	if (!ReplacementScan::CanReplace(table_name, {"yaml", "yml"})) {
-		return nullptr;
-	}
-    
-	auto table_function = make_uniq<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
-	table_function->function = make_uniq<FunctionExpression>("read_yaml", std::move(children));
-
-	if (!FileSystem::HasGlob(table_name)) {
-		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
-	}
-
-	return std::move(table_function);
-}
 
 void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
     // Basic YAML validity check
@@ -63,56 +44,8 @@ void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
 }
 
 void YAMLFunctions::RegisterConversionFunctions(DatabaseInstance &db) {
-    // YAML to JSON conversion function
-    ScalarFunction yaml_to_json("yaml_to_json", {LogicalType::VARCHAR}, LogicalType::VARCHAR, 
-        [](DataChunk &args, ExpressionState &state, Vector &result) {
-            auto &input_vector = args.data[0];
-            
-            UnaryExecutor::ExecuteWithNulls<string_t, string_t>(input_vector, result, args.size(),
-                [&](string_t yaml_str, ValidityMask &mask, idx_t idx) {
-                    if (!mask.RowIsValid(idx)) {
-                        return string_t();
-                    }
-                    
-                    try {
-                        // Convert YAML to JSON using YAMLTypes helper
-                        ClientContext &context = state.GetContext();
-                        return YAMLTypes::CastYAMLToJSON(context, yaml_str);
-                    } catch (const std::exception &e) {
-                        throw InvalidInputException("Error converting YAML to JSON: %s", e.what());
-                    }
-                });
-        });
-    
-    ExtensionUtil::RegisterFunction(db, yaml_to_json);
-    
-    // JSON to YAML conversion function
-    ScalarFunction json_to_yaml("json_to_yaml", {LogicalType::VARCHAR}, LogicalType::VARCHAR, 
-        [](DataChunk &args, ExpressionState &state, Vector &result) {
-            auto &input_vector = args.data[0];
-            
-            UnaryExecutor::ExecuteWithNulls<string_t, string_t>(input_vector, result, args.size(),
-                [&](string_t json_str, ValidityMask &mask, idx_t idx) {
-                    if (!mask.RowIsValid(idx)) {
-                        return string_t();
-                    }
-                    
-                    try {
-                        // Convert JSON to YAML
-                        ClientContext &context = state.GetContext();
-                        
-                        // Parse JSON and convert to Value
-                        Value json_val(json_str);
-                        
-                        // Convert to YAML
-                        return YAMLTypes::CastValueToYAML(context, json_val);
-                    } catch (const std::exception &e) {
-                        throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
-                    }
-                });
-        });
-    
-    ExtensionUtil::RegisterFunction(db, json_to_yaml);
+    // Conversion functions are already registered in YAMLTypes::Register()
+    // This function is kept for future expansion
 }
 
 } // namespace duckdb

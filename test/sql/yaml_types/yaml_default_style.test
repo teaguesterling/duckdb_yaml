@@ -1,0 +1,88 @@
+# name: test/sql/yaml_types/yaml_default_style.test
+# description: Test YAML default style management functions
+# group: [yaml_types]
+
+require yaml
+
+# Test getting the initial default style (should be 'flow')
+query I
+SELECT yaml_get_default_style();
+----
+flow
+
+# Test setting default style to block
+query I
+SELECT yaml_set_default_style('block');
+----
+block
+
+# Verify the default style was changed
+query I
+SELECT yaml_get_default_style();
+----
+block
+
+# Test that format_yaml now uses block format by default
+# (Check for newlines which indicate block format)
+query I
+SELECT CASE
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}) LIKE '%' || CHR(10) || '%'
+    THEN 'BLOCK_FORMAT_HAS_NEWLINES'
+    ELSE 'BLOCK_FORMAT_NO_NEWLINES'
+END AS block_test;
+----
+BLOCK_FORMAT_HAS_NEWLINES
+
+# Test setting default style back to flow
+query I
+SELECT yaml_set_default_style('flow');
+----
+flow
+
+# Test that format_yaml now uses flow format by default
+# (Check for absence of newlines which indicates flow format)
+query I
+SELECT CASE
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}) LIKE '%' || CHR(10) || '%'
+    THEN 'FLOW_FORMAT_HAS_NEWLINES'
+    ELSE 'FLOW_FORMAT_NO_NEWLINES'
+END AS flow_test;
+----
+FLOW_FORMAT_NO_NEWLINES
+
+# Test that value_to_yaml always uses flow format regardless of default
+query I
+SELECT CASE
+    WHEN value_to_yaml({'name': 'John', 'items': [1, 2, 3]})::VARCHAR LIKE '%' || CHR(10) || '%'
+    THEN 'VALUE_TO_YAML_HAS_NEWLINES'
+    ELSE 'VALUE_TO_YAML_NO_NEWLINES'
+END AS value_to_yaml_test;
+----
+VALUE_TO_YAML_NO_NEWLINES
+
+# Test error handling for invalid style
+statement error
+SELECT yaml_set_default_style('invalid');
+----
+Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
+
+# Test error handling for NULL style
+statement error
+SELECT yaml_set_default_style(NULL);
+----
+YAML style cannot be NULL
+
+# Test case insensitivity
+query I
+SELECT yaml_set_default_style('BLOCK');
+----
+block
+
+query I
+SELECT yaml_get_default_style();
+----
+block
+
+# Reset to flow for other tests
+statement ok
+SELECT yaml_set_default_style('flow');

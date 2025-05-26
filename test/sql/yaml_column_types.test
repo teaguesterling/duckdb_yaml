@@ -1,0 +1,123 @@
+# name: test/sql/yaml_column_types.test
+# description: Test YAML column type specification
+# group: [yaml]
+
+require yaml
+
+# Test reading with auto-detection (default)
+query TRITI
+SELECT joined, score, active, age, name FROM read_yaml('test/yaml/typed.yaml');
+----
+2023-01-15	95.5	true	30	John Doe
+
+# Test reading with explicit column types
+query TIR
+SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR', 'age': 'INTEGER',  'score': 'DOUBLE'});
+----
+John Doe	30	95.5
+
+# Test type casting with explicit types
+query TT
+SELECT name, age FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR', 'age': 'VARCHAR' });
+----
+John Doe	30
+
+# Test with wrong type specification - should cast or error
+query TII
+SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml',
+    columns={
+        'name': 'VARCHAR',
+        'age': 'BIGINT',
+        'score': 'BIGINT'
+    });
+----
+John Doe	30	95
+
+# Test basic column type functionality with simple fields
+query T
+SELECT name FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHAR'});
+----
+John Doe
+
+# Test column subset selection
+query RT
+SELECT score, name FROM read_yaml('test/yaml/typed.yaml',
+    columns={
+        'name': 'VARCHAR',
+        'score': 'DOUBLE',
+        'age': 'INTEGER'
+    });
+----
+95.5	John Doe
+
+# Test auto_detect=false with columns parameter
+query TT
+SELECT name, age FROM read_yaml('test/yaml/typed.yaml',
+    auto_detect=false,
+    columns={
+        'name': 'VARCHAR',
+        'age': 'VARCHAR'
+    });
+----
+John Doe	30
+
+# Test invalid column types
+statement error
+SELECT name FROM read_yaml('test/yaml/typed.yaml',
+    columns={
+        'name': 'INVALIDTYPE'
+    });
+----
+Type with name INVALIDTYPE does not exist!
+
+# Test with missing columns in data - should return NULL for missing column
+query TTI
+SELECT name, missing_column, age FROM read_yaml('test/yaml/typed.yaml',
+    columns={
+        'name': 'VARCHAR',
+        'missing_column': 'VARCHAR',
+        'age': 'INTEGER'
+    });
+----
+John Doe	NULL	30
+
+# Test complex types - struct with explicit structure
+statement ok
+CREATE TABLE test_struct AS
+SELECT person FROM read_yaml('test/yaml/nested.yaml',
+    columns={
+        'person': 'STRUCT(name VARCHAR, age INTEGER, is_active BOOLEAN)'
+    });
+
+query T
+SELECT person.name FROM test_struct;
+----
+John Doe
+
+query I
+SELECT person.age FROM test_struct;
+----
+30
+
+query I
+SELECT person.is_active FROM test_struct;
+----
+true
+
+# Test complex types - list as VARCHAR array
+query T
+SELECT tags FROM read_yaml('test/yaml/lists.yaml',
+    columns={
+        'tags': 'VARCHAR[]'
+    });
+----
+[developer, mentor, designer]
+
+# Test integer array
+query T
+SELECT numbers FROM read_yaml('test/yaml/lists.yaml',
+    columns={
+        'numbers': 'INTEGER[]'
+    });
+----
+[1, 2, 3]

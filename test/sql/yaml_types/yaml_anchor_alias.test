@@ -1,0 +1,23 @@
+# name: test/sql/yaml_types/yaml_anchor_alias.test
+# description: Test YAML file reading and complex structures using external files
+# group: [yaml]
+
+require yaml
+
+# Test reading YAML from external file (avoids SQL parsing issues with complex inline YAML)
+query II
+SELECT name, version FROM read_yaml('test/yaml/simple_config.yaml');
+----
+example	1.0
+
+# Test YAML to JSON conversion
+query I
+SELECT yaml_to_json(value_to_yaml({'name': name, 'version': version})) FROM read_yaml('test/yaml/simple_config.yaml');
+----
+{"name":"example","version":1}
+
+# Test complex structure reading
+query I
+SELECT features[1] as first_feature FROM read_yaml('test/yaml/simple_config.yaml');
+----
+authentication

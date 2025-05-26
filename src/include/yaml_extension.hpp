@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 
@@ -12,5 +13,8 @@ public:
 	std::string Name() override;
         std::string Version() const override;
 };
+
+// YAML copy function
+CopyFunction GetYAMLCopyFunction();
 
 } // namespace duckdb

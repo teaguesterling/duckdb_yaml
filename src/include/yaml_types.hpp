@@ -7,17 +7,14 @@ namespace duckdb {
 
 class YAMLTypes {
 public:
-    //! The YAML type used by DuckDB
+    //! The YAML type used by DuckDB (implemented as VARCHAR)
     static LogicalType YAMLType();
+
+    //! Check if a logical type is a YAML type
+    //static bool IsYAMLType(const LogicalType &t);
     
-    //! Register the YAML type
+    //! Register the YAML type and conversion functions
     static void Register(DatabaseInstance &db);
-    
-    //! Cast the YAML type to JSON type
-    static string_t CastYAMLToJSON(ClientContext &context, string_t yaml_str);
-    
-    //! Cast a value to the YAML type
-    static string_t CastValueToYAML(ClientContext &context, Value value);
 };
 
 } // namespace duckdb

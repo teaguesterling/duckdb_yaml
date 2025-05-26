@@ -1,0 +1,142 @@
+# name: test/sql/yaml_types/yaml_extraction.test
+# description: Test YAML extraction functions
+# group: [yaml]
+
+require yaml
+
+statement ok
+CREATE TABLE test_yaml AS SELECT 
+  '{"name": "John", "age": 30, "address": {"city": "NYC", "zip": 10001}}' as yaml_simple,
+  '[1, 2, [3, 4]]' as yaml_array,
+  'null' as yaml_null
+;
+
+# Test yaml_type function - unary version
+query I
+SELECT yaml_type(yaml_simple::YAML) FROM test_yaml;
+----
+object
+
+query I
+SELECT yaml_type(yaml_array::YAML) FROM test_yaml;
+----
+array
+
+query I
+SELECT yaml_type(yaml_null::YAML) FROM test_yaml;
+----
+null
+
+# Test yaml_type function - binary version (with path)
+query I
+SELECT yaml_type(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+scalar
+
+query I
+SELECT yaml_type(yaml_simple::YAML, '$.address') FROM test_yaml;
+----
+object
+
+query I
+SELECT yaml_type(yaml_simple::YAML, '$.address.city') FROM test_yaml;
+----
+scalar
+
+query I
+SELECT yaml_type(yaml_array::YAML, '$[2]') FROM test_yaml;
+----
+array
+
+# Test yaml_extract function
+query I
+SELECT yaml_extract(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_extract(yaml_simple::YAML, '$.age') FROM test_yaml;
+----
+30
+
+query I
+SELECT yaml_extract(yaml_simple::YAML, '$.address.city') FROM test_yaml;
+----
+NYC
+
+query I
+SELECT yaml_extract(yaml_array::YAML, '$[0]') FROM test_yaml;
+----
+1
+
+query I
+SELECT yaml_extract(yaml_array::YAML, '$[2]') FROM test_yaml;
+----
+[3, 4]
+
+# Test yaml_extract_string function
+query I
+SELECT yaml_extract_string(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_extract_string(yaml_simple::YAML, '$.address') FROM test_yaml;
+----
+{city: NYC, zip: 10001}
+
+query I
+SELECT yaml_extract_string(yaml_simple::YAML, '$.missing') FROM test_yaml;
+----
+NULL
+
+# Test yaml_exists function
+query I
+SELECT yaml_exists(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+true
+
+query I
+SELECT yaml_exists(yaml_simple::YAML, '$.missing') FROM test_yaml;
+----
+false
+
+query I
+SELECT yaml_exists(yaml_simple::YAML, '$.address.city') FROM test_yaml;
+----
+true
+
+query I
+SELECT yaml_exists(yaml_array::YAML, '$[5]') FROM test_yaml;
+----
+false
+
+# Test with actual YAML type values
+statement ok
+CREATE TABLE yaml_typed (data YAML);
+
+statement ok
+INSERT INTO yaml_typed VALUES 
+  (value_to_yaml({'name': 'Alice', 'scores': [90, 85, 92]})),
+  (value_to_yaml(['apple', 'banana', 'cherry']));
+
+query I
+SELECT yaml_type(data) FROM yaml_typed;
+----
+object
+array
+
+query I
+SELECT yaml_extract_string(data, '$.name') FROM yaml_typed WHERE yaml_exists(data, '$.name');
+----
+Alice
+
+query I
+SELECT yaml_extract(data, '$.scores[1]') FROM yaml_typed WHERE yaml_exists(data, '$.scores');
+----
+85
+
+query I
+SELECT yaml_extract(data, '$[1]') FROM yaml_typed WHERE yaml_type(data) = 'array';
+----
+banana

@@ -1,0 +1,91 @@
+# name: test/sql/yaml_types/yaml_format_parameter.test
+# description: Test YAML formatting functionality with format_yaml function
+# group: [yaml_types]
+
+require yaml
+
+statement ok
+PRAGMA enable_verification
+
+# Test value_to_yaml default behavior (single parameter, returns YAML type)
+query I
+SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_yaml;
+----
+{name: John, age: 30}
+
+# Test format_yaml with flow style (returns VARCHAR)
+query I
+SELECT format_yaml({'name': 'John', 'age': 30}, {'style': 'flow'}) AS flow_format;
+----
+{name: John, age: 30}
+
+# Test that flow format does NOT contain newlines
+query I
+SELECT CASE
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'flow'}) LIKE '%' || CHR(10) || '%'
+    THEN 'FLOW_FORMAT_HAS_NEWLINES'
+    ELSE 'FLOW_FORMAT_NO_NEWLINES'
+END AS flow_test;
+----
+FLOW_FORMAT_NO_NEWLINES
+
+# Test format_yaml with block style (multi-line YAML) - check for newlines
+query I
+SELECT CASE
+    WHEN format_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'block'}) LIKE '%' || CHR(10) || '%'
+    THEN 'BLOCK_FORMAT_HAS_NEWLINES'
+    ELSE 'BLOCK_FORMAT_NO_NEWLINES'
+END AS block_test;
+----
+BLOCK_FORMAT_HAS_NEWLINES
+
+# Test NULL value handling (should return SQL NULL)
+query I
+SELECT value_to_yaml(NULL) AS null_value;
+----
+NULL
+
+# Test format_yaml with NULL style parameter (should default to flow)
+query I
+SELECT format_yaml({'a': 1}, {'style': NULL}) AS null_format;
+----
+{a: 1}
+
+
+# Test error handling for invalid format in format_yaml
+statement error
+SELECT format_yaml({'a': 1}, {'style': 'invalid'});
+----
+Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
+
+# Test with array values
+query I
+SELECT value_to_yaml([1, 2, 3]) AS array_default;
+----
+[1, 2, 3]
+
+# Test array block format has newlines
+query I
+SELECT CASE
+    WHEN format_yaml([1, 2, 3], {'style': 'block'}) LIKE '%' || CHR(10) || '%'
+    THEN 'ARRAY_BLOCK_HAS_NEWLINES'
+    ELSE 'ARRAY_BLOCK_NO_NEWLINES'
+END AS array_block_test;
+----
+ARRAY_BLOCK_HAS_NEWLINES
+
+query I
+SELECT format_yaml([1, 2, 3], {'style': 'flow'}) AS array_flow;
+----
+[1, 2, 3]
+
+# Test with simple scalar values
+query I
+SELECT format_yaml('hello', {'style': 'flow'}) AS scalar_flow;
+----
+hello
+
+query I
+SELECT format_yaml('hello', {'style': 'block'}) AS scalar_block;
+----
+hello

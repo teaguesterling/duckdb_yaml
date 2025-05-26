@@ -1,0 +1,9 @@
+name: example
+version: 1.0
+features:
+  - authentication
+  - logging
+  - monitoring
+settings:
+  debug: true
+  timeout: 30

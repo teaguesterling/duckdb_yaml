@@ -6,3 +6,6 @@ duckdb_unittest_tempdir/
 testext
 test/python/__pycache__/
 .Rhistory
+*.sw[poq]
+
+**/.claude/settings.local.json
