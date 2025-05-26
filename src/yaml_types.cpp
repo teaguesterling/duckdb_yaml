@@ -525,7 +525,7 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
     }
 }
 
-static void ValueToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     auto& input = args.data[0];
     auto& style_input = args.data[1];
 
@@ -830,14 +830,13 @@ void YAMLTypes::Register(DatabaseInstance& db) {
 
     ExtensionUtil::RegisterFunction(db, json_to_yaml_set);
     
-    // Register value_to_yaml function set with overloads
-    ScalarFunctionSet value_to_yaml_set("value_to_yaml");
-    value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY}, yaml_type, ValueToYAMLFunction));
+    // Register value_to_yaml function (single parameter, returns YAML type)
+    auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
+    ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
 
-    // Reuse the same style_struct for consistency
-    value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY, style_struct}, yaml_type, ValueToYAMLWithStyleFunction));
-
-    ExtensionUtil::RegisterFunction(db, value_to_yaml_set);
+    // Register format_yaml function (returns VARCHAR for display/formatting)
+    auto format_yaml_fun = ScalarFunction("format_yaml", {LogicalType::ANY, style_struct}, LogicalType::VARCHAR, FormatYAMLFunction);
+    ExtensionUtil::RegisterFunction(db, format_yaml_fun);
 
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);
