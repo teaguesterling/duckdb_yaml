@@ -86,7 +86,7 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
         case YAML::NodeType::Null:
             return "null";
         case YAML::NodeType::Scalar: {
-            std::string value = node.Scalar();
+            const auto value = node.Scalar();
             
             // Try to detect if the scalar is a number, boolean, or string
             if (value == "true" || value == "yes" || value == "on") {
@@ -100,7 +100,7 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
             // Try to parse as number
             try {
                 // Check if it's an integer
-                size_t pos;
+                idx_t pos;
                 int64_t int_val = std::stoll(value, &pos);
                 if (pos == value.size()) {
                     return value; // It's an integer, return as is
@@ -126,14 +126,17 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
                     case '\n': result += "\\n"; break;
                     case '\r': result += "\\r"; break;
                     case '\t': result += "\\t"; break;
-                    default:
-                        if (static_cast<unsigned char>(c) < 32) {
-                            char buf[8];
+                    default: {
+                        constexpr unsigned char MIN_PRINTABLE_CHAR = 32;
+                        constexpr idx_t UNICODE_BUFFER_SIZE = 8;
+                        if (static_cast<unsigned char>(c) < MIN_PRINTABLE_CHAR) {
+                            char buf[UNICODE_BUFFER_SIZE];
                             snprintf(buf, sizeof(buf), "\\u%04x", c);
                             result += buf;
                         } else {
                             result += c;
                         }
+                    }
                 }
             }
             result += "\"";
@@ -141,7 +144,7 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
         }
         case YAML::NodeType::Sequence: {
             std::string result = "[";
-            for (size_t i = 0; i < node.size(); i++) {
+            for (idx_t i = 0; i < node.size(); i++) {
                 if (i > 0) {
                     result += ",";
                 }
@@ -153,15 +156,15 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
         case YAML::NodeType::Map: {
             std::string result = "{";
             bool first = true;
-            for (auto it = node.begin(); it != node.end(); ++it) {
+            for (const auto& it : node) {
                 if (!first) {
                     result += ",";
                 }
                 first = false;
-                
+
                 // Key must be a string in JSON
-                std::string key = it->first.Scalar();
-                result += "\"" + key + "\":" + YAMLNodeToJSON(it->second);
+                const auto key = it.first.Scalar();
+                result += "\"" + key + "\":" + YAMLNodeToJSON(it.second);
             }
             result += "}";
             return result;
@@ -172,7 +175,8 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
 }
 
 void ConfigureEmitter(YAML::Emitter& out, YAMLFormat format) {
-    out.SetIndent(2);
+    constexpr idx_t YAML_INDENT_SIZE = 2;
+    out.SetIndent(YAML_INDENT_SIZE);
     if (format == YAMLFormat::FLOW) {
         out.SetMapFormat(YAML::Flow);
         out.SetSeqFormat(YAML::Flow);
@@ -211,7 +215,7 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
     } else {
         // For block format, emit as multiple documents
         std::string result;
-        for (size_t i = 0; i < docs.size(); i++) {
+        for (idx_t i = 0; i < docs.size(); i++) {
             if (i > 0) {
                 result += "\n---\n";
             }
@@ -236,7 +240,7 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                 if (value.type().IsJSONType()) {
                     try {
                         // Get the JSON string representation
-                        std::string json_str = value.GetValue<string>();
+                        const auto json_str = value.GetValue<string>();
 
                         // Parse JSON using YAML parser (yaml-cpp can parse JSON)
                         YAML::Node json_node = YAML::Load(json_str);
@@ -251,7 +255,7 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                 }
 
                 // Handle regular VARCHAR
-                std::string str_val = value.GetValue<string>();
+                const auto str_val = value.GetValue<string>();
 
                 // Check if the string needs special formatting
                 bool needs_quotes = false;
@@ -268,7 +272,7 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                     
                     // Check if it looks like a number
                     try {
-                        size_t pos;
+                        idx_t pos;
                         std::stod(str_val, &pos);
                         if (pos == str_val.size()) {
                             needs_quotes = true; // It looks like a number
@@ -323,7 +327,7 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
             case LogicalTypeId::LIST: {
                 try {
                     out << YAML::BeginSeq;
-                    auto& list_val = ListValue::GetChildren(value);
+                    const auto& list_val = ListValue::GetChildren(value);
                     for (const auto& element : list_val) {
                         EmitValueToYAML(out, element);
                     }
@@ -337,15 +341,15 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
             case LogicalTypeId::STRUCT: {
                 try {
                     out << YAML::BeginMap;
-                    auto& struct_vals = StructValue::GetChildren(value);
-                    auto& struct_names = StructType::GetChildTypes(value.type());
+                    const auto& struct_vals = StructValue::GetChildren(value);
+                    const auto& struct_names = StructType::GetChildTypes(value.type());
                     
                     // Safety check for struct children
                     if (struct_vals.size() != struct_names.size()) {
                         throw std::runtime_error("Mismatch between struct values and names");
                     }
                     
-                    for (size_t i = 0; i < struct_vals.size(); i++) {
+                    for (idx_t i = 0; i < struct_vals.size(); i++) {
                         out << YAML::Key << struct_names[i].first;
                         out << YAML::Value;
                         EmitValueToYAML(out, struct_vals[i]);
@@ -406,7 +410,7 @@ YAML::Node ValueToYAMLNode(const Value& value) {
             return YAML::Node(value.GetValue<double>());
         case LogicalTypeId::LIST: {
             YAML::Node list_node(YAML::NodeType::Sequence);
-            auto& list_vals = ListValue::GetChildren(value);
+            const auto& list_vals = ListValue::GetChildren(value);
             for (const auto& element : list_vals) {
                 list_node.push_back(ValueToYAMLNode(element));  // Recursive
             }
@@ -414,11 +418,11 @@ YAML::Node ValueToYAMLNode(const Value& value) {
         }
         case LogicalTypeId::STRUCT: {
             YAML::Node map_node(YAML::NodeType::Map);
-            auto& struct_vals = StructValue::GetChildren(value);
-            auto& struct_names = StructType::GetChildTypes(value.type());
+            const auto& struct_vals = StructValue::GetChildren(value);
+            const auto& struct_names = StructType::GetChildTypes(value.type());
 
             for (idx_t i = 0; i < struct_vals.size() && i < struct_names.size(); i++) {
-                std::string key = struct_names[i].first;
+                const auto key = struct_names[i].first;
                 map_node[key] = ValueToYAMLNode(struct_vals[i]);  // Recursive
             }
             return map_node;
@@ -470,7 +474,7 @@ static void YAMLToJSONFunction(DataChunk& args, ExpressionState& state, Vector& 
             
             try {
                 // Parse as multi-document YAML
-                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
+                const auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
                 std::string json_str;
                 if (docs.empty()) {
@@ -481,7 +485,7 @@ static void YAMLToJSONFunction(DataChunk& args, ExpressionState& state, Vector& 
                 } else {
                     // Multiple documents - convert to JSON array
                     json_str = "[";
-                    for (size_t i = 0; i < docs.size(); i++) {
+                    for (idx_t i = 0; i < docs.size(); i++) {
                         if (i > 0) {
                             json_str += ",";
                         }
@@ -539,10 +543,10 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
         yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
         if (!style_struct.IsNull()) {
             // Extract 'style' field from struct
-            auto struct_value = StructValue::GetChildren(style_struct);
+            const auto struct_value = StructValue::GetChildren(style_struct);
 
             if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
-                std::string style_str = struct_value[0].ToString();
+                auto style_str = struct_value[0].ToString();
                 std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
 
                 if (style_str == "block") {
@@ -590,7 +594,7 @@ static bool YAMLToJSONCast(Vector& source, Vector& result, idx_t count, CastPara
             
             try {
                 // Process as multi-document YAML
-                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
+                const auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
                 std::string json_str;
                 if (docs.empty()) {
@@ -601,7 +605,7 @@ static bool YAMLToJSONCast(Vector& source, Vector& result, idx_t count, CastPara
                 } else {
                     // Multiple documents - convert to JSON array
                     json_str = "[";
-                    for (size_t i = 0; i < docs.size(); i++) {
+                    for (idx_t i = 0; i < docs.size(); i++) {
                         if (i > 0) {
                             json_str += ",";
                         }
@@ -675,7 +679,7 @@ static bool YAMLToVarcharCast(Vector& source, Vector& result, idx_t count, CastP
             
             try {
                 // Parse as multi-document YAML
-                auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
+                const auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
                 
                 // Format using inline (flow) style for display purposes
                 std::string formatted_yaml = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::FLOW);

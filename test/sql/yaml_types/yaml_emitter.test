@@ -4,6 +4,8 @@
 
 require yaml
 
+require json
+
 # Test value_to_yaml function with emitter formatting
 statement ok
 CREATE TABLE test_values(v VARCHAR);
