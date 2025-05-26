@@ -1,5 +1,5 @@
 # name: test/sql/yaml_types/yaml_format_parameter.test
-# description: Test YAML format parameter functionality
+# description: Test YAML formatting functionality with format_yaml function
 # group: [yaml_types]
 
 require yaml
@@ -7,21 +7,21 @@ require yaml
 statement ok
 PRAGMA enable_verification
 
-# Test default format (should be flow)
+# Test value_to_yaml default behavior (single parameter, returns YAML type)
 query I
-SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_format;
+SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_yaml;
 ----
 {name: John, age: 30}
 
-# Test explicit flow format
+# Test format_yaml with flow style (returns VARCHAR)
 query I
-SELECT value_to_yaml({'name': 'John', 'age': 30}, {'style': 'flow'}) AS flow_format;
+SELECT format_yaml({'name': 'John', 'age': 30}, {'style': 'flow'}) AS flow_format;
 ----
 {name: John, age: 30}
 
-# Test explicit block format (should be multi-line for complex structures)
+# Test format_yaml with block style (multi-line YAML)
 query I
-SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'block'}) AS block_format;
+SELECT format_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'block'}) AS block_format;
 ----
 name: John\nitems:\n  - 1\n  - 2\n  - 3
 
@@ -31,9 +31,9 @@ SELECT value_to_yaml(NULL) AS null_value;
 ----
 null
 
-# Test NULL format parameter (should default to flow)
+# Test format_yaml with NULL style parameter (should default to flow)
 query I
-SELECT value_to_yaml({'a': 1}, {'style': NULL}) AS null_format;
+SELECT format_yaml({'a': 1}, {'style': NULL}) AS null_format;
 ----
 {a: 1}
 
@@ -55,11 +55,11 @@ SELECT json_to_yaml('{"name": "John", "items": [1, 2, 3]}', {'style': 'block'}) 
 ----
 name: John\nitems:\n  - 1\n  - 2\n  - 3
 
-# Test error handling for invalid format
+# Test error handling for invalid format in format_yaml
 statement error
-SELECT value_to_yaml({'a': 1}, {'style': 'invalid'});
+SELECT format_yaml({'a': 1}, {'style': 'invalid'});
 ----
-Invalid format 'invalid'. Must be 'flow' or 'block'
+Invalid YAML style 'invalid'. Valid options are 'flow' or 'block'.
 
 # Test error handling for invalid format in json_to_yaml
 statement error
@@ -69,22 +69,27 @@ Invalid format 'invalid'. Must be 'flow' or 'block'
 
 # Test with array values
 query I
-SELECT value_to_yaml([1, 2, 3]) AS array_flow;
+SELECT value_to_yaml([1, 2, 3]) AS array_default;
 ----
 [1, 2, 3]
 
 query I
-SELECT value_to_yaml([1, 2, 3], {'style': 'block'}) AS array_block;
+SELECT format_yaml([1, 2, 3], {'style': 'block'}) AS array_block;
 ----
 - 1\n- 2\n- 3
 
+query I
+SELECT format_yaml([1, 2, 3], {'style': 'flow'}) AS array_flow;
+----
+[1, 2, 3]
+
 # Test with simple scalar values
 query I
-SELECT value_to_yaml('hello', {'style': 'flow'}) AS scalar_flow;
+SELECT format_yaml('hello', {'style': 'flow'}) AS scalar_flow;
 ----
 hello
 
 query I
-SELECT value_to_yaml('hello', {'style': 'block'}) AS scalar_block;
+SELECT format_yaml('hello', {'style': 'block'}) AS scalar_block;
 ----
 hello
