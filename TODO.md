@@ -21,6 +21,7 @@
 - [x] Improve tests for multi-line YAML strings (resolved using flow-style)
 - [x] Explicit column type specification via 'columns' parameter
 - [x] Complete YAML scalar function suite (13 functions with 59 test assertions)
+- [x] COPY TO YAML functionality with style and layout parameters
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Stream processing for large files
 
@@ -43,7 +44,7 @@
 - [x] YAML extraction functions (yaml_extract, yaml_extract_string, yaml_exists, yaml_type)
 - [ ] YAML path expressions
 - [ ] YAML modification functions
-- [ ] YAML output functions
+- [x] YAML output functions (COPY TO with FORMAT YAML)
 
 ## Error Handling
 

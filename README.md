@@ -15,6 +15,7 @@ Claude.ai wrote 99% of the code in this project over the course of a weekend.
 - Convert between YAML, JSON, and other types
 - Robust parameter handling and error recovery
 - Direct file path support for easy querying
+- Write query results to YAML files with `COPY TO`
 
 ## Usage
 
@@ -130,6 +131,43 @@ SELECT name, age FROM 'people.yaml' WHERE age > 30;
 CREATE TABLE config AS SELECT * FROM 'config.yaml';
 ```
 
+### Writing YAML Files
+
+The YAML extension supports writing query results to YAML files using the `COPY TO` statement:
+
+```sql
+-- Basic COPY TO with default settings (flow style)
+COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml);
+
+-- Write with block style (more readable for complex data)
+COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, STYLE block);
+
+-- Write as sequence (each row as a YAML sequence item)
+COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, LAYOUT sequence);
+
+-- Write as documents (each row as a separate YAML document)
+COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, LAYOUT document, STYLE block);
+
+-- Combine with queries and transformations
+COPY (
+    SELECT id, name, struct_pack(age, city) AS details 
+    FROM people 
+    WHERE age > 25
+) TO 'adults.yaml' (FORMAT yaml, STYLE block);
+```
+
+#### COPY TO Parameters
+
+- `STYLE`: Controls YAML formatting style
+  - `flow` (default): Inline format `{id: 1, name: John}`
+  - `block`: Multi-line format with proper indentation
+  
+- `LAYOUT`: Controls how multiple rows are formatted
+  - `document` (default): Each row as a separate YAML object/document
+  - `sequence`: All rows as items in a YAML sequence (array)
+
+When using `LAYOUT document` with `STYLE block`, rows are separated by `---` (YAML document separator).
+
 ### Error Handling
 
 The YAML extension provides robust error handling capabilities:
@@ -182,7 +220,6 @@ Both formats produce the same result when read with `read_yaml()`.
 
 Current limitations:
 - Limited type detection (no automatic dates, timestamps)
-- The `value_to_yaml` function has a segfault issue with certain inputs
 - No streaming support for large files yet
 - Path expressions not yet implemented
 
@@ -192,7 +229,6 @@ Current limitations:
 - Streaming support for large files
 - Improved type detection and conversion
 - YAML modification functions
-- YAML output functions
 - Better schema inference
 
 ## Building from Source
