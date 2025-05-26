@@ -15,19 +15,15 @@ SELECT value_to_yaml({'name': 'John', 'age': 30}) AS default_format;
 
 # Test explicit flow format
 query I
-SELECT value_to_yaml({'name': 'John', 'age': 30}, 'flow') AS flow_format;
+SELECT value_to_yaml({'name': 'John', 'age': 30}, {'style': 'flow'}) AS flow_format;
 ----
 {name: John, age: 30}
 
 # Test explicit block format (should be multi-line for complex structures)
 query I
-SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]}, 'block') AS block_format;
+SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]}, {'style': 'block'}) AS block_format;
 ----
-name: John
-items:
-  - 1
-  - 2
-  - 3
+name: John\nitems:\n  - 1\n  - 2\n  - 3
 
 # Test NULL value handling
 query I
@@ -37,7 +33,7 @@ null
 
 # Test NULL format parameter (should default to flow)
 query I
-SELECT value_to_yaml({'a': 1}, NULL) AS null_format;
+SELECT value_to_yaml({'a': 1}, {'style': NULL}) AS null_format;
 ----
 {a: 1}
 
@@ -49,29 +45,25 @@ SELECT json_to_yaml('{"name": "John", "age": 30}') AS json_default;
 
 # Test json_to_yaml with explicit flow format
 query I
-SELECT json_to_yaml('{"name": "John", "age": 30}', 'flow') AS json_flow;
+SELECT json_to_yaml('{"name": "John", "age": 30}', {'style': 'flow'}) AS json_flow;
 ----
 {name: John, age: 30}
 
 # Test json_to_yaml with block format
 query I
-SELECT json_to_yaml('{"name": "John", "items": [1, 2, 3]}', 'block') AS json_block;
+SELECT json_to_yaml('{"name": "John", "items": [1, 2, 3]}', {'style': 'block'}) AS json_block;
 ----
-name: John
-items:
-  - 1
-  - 2
-  - 3
+name: John\nitems:\n  - 1\n  - 2\n  - 3
 
 # Test error handling for invalid format
 statement error
-SELECT value_to_yaml({'a': 1}, 'invalid');
+SELECT value_to_yaml({'a': 1}, {'style': 'invalid'});
 ----
 Invalid format 'invalid'. Must be 'flow' or 'block'
 
 # Test error handling for invalid format in json_to_yaml
 statement error
-SELECT json_to_yaml('{"a": 1}', 'invalid');
+SELECT json_to_yaml('{"a": 1}', {'style': 'invalid'});
 ----
 Invalid format 'invalid'. Must be 'flow' or 'block'
 
@@ -82,19 +74,17 @@ SELECT value_to_yaml([1, 2, 3]) AS array_flow;
 [1, 2, 3]
 
 query I
-SELECT value_to_yaml([1, 2, 3], 'block') AS array_block;
+SELECT value_to_yaml([1, 2, 3], {'style': 'block'}) AS array_block;
 ----
-- 1
-- 2
-- 3
+- 1\n- 2\n- 3
 
 # Test with simple scalar values
 query I
-SELECT value_to_yaml('hello', 'flow') AS scalar_flow;
+SELECT value_to_yaml('hello', {'style': 'flow'}) AS scalar_flow;
 ----
 hello
 
 query I
-SELECT value_to_yaml('hello', 'block') AS scalar_block;
+SELECT value_to_yaml('hello', {'style': 'block'}) AS scalar_block;
 ----
 hello
