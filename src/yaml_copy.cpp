@@ -79,16 +79,12 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
     vector<unique_ptr<ParsedExpression>> format_yaml_children;
     format_yaml_children.emplace_back(std::move(struct_pack_expr));
     
-    // Add style parameter if specified
+    // Add style parameter if specified (using named parameter syntax)
     if (!yaml_style.empty()) {
-        // Create style struct: {'style': 'block'} or {'style': 'flow'}
-        // struct_pack needs aliased expressions, not key-value pairs
-        vector<unique_ptr<ParsedExpression>> style_struct_children;
+        // Create named parameter: style := 'block' or style := 'flow'
         auto style_value = make_uniq<ConstantExpression>(yaml_style);
-        style_value->SetAlias("style");
-        style_struct_children.emplace_back(std::move(style_value));
-        auto style_struct = make_uniq<FunctionExpression>("struct_pack", std::move(style_struct_children));
-        format_yaml_children.emplace_back(std::move(style_struct));
+        style_value->SetAlias("style");  // This creates the named parameter
+        format_yaml_children.emplace_back(std::move(style_value));
     }
 
     // Create format_yaml function call
