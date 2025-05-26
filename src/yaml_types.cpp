@@ -531,34 +531,33 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
 
     // Process each row
     for (idx_t i = 0; i < args.size(); i++) {
-        try {
-            // Extract the value from the input vector
-            Value value = input.GetValue(i);
-            Value style_struct = style_input.GetValue(i);
+        // Extract the value from the input vector
+        Value value = input.GetValue(i);
+        Value style_struct = style_input.GetValue(i);
 
-            // Determine the style from the struct parameter
-            yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
-            if (!style_struct.IsNull()) {
-                // Extract 'style' field from struct
-                auto struct_value = StructValue::GetChildren(style_struct);
+        // Determine the style from the struct parameter (input validation - let errors propagate)
+        yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
+        if (!style_struct.IsNull()) {
+            // Extract 'style' field from struct
+            auto struct_value = StructValue::GetChildren(style_struct);
 
-                if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
-                    std::string style_str = struct_value[0].ToString();
-                    std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
+            if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
+                std::string style_str = struct_value[0].ToString();
+                std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
 
-                    if (style_str == "block") {
-                        format = yaml_utils::YAMLFormat::BLOCK;
-                    } else if (style_str == "flow") {
-                        format = yaml_utils::YAMLFormat::FLOW;
-                    } else {
-                        // Invalid style string - throw error
-                        throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str);
-                    }
+                if (style_str == "block") {
+                    format = yaml_utils::YAMLFormat::BLOCK;
+                } else if (style_str == "flow") {
+                    format = yaml_utils::YAMLFormat::FLOW;
+                } else {
+                    // Invalid style string - throw error (let it propagate)
+                    throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str.c_str());
                 }
             }
+        }
 
-
-            // If YAMLDebug is enabled, use the safer version
+        // YAML generation (catch only YAML generation errors)
+        try {
             if (YAMLDebug::IsDebugModeEnabled()) {
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
                 result.SetValue(i, Value(yaml_str));
@@ -568,10 +567,10 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
                 result.SetValue(i, Value(yaml_str));
             }
         } catch (const std::exception& e) {
-            // If there's a known exception, return a descriptive message
+            // Only catch YAML generation errors, return null for data conversion issues
             result.SetValue(i, Value("null"));
         } catch (...) {
-            // For unknown exceptions, just return null
+            // For unknown YAML generation exceptions, return null
             result.SetValue(i, Value("null"));
         }
     }
