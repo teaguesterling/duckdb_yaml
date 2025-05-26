@@ -20,9 +20,18 @@ std::vector<YAML::Node> ParseYAML(const std::string& yaml_str, bool multi_doc = 
 std::string YAMLNodeToJSON(const YAML::Node& node);
 
 // YAML emission utilities
-enum class YAMLFormat { 
+enum class YAMLFormat {
     BLOCK,  // Multi-line, indented format
     FLOW    // Inline, compact format similar to JSON
+};
+
+// Default style management
+class YAMLSettings {
+public:
+    static YAMLFormat GetDefaultFormat();
+    static void SetDefaultFormat(YAMLFormat format);
+private:
+    static YAMLFormat default_format;
 };
 
 void ConfigureEmitter(YAML::Emitter& out, YAMLFormat format);
@@ -144,11 +153,11 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
         }
         case YAML::NodeType::Sequence: {
             std::string result = "[";
-            for (idx_t i = 0; i < node.size(); i++) {
-                if (i > 0) {
+            for (idx_t seq_idx = 0; seq_idx < node.size(); seq_idx++) {
+                if (seq_idx > 0) {
                     result += ",";
                 }
-                result += YAMLNodeToJSON(node[i]);
+                result += YAMLNodeToJSON(node[seq_idx]);
             }
             result += "]";
             return result;
@@ -215,11 +224,11 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
     } else {
         // For block format, emit as multiple documents
         std::string result;
-        for (idx_t i = 0; i < docs.size(); i++) {
-            if (i > 0) {
+        for (idx_t doc_idx = 0; doc_idx < docs.size(); doc_idx++) {
+            if (doc_idx > 0) {
                 result += "\n---\n";
             }
-            result += EmitYAML(docs[i], format);
+            result += EmitYAML(docs[doc_idx], format);
         }
         return result;
     }
@@ -349,10 +358,10 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                         throw std::runtime_error("Mismatch between struct values and names");
                     }
                     
-                    for (idx_t i = 0; i < struct_vals.size(); i++) {
-                        out << YAML::Key << struct_names[i].first;
+                    for (idx_t field_idx = 0; field_idx < struct_vals.size(); field_idx++) {
+                        out << YAML::Key << struct_names[field_idx].first;
                         out << YAML::Value;
-                        EmitValueToYAML(out, struct_vals[i]);
+                        EmitValueToYAML(out, struct_vals[field_idx]);
                     }
                     out << YAML::EndMap;
                 } catch (...) {
@@ -421,9 +430,9 @@ YAML::Node ValueToYAMLNode(const Value& value) {
             const auto& struct_vals = StructValue::GetChildren(value);
             const auto& struct_names = StructType::GetChildTypes(value.type());
 
-            for (idx_t i = 0; i < struct_vals.size() && i < struct_names.size(); i++) {
-                const auto key = struct_names[i].first;
-                map_node[key] = ValueToYAMLNode(struct_vals[i]);  // Recursive
+            for (idx_t field_idx = 0; field_idx < struct_vals.size() && field_idx < struct_names.size(); field_idx++) {
+                const auto key = struct_names[field_idx].first;
+                map_node[key] = ValueToYAMLNode(struct_vals[field_idx]);  // Recursive
             }
             return map_node;
         }
@@ -485,11 +494,11 @@ static void YAMLToJSONFunction(DataChunk& args, ExpressionState& state, Vector& 
                 } else {
                     // Multiple documents - convert to JSON array
                     json_str = "[";
-                    for (idx_t i = 0; i < docs.size(); i++) {
-                        if (i > 0) {
+                    for (idx_t doc_idx = 0; doc_idx < docs.size(); doc_idx++) {
+                        if (doc_idx > 0) {
                             json_str += ",";
                         }
-                        json_str += yaml_utils::YAMLNodeToJSON(docs[i]);
+                        json_str += yaml_utils::YAMLNodeToJSON(docs[doc_idx]);
                     }
                     json_str += "]";
                 }
@@ -605,11 +614,11 @@ static bool YAMLToJSONCast(Vector& source, Vector& result, idx_t count, CastPara
                 } else {
                     // Multiple documents - convert to JSON array
                     json_str = "[";
-                    for (idx_t i = 0; i < docs.size(); i++) {
-                        if (i > 0) {
+                    for (idx_t doc_idx = 0; doc_idx < docs.size(); doc_idx++) {
+                        if (doc_idx > 0) {
                             json_str += ",";
                         }
-                        json_str += yaml_utils::YAMLNodeToJSON(docs[i]);
+                        json_str += yaml_utils::YAMLNodeToJSON(docs[doc_idx]);
                     }
                     json_str += "]";
                 }
