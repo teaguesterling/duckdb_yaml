@@ -372,11 +372,71 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
     }
 }
 
+// Convert DuckDB Value to YAML::Node (respects emitter configuration)
+YAML::Node ValueToYAMLNode(const Value& value) {
+    if (value.IsNull()) {
+        return YAML::Node(YAML::NodeType::Null);
+    }
+
+    switch (value.type().id()) {
+        case LogicalTypeId::VARCHAR: {
+            if (value.type().IsJSONType()) {
+                try {
+                    std::string json_str = value.GetValue<string>();
+                    return YAML::Load(json_str);  // Parse JSON as YAML
+                } catch (...) {
+                    return YAML::Node(value.ToString());
+                }
+            }
+            return YAML::Node(value.ToString());
+        }
+        case LogicalTypeId::BOOLEAN:
+            return YAML::Node(value.GetValue<bool>());
+        case LogicalTypeId::TINYINT:
+            return YAML::Node(static_cast<int>(value.GetValue<int8_t>()));
+        case LogicalTypeId::SMALLINT:
+            return YAML::Node(static_cast<int>(value.GetValue<int16_t>()));
+        case LogicalTypeId::INTEGER:
+            return YAML::Node(value.GetValue<int32_t>());
+        case LogicalTypeId::BIGINT:
+            return YAML::Node(value.GetValue<int64_t>());
+        case LogicalTypeId::FLOAT:
+            return YAML::Node(value.GetValue<float>());
+        case LogicalTypeId::DOUBLE:
+            return YAML::Node(value.GetValue<double>());
+        case LogicalTypeId::LIST: {
+            YAML::Node list_node(YAML::NodeType::Sequence);
+            auto& list_vals = ListValue::GetChildren(value);
+            for (const auto& element : list_vals) {
+                list_node.push_back(ValueToYAMLNode(element));  // Recursive
+            }
+            return list_node;
+        }
+        case LogicalTypeId::STRUCT: {
+            YAML::Node map_node(YAML::NodeType::Map);
+            auto& struct_vals = StructValue::GetChildren(value);
+            auto& struct_names = StructType::GetChildTypes(value.type());
+
+            for (idx_t i = 0; i < struct_vals.size() && i < struct_names.size(); i++) {
+                std::string key = struct_names[i].first;
+                map_node[key] = ValueToYAMLNode(struct_vals[i]);  // Recursive
+            }
+            return map_node;
+        }
+        default:
+            return YAML::Node(value.ToString());
+    }
+}
+
 std::string ValueToYAMLString(const Value& value, YAMLFormat format) {
     try {
+        // Convert to YAML::Node first (this respects emitter configuration)
+        YAML::Node node = ValueToYAMLNode(value);
+
+        // Now emit with proper format settings
         YAML::Emitter out;
         ConfigureEmitter(out, format);
-        EmitValueToYAML(out, value);
+        out << node;
 
         // Check if we have a valid YAML string
         if (out.good() && out.c_str() != nullptr) {
@@ -497,6 +557,7 @@ static void ValueToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state
                 }
             }
 
+
             // If YAMLDebug is enabled, use the safer version
             if (YAMLDebug::IsDebugModeEnabled()) {
                 std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
@@ -517,24 +578,71 @@ static void ValueToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state
 }
 
 static void JSONToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    UnaryExecutor::Execute<string_t, string_t>(
-        args.data[0], result, args.size(),
-        [&](string_t json_str) -> string_t {
-            if (json_str.GetSize() == 0) {
-                return string_t();
+    auto& input = args.data[0];
+
+    // Process each row
+    for (idx_t i = 0; i < args.size(); i++) {
+        try {
+            // Extract the JSON value
+            Value json_value = input.GetValue(i);
+
+            if (json_value.IsNull()) {
+                result.SetValue(i, Value());
+                continue;
             }
-            
-            try {
-                // Parse JSON using YAML parser
-                YAML::Node json_node = YAML::Load(json_str.GetString());
-                
-                // Convert to YAML with flow formatting for better testability
-                std::string yaml_str = yaml_utils::EmitYAML(json_node, yaml_utils::YAMLFormat::FLOW);
-                return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
-            } catch (const std::exception& e) {
-                throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
+
+            // Use the same code path as value_to_yaml for consistency
+            std::string yaml_str = yaml_utils::ValueToYAMLString(json_value, yaml_utils::YAMLFormat::FLOW);
+            result.SetValue(i, Value(yaml_str));
+        } catch (const std::exception& e) {
+            throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
+        }
+    }
+}
+
+static void JSONToYAMLWithStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+    auto& style_input = args.data[1];
+
+    // Process each row
+    for (idx_t i = 0; i < args.size(); i++) {
+        try {
+            // Extract the value from the input vector
+            Value json_value = input.GetValue(i);
+            Value style_struct = style_input.GetValue(i);
+
+            if (json_value.IsNull()) {
+                result.SetValue(i, Value());
+                continue;
             }
-        });
+
+            // Determine the style from the struct parameter
+            yaml_utils::YAMLFormat format = yaml_utils::YAMLFormat::FLOW; // default
+            if (!style_struct.IsNull()) {
+                // Extract 'style' field from struct
+                auto struct_value = StructValue::GetChildren(style_struct);
+
+                if (struct_value.size() > 0 && !struct_value[0].IsNull()) {
+                    std::string style_str = struct_value[0].ToString();
+                    std::transform(style_str.begin(), style_str.end(), style_str.begin(), ::tolower);
+
+                    if (style_str == "block") {
+                        format = yaml_utils::YAMLFormat::BLOCK;
+                    } else if (style_str == "flow") {
+                        format = yaml_utils::YAMLFormat::FLOW;
+                    } else {
+                        throw InvalidInputException("Invalid format '%s'. Must be 'flow' or 'block'", style_str.c_str());
+                    }
+                }
+            }
+
+            // Use the same code path as value_to_yaml for consistency
+            std::string yaml_str = yaml_utils::ValueToYAMLString(json_value, format);
+            result.SetValue(i, Value(yaml_str));
+        } catch (const std::exception& e) {
+            throw InvalidInputException("Error converting JSON to YAML: %s", e.what());
+        }
+    }
 }
 
 //===--------------------------------------------------------------------===//
@@ -712,15 +820,21 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
     ExtensionUtil::RegisterFunction(db, yaml_to_json_fun);
     
-    auto json_to_yaml_fun = ScalarFunction("json_to_yaml", {LogicalType::JSON()}, yaml_type, JSONToYAMLFunction);
-    ExtensionUtil::RegisterFunction(db, json_to_yaml_fun);
+    // Register json_to_yaml function set with overloads
+    ScalarFunctionSet json_to_yaml_set("json_to_yaml");
+    json_to_yaml_set.AddFunction(ScalarFunction({LogicalType::JSON()}, yaml_type, JSONToYAMLFunction));
+
+    // Style struct-based parameter: {'style': 'block'/'flow'}
+    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
+    json_to_yaml_set.AddFunction(ScalarFunction({LogicalType::JSON(), style_struct}, yaml_type, JSONToYAMLWithStyleFunction));
+
+    ExtensionUtil::RegisterFunction(db, json_to_yaml_set);
     
     // Register value_to_yaml function set with overloads
     ScalarFunctionSet value_to_yaml_set("value_to_yaml");
     value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY}, yaml_type, ValueToYAMLFunction));
 
-    // Style struct-based parameter: {'style': 'block'/'flow'}
-    auto style_struct = LogicalType::STRUCT({{"style", LogicalType::VARCHAR}});
+    // Reuse the same style_struct for consistency
     value_to_yaml_set.AddFunction(ScalarFunction({LogicalType::ANY, style_struct}, yaml_type, ValueToYAMLWithStyleFunction));
 
     ExtensionUtil::RegisterFunction(db, value_to_yaml_set);
