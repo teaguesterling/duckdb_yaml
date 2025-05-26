@@ -1,5 +1,6 @@
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
+#include "yaml_formatting.hpp"
 #include "yaml_debug.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -234,8 +235,14 @@ static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vect
     Value target_layout_value = args.data[args.ColumnCount() - 2].GetValue(0);
     Value target_style_value = args.data[args.ColumnCount() - 1].GetValue(0);
 
-    string target_layout = StringUtil::Lower(target_layout_value.ToString());
+    string target_layout_str = StringUtil::Lower(target_layout_value.ToString());
     string target_style = StringUtil::Lower(target_style_value.ToString());
+
+    // Convert layout string to enum
+    yaml_formatting::YAMLLayout layout = yaml_formatting::YAMLLayout::DOCUMENT;
+    if (target_layout_str == "sequence") {
+        layout = yaml_formatting::YAMLLayout::SEQUENCE;
+    }
 
     // Determine YAML format from target style
     yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
@@ -250,27 +257,11 @@ static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vect
         Value value = input.GetValue(i);
 
         try {
-            // Get the base YAML (always using document layout internally)
-            std::string yaml_str = yaml_utils::FormatPerStyleAndLayout(value, format, "document");
+            // Get the base YAML string
+            std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
 
-            // Apply post-processing based on target layout
-            if (target_layout == "sequence") {
-                // Apply sequence transformation: prepend '- ' and indent continuation lines
-                if (!yaml_str.empty()) {
-                    yaml_str = "- " + yaml_str;
-
-                    // Add 2 spaces of indentation to continuation lines
-                    size_t pos = yaml_str.find('\n');
-                    while (pos != std::string::npos && pos + 1 < yaml_str.length()) {
-                        yaml_str.insert(pos + 1, "  ");
-                        pos = yaml_str.find('\n', pos + 3);
-                    }
-                }
-            } else if (target_layout == "document" && i > 0 && target_style == "block") {
-                // For document layout with block style, prepend document separator for all rows after the first
-                yaml_str = "---\n" + yaml_str;
-            }
-            // For document layout with flow style, no separator needed
+            // Apply layout-specific formatting
+            yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, i);
 
             result.SetValue(i, Value(yaml_str));
         } catch (const std::exception& e) {

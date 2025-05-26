@@ -24,6 +24,7 @@ set(EXTENSION_SOURCES
   src/yaml_extraction_functions.cpp
   src/yaml_copy.cpp
   src/yaml_utils.cpp
+  src/yaml_formatting.cpp
 )
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
