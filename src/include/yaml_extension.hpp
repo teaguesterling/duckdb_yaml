@@ -17,4 +17,7 @@ public:
 // YAML copy function
 CopyFunction GetYAMLCopyFunction();
 
+// Register YAML copy functions
+void RegisterYAMLCopyFunctions(DatabaseInstance& db);
+
 } // namespace duckdb

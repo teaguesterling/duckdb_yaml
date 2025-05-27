@@ -6,40 +6,16 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "yaml_extension.hpp"
 #include "yaml_types.hpp"
+#include "yaml_utils.hpp"
+#include "yaml_formatting.hpp"
 
 namespace duckdb {
 
-// Helper function to post-process YAML output based on layout
-static std::string PostProcessYAMLForLayout(const std::string& yaml_str, const std::string& layout, const std::string& style) {
-    if (layout.empty() || layout == "document") {
-        return yaml_str; // No transformation needed
-    }
-
-    if (layout == "sequence") {
-        if (yaml_str.empty()) {
-            return yaml_str;
-        }
-
-        std::string result = yaml_str;
-        // Prepend '- ' to the beginning
-        if (!result.empty()) {
-            result = "- " + result;
-        }
-
-        // Add 2 spaces of indentation to continuation lines (lines after the first)
-        size_t pos = result.find('\n');
-        while (pos != std::string::npos && pos + 1 < result.length()) {
-            result.insert(pos + 1, "  ");
-            pos = result.find('\n', pos + 3); // Skip the inserted spaces
-        }
-
-        return result;
-    }
-
-    return yaml_str; // Fallback
-}
 
 static void ThrowYAMLCopyParameterException(const string &loption) {
     throw BinderException("COPY (FORMAT YAML) parameter %s expects a single argument.", loption);
@@ -162,6 +138,68 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
     copied_info.options["header"] = {{0}};
 
     return binder.Bind(*stmt_copy);
+}
+
+//===--------------------------------------------------------------------===//
+// COPY Format YAML Function
+//===--------------------------------------------------------------------===//
+
+static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
+    auto& input = args.data[0];
+
+    // Get target layout and style from the last two arguments
+    Value target_layout_value = args.data[args.ColumnCount() - 2].GetValue(0);
+    Value target_style_value = args.data[args.ColumnCount() - 1].GetValue(0);
+
+    string target_layout_str = StringUtil::Lower(target_layout_value.ToString());
+    string target_style = StringUtil::Lower(target_style_value.ToString());
+
+    // Convert layout string to enum
+    yaml_formatting::YAMLLayout layout = yaml_formatting::YAMLLayout::DOCUMENT;
+    if (target_layout_str == "sequence") {
+        layout = yaml_formatting::YAMLLayout::SEQUENCE;
+    }
+
+    // Determine YAML format from target style
+    yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
+    if (target_style == "block") {
+        format = yaml_utils::YAMLFormat::BLOCK;
+    } else if (target_style == "flow") {
+        format = yaml_utils::YAMLFormat::FLOW;
+    }
+
+    // Process each row with post-processing
+    for (idx_t i = 0; i < args.size(); i++) {
+        Value value = input.GetValue(i);
+
+        try {
+            // Get the base YAML string
+            std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+
+            // Apply layout-specific formatting
+            yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, i);
+
+            result.SetValue(i, Value(yaml_str));
+        } catch (const std::exception& e) {
+            result.SetValue(i, Value("null"));
+        } catch (...) {
+            result.SetValue(i, Value("null"));
+        }
+    }
+}
+
+void RegisterYAMLCopyFunctions(DatabaseInstance& db) {
+    // Register the COPY TO function
+    auto copy_function = CopyFunction("yaml");
+    copy_function.extension = "yaml";
+    copy_function.plan = CopyToYAMLPlan;
+    ExtensionUtil::RegisterFunction(db, copy_function);
+
+    // Register copy_format_yaml function for COPY TO post-processing
+    auto copy_format_yaml_fun = ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
+    copy_format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+    copy_format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
+    ExtensionUtil::RegisterFunction(db, copy_format_yaml_fun);
 }
 
 CopyFunction GetYAMLCopyFunction() {

@@ -29,9 +29,8 @@ static void LoadInternal(DatabaseInstance &instance) {
     // Register YAML types
     YAMLTypes::Register(instance);
 
-    // Register YAML copy function
-    auto yaml_copy_function = GetYAMLCopyFunction();
-    ExtensionUtil::RegisterFunction(instance, yaml_copy_function);
+    // Register YAML copy functions
+    RegisterYAMLCopyFunctions(instance);
 }
 
 void YamlExtension::Load(DuckDB &db) {

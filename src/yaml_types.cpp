@@ -228,49 +228,6 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
     }
 }
 
-static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto& input = args.data[0];
-
-    // Get target layout and style from the last two arguments
-    Value target_layout_value = args.data[args.ColumnCount() - 2].GetValue(0);
-    Value target_style_value = args.data[args.ColumnCount() - 1].GetValue(0);
-
-    string target_layout_str = StringUtil::Lower(target_layout_value.ToString());
-    string target_style = StringUtil::Lower(target_style_value.ToString());
-
-    // Convert layout string to enum
-    yaml_formatting::YAMLLayout layout = yaml_formatting::YAMLLayout::DOCUMENT;
-    if (target_layout_str == "sequence") {
-        layout = yaml_formatting::YAMLLayout::SEQUENCE;
-    }
-
-    // Determine YAML format from target style
-    yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
-    if (target_style == "block") {
-        format = yaml_utils::YAMLFormat::BLOCK;
-    } else if (target_style == "flow") {
-        format = yaml_utils::YAMLFormat::FLOW;
-    }
-
-    // Process each row with post-processing
-    for (idx_t i = 0; i < args.size(); i++) {
-        Value value = input.GetValue(i);
-
-        try {
-            // Get the base YAML string
-            std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
-
-            // Apply layout-specific formatting
-            yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, i);
-
-            result.SetValue(i, Value(yaml_str));
-        } catch (const std::exception& e) {
-            result.SetValue(i, Value("null"));
-        } catch (...) {
-            result.SetValue(i, Value("null"));
-        }
-    }
-}
 
 
 //===--------------------------------------------------------------------===//
@@ -493,11 +450,6 @@ void YAMLTypes::Register(DatabaseInstance& db) {
     format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
     ExtensionUtil::RegisterFunction(db, format_yaml_fun);
 
-    // Register copy_format_yaml function for COPY TO post-processing (no bind function needed, simpler interface)
-    auto copy_format_yaml_fun = ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
-    copy_format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-    copy_format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
-    ExtensionUtil::RegisterFunction(db, copy_format_yaml_fun);
 
     // Register debug functions
     auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);
