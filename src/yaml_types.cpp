@@ -1,19 +1,8 @@
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "yaml_formatting.hpp"
-#include "yaml_debug.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include "yaml-cpp/yaml.h"
-#include <algorithm>
 
 namespace duckdb {
 

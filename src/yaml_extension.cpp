@@ -11,7 +11,7 @@
 #include "yaml_extension.hpp"
 #include "yaml_reader.hpp"
 #include "yaml_types.hpp"
-#include "yaml_functions.hpp"
+#include "yaml_scalar_functions.hpp"
 #include "yaml_extraction_functions.hpp"
 
 namespace duckdb {

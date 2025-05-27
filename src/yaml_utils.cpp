@@ -1,7 +1,6 @@
 #include "yaml_utils.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/list_segment.hpp"
 #include <sstream>
 
 namespace duckdb {
