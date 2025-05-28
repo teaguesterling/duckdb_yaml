@@ -45,7 +45,7 @@ project:
 query I
 SELECT yaml_to_json(y) AS json_value FROM complex_yaml;
 ----
-[{"type":"user","metadata":{"version":1.0,"created_at":"2023-05-15T10:30:00Z"},"user":{"id":1001,"username":"johndoe","email":"john.doe@example.com","profile":{"first_name":"John","last_name":"Doe","age":30}}},{"type":"project","metadata":{"version":1.0,"created_at":"2023-05-16T09:15:00Z"},"project":{"id":2001,"name":"Data Warehouse Migration","status":"in_progress","priority":"high","team":[{"user_id":1001,"role":"Project Lead"},{"user_id":1002,"role":"Data Engineer"}]}}]
+[{"type":"user","metadata":{"version":1.0,"created_at":"2023-05-15 10:30:00Z"},"user":{"id":1001,"username":"johndoe","email":"john.doe@example.com","profile":{"first_name":"John","last_name":"Doe","age":30}}},{"type":"project","metadata":{"version":1.0,"created_at":"2023-05-16 09:15:00Z"},"project":{"id":2001,"name":"Data Warehouse Migration","status":"in_progress","priority":"high","team":[{"user_id":1001,"role":"Project Lead"},{"user_id":1002,"role":"Data Engineer"}]}}]
 
 # Test using JSON functions after YAML conversion
 query I

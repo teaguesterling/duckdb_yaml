@@ -1,0 +1,11 @@
+# Test file for type detection
+- integers: [1, 42, -123, 0]
+- floats: [3.14, -2.5, 1.0, 0.0]
+- booleans: [true, false, yes, no, on, off, y, n, t, f, True, False, YES, NO]
+- dates: ["2023-12-25", "1990-01-01", "2000-02-29"]
+- timestamps: ["2023-12-25 10:30:00", "1990-01-01T12:00:00", "2000-02-29 23:59:59"]
+- times: ["10:30:00", "23:59:59", "00:00:00"]
+- nulls: [null, ~, "", Null, NULL]
+- strings: ["hello", "world", "2023-not-a-date", "not-a-number"]
+- special_numbers: [inf, -inf, nan, infinity, -infinity]
+- mixed: [1, "hello", true, "2023-12-25", 3.14, null]

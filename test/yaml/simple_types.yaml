@@ -1,0 +1,10 @@
+---
+integer: 42
+float: 3.14
+boolean_true: true
+boolean_false: false
+date: 2023-12-25
+timestamp: 2023-12-25T10:30:00
+time: 10:30:00
+string: hello world
+null_value: null

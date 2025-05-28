@@ -1,0 +1,51 @@
+# name: test/sql/yaml_type_detection_current.test
+# description: Test current type detection behavior in YAML reader
+# group: [yaml]
+
+require yaml
+
+# Test current type detection capabilities  
+query IIIIIIIII
+SELECT 
+    typeof(integers) as int_type,
+    typeof(floats) as float_type,
+    typeof(booleans) as bool_type,
+    typeof(dates) as date_type,
+    typeof(timestamps) as ts_type,
+    typeof(times) as time_type,
+    typeof(nulls) as null_type,
+    typeof(strings) as str_type,
+    typeof(mixed_types) as mixed_type
+FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+TINYINT[]	DOUBLE[]	BOOLEAN[]	DATE[]	TIMESTAMP[]	TIME[]	VARCHAR[]	VARCHAR[]	VARCHAR[]
+
+# Verify integer array values - note that -123 is still within TINYINT range
+query I
+SELECT integers FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+[1, 42, -123, 0]
+
+# Verify float array values
+query I
+SELECT floats FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+[3.14, -2.5, 1.0, 0.0, inf, -inf]
+
+# Verify boolean array values
+query I
+SELECT booleans FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+[true, false, true, false, true, false]
+
+# Dates are stored as VARCHAR arrays (no date detection yet)
+query I
+SELECT dates FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+[2023-12-25, 1990-01-01, 2000-02-29]
+
+# Mixed types should now be detected as VARCHAR[] and work properly
+query I
+SELECT mixed_types FROM read_yaml('test/yaml/type_detection_proper.yaml');
+----
+[1, hello, true, 3.14, NULL]

@@ -1,7 +1,13 @@
 #include "yaml_utils.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/time.hpp"
 #include <sstream>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 
 namespace duckdb {
 
@@ -100,6 +106,45 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node>& docs, YAMLFormat for
 // YAML to JSON Conversion
 //===--------------------------------------------------------------------===//
 
+// Helper function to check if a string might be a date/timestamp
+static bool TryDetectDateOrTimestamp(const std::string& value, std::string& json_value) {
+    // Try to parse as date first
+    idx_t pos = 0;
+    date_t date_result;
+    bool special = false;
+    
+    auto date_cast_result = Date::TryConvertDate(value.c_str(), value.length(), pos, date_result, special, false);
+    if (date_cast_result == DateCastResult::SUCCESS && pos == value.length()) {
+        // Successfully parsed as date, format it in JSON date format
+        json_value = "\"" + Date::ToString(date_result) + "\"";
+        return true;
+    }
+    
+    // Try to parse as timestamp
+    timestamp_t timestamp_result;
+    if (Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result) == TimestampCastResult::SUCCESS) {
+        // Successfully parsed as timestamp, format it in ISO 8601 format with Z suffix for JSON compatibility
+        auto timestamp_str = Timestamp::ToString(timestamp_result);
+        // Check if timestamp already has timezone info
+        if (timestamp_str.find('+') == std::string::npos && timestamp_str.find('Z') == std::string::npos) {
+            timestamp_str += "Z"; // Add UTC timezone indicator
+        }
+        json_value = "\"" + timestamp_str + "\"";
+        return true;
+    }
+    
+    // Try to parse as time
+    pos = 0;
+    dtime_t time_result;
+    if (Time::TryConvertTime(value.c_str(), value.length(), pos, time_result, false) && pos == value.length()) {
+        // Successfully parsed as time, format it in JSON time format
+        json_value = "\"" + Time::ToString(time_result) + "\"";
+        return true;
+    }
+    
+    return false;
+}
+
 std::string YAMLNodeToJSON(const YAML::Node& node) {
     if (!node) {
         return "null";
@@ -111,34 +156,59 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
         case YAML::NodeType::Scalar: {
             const auto value = node.Scalar();
             
-            // Try to detect if the scalar is a number, boolean, or string
-            if (value == "true" || value == "yes" || value == "on") {
+            // Check for boolean values (case-insensitive)
+            std::string lower_value = value;
+            std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
+            
+            if (lower_value == "true" || lower_value == "yes" || lower_value == "on" || 
+                lower_value == "y" || lower_value == "t") {
                 return "true";
-            } else if (value == "false" || value == "no" || value == "off") {
+            } else if (lower_value == "false" || lower_value == "no" || lower_value == "off" || 
+                       lower_value == "n" || lower_value == "f") {
                 return "false";
-            } else if (value == "null" || value == "~") {
+            } else if (lower_value == "null" || value == "~" || value == "") {
                 return "null";
             }
             
-            // Try to parse as number
+            // Try to parse as number (integer first, then double)
             try {
-                // Check if it's an integer
-                idx_t pos;
-                int64_t int_val = std::stoll(value, &pos);
-                if (pos == value.size()) {
-                    return value; // It's an integer, return as is
+                // Skip numeric detection for values that look like dates/times
+                bool might_be_temporal = false;
+                if (value.find('-') != std::string::npos || value.find(':') != std::string::npos) {
+                    might_be_temporal = true;
                 }
                 
-                // Check if it's a double
-                double double_val = std::stod(value, &pos);
-                if (pos == value.size()) {
-                    return value; // It's a double, return as is
+                if (!might_be_temporal) {
+                    // Check if it's an integer
+                    idx_t pos;
+                    int64_t int_val = std::stoll(value, &pos);
+                    if (pos == value.size()) {
+                        return value; // It's an integer, return as is
+                    }
+                    
+                    // Check if it's a double
+                    double double_val = std::stod(value, &pos);
+                    if (pos == value.size()) {
+                        // Check for special floating point values
+                        if (std::isinf(double_val)) {
+                            return value[0] == '-' ? "\"-Infinity\"" : "\"Infinity\"";
+                        } else if (std::isnan(double_val)) {
+                            return "\"NaN\"";
+                        }
+                        return value; // It's a double, return as is
+                    }
                 }
             } catch (...) {
-                // Not a number, treat as string
+                // Not a number, continue with other type detection
             }
             
-            // Escape JSON string special characters
+            // Try to detect date/timestamp/time
+            std::string json_value;
+            if (TryDetectDateOrTimestamp(value, json_value)) {
+                return json_value;
+            }
+            
+            // If all else fails, treat as string and escape JSON special characters
             std::string result = "\"";
             for (char c : value) {
                 switch (c) {

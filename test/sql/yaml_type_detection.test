@@ -1,0 +1,82 @@
+# name: test/sql/yaml_type_detection.test
+# description: Test enhanced type detection in YAML reader
+# group: [yaml]
+
+require yaml
+
+require json
+
+# Test that read_yaml properly detects column types
+query III
+SELECT typeof(integer) as int_type, typeof(float) as float_type, typeof(boolean_true) as bool_type FROM read_yaml('test/yaml/simple_types.yaml');
+----
+TINYINT	DOUBLE	BOOLEAN
+
+# Test integer values
+query I
+SELECT integer FROM read_yaml('test/yaml/simple_types.yaml');
+----
+42
+
+# Test float values
+query R
+SELECT float FROM read_yaml('test/yaml/simple_types.yaml');
+----
+3.14
+
+# Test boolean values
+query II
+SELECT boolean_true, boolean_false FROM read_yaml('test/yaml/simple_types.yaml');
+----
+true	false
+
+# Test date/timestamp/time are properly detected with enhanced type detection
+query III
+SELECT typeof(date) as date_type, typeof(timestamp) as timestamp_type, typeof(time) as time_type FROM read_yaml('test/yaml/simple_types.yaml');
+----
+DATE	TIMESTAMP	TIME
+
+# But the values are correctly preserved
+query III
+SELECT date, timestamp, time FROM read_yaml('test/yaml/simple_types.yaml');
+----
+2023-12-25	2023-12-25 10:30:00	10:30:00
+
+# Test null detection
+query I
+SELECT null_value IS NULL as is_null FROM read_yaml('test/yaml/simple_types.yaml');
+----
+true
+
+# Test YAML to JSON conversion preserves type detection
+query I
+SELECT value_to_yaml(CAST('{"num": 42, "bool": true, "str": "hello", "null": null}' AS JSON)) as yaml_output;
+----
+{num: 42, bool: true, str: hello, "null": ~}
+
+# Test various boolean formats are detected with array types
+statement ok
+CREATE TABLE type_test AS 
+SELECT * FROM read_yaml('test/yaml/type_detection_proper.yaml');
+
+query III
+SELECT booleans[1], booleans[3], booleans[5] FROM type_test;
+----
+true	true	true
+
+query III
+SELECT booleans[2], booleans[4], booleans[6] FROM type_test;
+----
+false	false	false
+
+# Test that numbers are properly detected in arrays
+query IIR
+SELECT integers[1], integers[2], floats[1] FROM type_test;
+----
+1	42	3.14
+
+# Test that special numeric values are handled correctly
+query I
+SELECT typeof(floats) FROM type_test;
+----
+DOUBLE[]
