@@ -801,46 +801,66 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
         return std::move(result);
     }
 
-    // Check if user provided explicit column types
-    if (!options.column_names.empty() && !options.column_types.empty()) {
-        // Use user-provided schema
-        names = options.column_names;
-        return_types = options.column_types;
-    } else {
-        // Extract schema from all row nodes
-        unordered_map<string, LogicalType> column_types;
+    // Extract schema from all row nodes, considering user-provided column types
+    // Use a map to track column types
+    unordered_map<string, LogicalType> user_specified_types;
+    unordered_map<string, LogicalType> detected_types;
+    
+    // Store user-specified column types
+    for (size_t i = 0; i < options.column_names.size() && i < options.column_types.size(); i++) {
+        user_specified_types[options.column_names[i]] = options.column_types[i];
+    }
 
-        // Process each row node to build the schema
-        for (auto &node : result->yaml_docs) {
-            // Process each top-level key as a potential column
-            for (auto it = node.begin(); it != node.end(); ++it) {
-                std::string key = it->first.Scalar();
-                YAML::Node value = it->second;
+    // Process each row node to detect schema from YAML document order
+    vector<string> column_order;
+    unordered_set<string> seen_columns;
+    
+    for (auto &node : result->yaml_docs) {
+        // Process each top-level key in document order
+        for (auto it = node.begin(); it != node.end(); ++it) {
+            std::string key = it->first.Scalar();
+            YAML::Node value = it->second;
+            
+            // Track column order from first document
+            if (seen_columns.find(key) == seen_columns.end()) {
+                column_order.push_back(key);
+                seen_columns.insert(key);
+            }
 
-                // Detect the type of this value
+            // Check if user specified a type for this column
+            auto user_type_it = user_specified_types.find(key);
+            if (user_type_it != user_specified_types.end()) {
+                // User specified type takes precedence
+                detected_types[key] = user_type_it->second;
+            } else if (detected_types.find(key) == detected_types.end()) {
+                // Auto-detect type for new columns
                 LogicalType value_type;
                 if (options.auto_detect_types) {
                     value_type = DetectYAMLType(value);
                 } else {
                     value_type = LogicalType::VARCHAR;
                 }
-
-                // If we already have this column, reconcile the types
-                if (column_types.count(key)) {
-                    if (column_types[key].id() != value_type.id()) {
-                        column_types[key] = LogicalType::VARCHAR;
-                    }
+                detected_types[key] = value_type;
+            } else {
+                // Reconcile types for existing auto-detected columns
+                LogicalType value_type;
+                if (options.auto_detect_types) {
+                    value_type = DetectYAMLType(value);
                 } else {
-                    column_types[key] = value_type;
+                    value_type = LogicalType::VARCHAR;
+                }
+                
+                if (detected_types[key].id() != value_type.id()) {
+                    detected_types[key] = LogicalType::VARCHAR;
                 }
             }
         }
+    }
 
-        // Build the schema
-        for (auto &entry : column_types) {
-            names.push_back(entry.first);
-            return_types.push_back(entry.second);
-        }
+    // Build the final schema in document order
+    for (const auto& col : column_order) {
+        names.push_back(col);
+        return_types.push_back(detected_types[col]);
     }
 
     // Special handling for non-map documents
@@ -901,6 +921,12 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
         seen_parameters.insert(param.first);
     }
 
+    // Check for columns parameter
+    if (seen_parameters.find("columns") != seen_parameters.end()) {
+        // Bind column types
+        BindColumnTypes(context, input, options);
+    }
+
     // Parse optional parameters
     if (seen_parameters.find("auto_detect") != seen_parameters.end()) {
         options.auto_detect_types = input.named_parameters["auto_detect"].GetValue<bool>();
@@ -950,22 +976,33 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
     result->yaml_docs = all_docs;
 
     if (result->yaml_docs.empty()) {
-        // Empty result
-        names.emplace_back("yaml");
-        return_types.emplace_back(LogicalType::VARCHAR);
+        // Empty result - use user-specified columns if available
+        if (!options.column_names.empty()) {
+            names = options.column_names;
+            return_types = options.column_types;
+        } else {
+            names.emplace_back("yaml");
+            return_types.emplace_back(LogicalType::VARCHAR);
+        }
         return std::move(result);
     }
 
-    // Auto-detect columns from first document
-    if (options.auto_detect_types) {
-        // For each document, we create a column with the document structure
-        names.emplace_back("yaml");
-        auto doc_type = DetectYAMLType(result->yaml_docs[0]);
-        return_types.emplace_back(doc_type);
+    // Use user-specified columns if provided, otherwise auto-detect
+    if (!options.column_names.empty()) {
+        names = options.column_names;
+        return_types = options.column_types;
     } else {
-        // If not auto-detecting, just use VARCHAR for the whole document
-        names.emplace_back("yaml");
-        return_types.emplace_back(LogicalType::VARCHAR);
+        // Auto-detect columns from first document
+        if (options.auto_detect_types) {
+            // For each document, we create a column with the document structure
+            names.emplace_back("yaml");
+            auto doc_type = DetectYAMLType(result->yaml_docs[0]);
+            return_types.emplace_back(doc_type);
+        } else {
+            // If not auto-detecting, just use VARCHAR for the whole document
+            names.emplace_back("yaml");
+            return_types.emplace_back(LogicalType::VARCHAR);
+        }
     }
 
     // Save column info
@@ -1131,7 +1168,9 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
     read_yaml_objects.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
     read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
     read_yaml_objects.named_parameters["multi_document"] = LogicalType::BOOLEAN;
+    read_yaml_objects.named_parameters["columns"] = LogicalType::ANY;
     ExtensionUtil::RegisterFunction(db, read_yaml_objects);
 }
+
 
 } // namespace duckdb

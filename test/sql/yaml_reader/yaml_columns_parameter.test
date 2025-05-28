@@ -1,0 +1,182 @@
+# name: test/yaml_reader/yaml_columns_parameter.test
+# description: Tests for YAML reader columns parameter (explicit column type specification)
+# group: [yaml]
+
+require yaml
+
+# Test basic columns parameter with simple types
+statement ok
+CREATE TABLE explicit_types AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'INTEGER', 'is_active': 'BOOLEAN'});
+
+# Verify the column types are correctly applied
+query IIIIII
+DESCRIBE explicit_types;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	INTEGER	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Verify the data is correctly typed
+query TII
+SELECT name, age, is_active FROM explicit_types;
+----
+John	30	true
+
+# Test with different numeric types
+statement ok
+CREATE TABLE numeric_types AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'BIGINT'});
+
+query IIIIII
+DESCRIBE numeric_types;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	BIGINT	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Test with DOUBLE type
+statement ok
+CREATE TABLE double_type AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'age': 'DOUBLE'});
+
+query IIIIII
+DESCRIBE double_type;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	DOUBLE	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Test type override on sequence data
+statement ok
+CREATE TABLE array_types AS 
+SELECT * FROM read_yaml('test/yaml/sequence_basic.yaml', columns={'id': 'BIGINT', 'age': 'DOUBLE'});
+
+query IIIIII
+DESCRIBE array_types;
+----
+id	BIGINT	YES	NULL	NULL	NULL
+name	VARCHAR	YES	NULL	NULL	NULL
+age	DOUBLE	YES	NULL	NULL	NULL
+
+# Test columns parameter overrides auto_detect
+statement ok
+CREATE TABLE override_autodetect AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', auto_detect=true, columns={'age': 'VARCHAR'});
+
+# Even with auto_detect=true, age should be VARCHAR due to columns parameter
+query IIIIII
+DESCRIBE override_autodetect;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	VARCHAR	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+query T
+SELECT age FROM override_autodetect;
+----
+30
+
+# Test partial column specification (specified columns get explicit types, others auto-detected)
+statement ok
+CREATE TABLE partial_columns AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'age': 'BIGINT'});
+
+# name and is_active should be auto-detected, age should be BIGINT
+query IIIIII
+DESCRIBE partial_columns;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	BIGINT	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Test with multi-document YAML (multi_basic.yaml only has id and name fields)
+statement ok
+CREATE TABLE multi_doc_columns AS 
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=true, columns={'name': 'VARCHAR', 'id': 'BIGINT'});
+
+query TI
+SELECT name, id FROM multi_doc_columns ORDER BY name;
+----
+Bob	3
+Jane	2
+John	1
+
+# Test error cases - invalid column type
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'INVALID_TYPE'});
+----
+Invalid type 'INVALID_TYPE' for column 'name'
+
+# Test error cases - columns parameter is not a struct
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns='not_a_struct');
+----
+columns parameter must be a struct (e.g., {name: 'VARCHAR', id: 'INTEGER'})
+
+# Test error cases - columns parameter as array instead of struct
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns=['VARCHAR', 'INTEGER']);
+----
+columns parameter must be a struct (e.g., {name: 'VARCHAR', id: 'INTEGER'})
+
+# Test with DATE type (if supported by type detection)
+statement ok
+CREATE TABLE date_columns AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'DATE'});
+
+query IIIIII
+DESCRIBE date_columns;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	DATE	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Test with TIMESTAMP type
+statement ok
+CREATE TABLE timestamp_columns AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'TIMESTAMP'});
+
+query IIIIII
+DESCRIBE timestamp_columns;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	TIMESTAMP	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Test columns parameter with read_yaml_objects function
+statement ok
+CREATE TABLE objects_with_columns AS 
+SELECT * FROM read_yaml_objects('test/yaml/simple.yaml', columns={'yaml': 'STRUCT(name VARCHAR, age INTEGER, is_active BOOLEAN)'});
+
+query IIIIII
+DESCRIBE objects_with_columns;
+----
+yaml	STRUCT("name" VARCHAR, age INTEGER, is_active BOOLEAN)	YES	NULL	NULL	NULL
+
+# Test case sensitivity in type names
+statement ok
+CREATE TABLE case_insensitive AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'varchar', 'age': 'integer'});
+
+query IIIIII
+DESCRIBE case_insensitive;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	INTEGER	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+
+
+# Test with column that doesn't exist in YAML (should be handled gracefully)
+statement ok
+CREATE TABLE nonexistent_column AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'nonexistent': 'INTEGER'});
+
+# The nonexistent column should not appear in the result
+query IIIIII
+DESCRIBE nonexistent_column;
+----
+name	VARCHAR	YES	NULL	NULL	NULL
+age	TINYINT	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL

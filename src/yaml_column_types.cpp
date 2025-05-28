@@ -64,10 +64,8 @@ void YAMLReader::BindColumnTypes(ClientContext &context, TableFunctionBindInput 
         options.column_types.push_back(col_type);
     }
     
-    // Disable auto-detection when explicit types are provided
-    if (!options.column_names.empty()) {
-        options.auto_detect_types = false;
-    }
+    // Note: We don't disable auto-detection here to allow partial column specification
+    // where some columns are explicitly typed and others are auto-detected
 }
 
 } // namespace duckdb
