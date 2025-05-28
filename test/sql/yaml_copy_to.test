@@ -29,21 +29,21 @@ COPY (SELECT * FROM test_data) TO '__TEST_DIR__/block_output.yaml' (FORMAT yaml,
 # Verify the files were created and can be read back
 # Note: read_yaml returns columns in struct field order (score, name, id)
 query III
-SELECT * FROM read_yaml('__TEST_DIR__/basic_output.yaml') ORDER BY id;
+SELECT score, name, id FROM read_yaml('__TEST_DIR__/basic_output.yaml') ORDER BY id;
 ----
 95.5	Alice	1
 87.200000000000003	Bob	2
 92	Charlie	3
 
 query III
-SELECT * FROM read_yaml('__TEST_DIR__/flow_output.yaml') ORDER BY id;
+SELECT score, name, id FROM read_yaml('__TEST_DIR__/flow_output.yaml') ORDER BY id;
 ----
 95.5	Alice	1
 87.200000000000003	Bob	2
 92	Charlie	3
 
 query III
-SELECT * FROM read_yaml('__TEST_DIR__/block_output.yaml') ORDER BY id;
+SELECT score, name, id FROM read_yaml('__TEST_DIR__/block_output.yaml') ORDER BY id;
 ----
 95.5	Alice	1
 87.200000000000003	Bob	2
