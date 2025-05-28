@@ -59,6 +59,16 @@ SELECT * FROM read_yaml('data/configs/');
 
 -- Read preserving document structure (one row per file)
 SELECT * FROM read_yaml_objects('path/to/file.yaml');
+
+-- Type detection example
+CREATE TABLE events AS 
+SELECT * FROM read_yaml('events.yaml');
+-- Given YAML:
+-- - date: 2024-01-15
+--   count: 42
+--   active: true
+--   score: 3.14
+-- Results in columns: date DATE, count TINYINT, active BOOLEAN, score DOUBLE
 ```
 
 #### With Parameters
@@ -216,20 +226,31 @@ name: Jane
 
 Both formats produce the same result when read with `read_yaml()`.
 
+## Type Detection
+
+The YAML extension now includes comprehensive automatic type detection:
+
+- **Temporal Types**: Automatically detects DATE, TIMESTAMP, and TIME values
+- **Numeric Types**: Intelligently chooses between TINYINT, SMALLINT, INTEGER, BIGINT, and DOUBLE based on value ranges
+- **Boolean Values**: Case-insensitive detection of various formats (true/false, yes/no, on/off, y/n, t/f)
+- **Special Values**: Handles infinity (inf, -inf) and NaN values
+- **Null Values**: Recognizes null, ~, and empty strings as NULL
+- **Mixed Types**: Arrays with mixed types automatically fall back to VARCHAR[]
+
 ## Known Limitations
 
 Current limitations:
-- Limited type detection (no automatic dates, timestamps)
 - No streaming support for large files yet
 - Path expressions not yet implemented
+- Explicit column type specification not yet implemented
 
 ## Planned Features
 
 - YAML path expressions and extraction functions
 - Streaming support for large files
-- Improved type detection and conversion
+- Explicit column type specification via 'columns' parameter
 - YAML modification functions
-- Better schema inference
+- Support for YAML anchors and aliases
 
 ## Building from Source
 

@@ -19,10 +19,10 @@
 - [x] Value to YAML conversion (initial implementation)
 - [x] Fix segfault in value_to_yaml function with debug mode implementation
 - [x] Improve tests for multi-line YAML strings (resolved using flow-style)
-- [x] Explicit column type specification via 'columns' parameter
+- [ ] Explicit column type specification via 'columns' parameter
 - [x] Complete YAML scalar function suite (13 functions with 59 test assertions)
 - [x] COPY TO YAML functionality with style and layout parameters
-- [ ] Comprehensive type detection (dates, timestamps, etc.)
+- [x] Comprehensive type detection (dates, timestamps, numeric sizing, booleans, special values)
 - [ ] Stream processing for large files
 
 ## Type System
@@ -95,7 +95,10 @@
 ### Type System
 - [x] Fix segfault in value_to_yaml function (critical, affects yaml_types.test and yaml_emitter.test)
 - [x] Implement a safe fallback for value_to_yaml to avoid crashes
-- [ ] Improve type detection for specialized formats (timestamps, dates)
+- [x] Improve type detection for specialized formats (timestamps, dates, times)
+- [x] Enhanced numeric type detection (TINYINT, SMALLINT, INTEGER, BIGINT sizing)
+- [x] Case-insensitive boolean detection with multiple formats
+- [x] Special numeric value handling (inf, -inf, nan)
 - [ ] Add better support for YAML anchors and aliases
 
 ### Parameter Validation
