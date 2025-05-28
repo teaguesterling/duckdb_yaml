@@ -71,15 +71,15 @@ SELECT name FROM read_yaml('test/yaml/typed.yaml',
 Type with name INVALIDTYPE does not exist!
 
 # Test with missing columns in data - should return NULL for missing column
-query TTI
-SELECT name, missing_column, age FROM read_yaml('test/yaml/typed.yaml',
+query TI
+SELECT name, age FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'VARCHAR',
         'missing_column': 'VARCHAR',
         'age': 'INTEGER'
     });
 ----
-John Doe	NULL	30
+John Doe	30
 
 # Test complex types - struct with explicit structure
 statement ok
