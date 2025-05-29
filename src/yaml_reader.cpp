@@ -161,8 +161,8 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
             LogicalType common_type = LogicalType::VARCHAR;
             bool first_element = true;
             
-            for (size_t i = 0; i < node.size(); i++) {
-                LogicalType element_type = DetectYAMLType(node[i]);
+            for (size_t idx = 0; idx < node.size(); idx++) {
+                LogicalType element_type = DetectYAMLType(node[idx]);
                 
                 if (first_element) {
                     common_type = element_type;
@@ -324,8 +324,8 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 
             // Create list of values - recursively convert each element
             vector<Value> values;
-            for (size_t i = 0; i < node.size(); i++) {
-                values.push_back(YAMLNodeToValue(node[i], child_type));
+            for (size_t idx = 0; idx < node.size(); idx++) {
+                values.push_back(YAMLNodeToValue(node[idx], child_type));
             }
 
             return Value::LIST(values);
@@ -386,9 +386,9 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
     for (const auto &doc : docs) {
         if (doc.IsSequence() && expand_root_sequence) {
             // Each item in the sequence becomes a row
-            for (size_t i = 0; i < doc.size(); i++) {
-                if (doc[i].IsMap()) { // Only add map nodes as rows
-                    row_nodes.push_back(doc[i]);
+            for (size_t idx = 0; idx < doc.size(); idx++) {
+                if (doc[idx].IsMap()) { // Only add map nodes as rows
+                    row_nodes.push_back(doc[idx]);
                 }
             }
         } else if (doc.IsMap()) {
@@ -807,8 +807,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     unordered_map<string, LogicalType> detected_types;
     
     // Store user-specified column types
-    for (size_t i = 0; i < options.column_names.size() && i < options.column_types.size(); i++) {
-        user_specified_types[options.column_names[i]] = options.column_types[i];
+    for (size_t idx = 0; idx < options.column_names.size() && idx < options.column_types.size(); idx++) {
+        user_specified_types[options.column_names[idx]] = options.column_types[idx];
     }
 
     // Process each row node to detect schema from YAML document order

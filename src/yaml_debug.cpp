@@ -181,10 +181,10 @@ bool YAMLDebug::SafeEmitValueToYAML(YAML::Emitter& out, const Value& value, int 
                         throw std::runtime_error("Mismatch between struct values and names");
                     }
                     
-                    for (size_t i = 0; i < struct_vals.size(); i++) {
-                        out << YAML::Key << struct_names[i].first;
+                    for (size_t idx = 0; idx < struct_vals.size(); idx++) {
+                        out << YAML::Key << struct_names[idx].first;
                         out << YAML::Value;
-                        SafeEmitValueToYAML(out, struct_vals[i], depth + 1);
+                        SafeEmitValueToYAML(out, struct_vals[idx], depth + 1);
                     }
                     out << YAML::EndMap;
                 } catch (...) {

@@ -22,8 +22,8 @@ static vector<string> ParseYAMLPath(const string &path) {
     bool in_quotes = false;
     bool escaped = false;
     
-    for (size_t i = 1; i < path.length(); i++) {
-        char c = path[i];
+    for (size_t idx = 1; idx < path.length(); idx++) {
+        char c = path[idx];
         
         if (escaped) {
             current_component += c;
