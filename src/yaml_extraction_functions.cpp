@@ -49,15 +49,15 @@ static vector<string> ParseYAMLPath(const string &path) {
             
             if (c == '[') {
                 // Handle array index
-                size_t j = i + 1;
+                size_t j = idx + 1;
                 while (j < path.length() && path[j] != ']') {
                     j++;
                 }
                 if (j >= path.length()) {
                     throw InvalidInputException("Unclosed array index in path");
                 }
-                components.push_back(path.substr(i, j - i + 1));
-                i = j;
+                components.push_back(path.substr(idx, j - idx + 1));
+                idx = j;
             }
             continue;
         }
