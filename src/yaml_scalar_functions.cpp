@@ -3,7 +3,6 @@
 #include "duckdb/main/extension_util.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
-#include "yaml_debug.hpp"
 #include "yaml-cpp/yaml.h"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -18,7 +17,6 @@ void YAMLFunctions::Register(DatabaseInstance &db) {
     RegisterValidationFunction(db);
     RegisterConversionFunctions(db);
     RegisterYAMLTypeFunctions(db);
-    RegisterDebugFunctions(db);
     RegisterStyleFunctions(db);
 }
 
@@ -118,15 +116,9 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
             // Extract the value from the input vector
             Value value = input.GetValue(i);
 
-            // If YAMLDebug is enabled, use the safer version
-            if (YAMLDebug::IsDebugModeEnabled()) {
-                std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, false);
-                result.SetValue(i, Value(yaml_str));
-            } else {
-                // Use the regular version with flow format for consistent YAML objects
-                std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
-                result.SetValue(i, Value(yaml_str));
-            }
+            // Use the regular version with flow format for consistent YAML objects
+            std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
+            result.SetValue(i, Value(yaml_str));
         } catch (const std::exception& e) {
             // If there's a known exception, return a descriptive message
             result.SetValue(i, Value("null"));
@@ -240,14 +232,9 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
 
         // YAML generation using determined parameters
         try {
-            if (YAMLDebug::IsDebugModeEnabled()) {
-                std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, format == yaml_utils::YAMLFormat::BLOCK);
-                result.SetValue(i, Value(yaml_str));
-            } else {
-                // Format the value as YAML with the specified style
-                std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
-                result.SetValue(i, Value(yaml_str));
-            }
+            // Format the value as YAML with the specified style
+            std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+            result.SetValue(i, Value(yaml_str));
         } catch (const std::exception& e) {
             // Only catch YAML generation errors, return null for data conversion issues
             result.SetValue(i, Value("null"));
@@ -277,66 +264,6 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(DatabaseInstance &db) {
     ExtensionUtil::RegisterFunction(db, format_yaml_fun);
 }
 
-//===--------------------------------------------------------------------===//
-// Debug Functions
-//===--------------------------------------------------------------------===//
-
-static void YAMLDebugEnableFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    YAMLDebug::EnableDebugMode();
-    result.SetVectorType(VectorType::CONSTANT_VECTOR);
-    ConstantVector::GetData<bool>(result)[0] = true;
-}
-
-static void YAMLDebugDisableFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    YAMLDebug::DisableDebugMode();
-    result.SetVectorType(VectorType::CONSTANT_VECTOR);
-    ConstantVector::GetData<bool>(result)[0] = false;
-}
-
-static void YAMLDebugIsEnabledFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    result.SetVectorType(VectorType::CONSTANT_VECTOR);
-    ConstantVector::GetData<bool>(result)[0] = YAMLDebug::IsDebugModeEnabled();
-}
-
-static void YAMLDebugValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto& input = args.data[0];
-
-    // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
-        try {
-            // Extract the value from the input vector
-            Value value = input.GetValue(i);
-
-            std::string yaml_str = YAMLDebug::SafeValueToYAMLString(value, false);
-            result.SetValue(i, Value(yaml_str));
-        } catch (const std::exception& e) {
-            // If there's a known exception, return a descriptive message
-            std::string error_msg = "Error converting to YAML: " + std::string(e.what());
-            result.SetValue(i, Value(error_msg));
-        } catch (...) {
-            // For unknown exceptions, just return null
-            result.SetValue(i, Value("null"));
-        }
-    }
-}
-
-void YAMLFunctions::RegisterDebugFunctions(DatabaseInstance &db) {
-    // Get the YAML type
-    auto yaml_type = YAMLTypes::YAMLType();
-    
-    // Register debug functions
-    auto yaml_debug_enable_fun = ScalarFunction("yaml_debug_enable", {}, LogicalType::BOOLEAN, YAMLDebugEnableFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_debug_enable_fun);
-    
-    auto yaml_debug_disable_fun = ScalarFunction("yaml_debug_disable", {}, LogicalType::BOOLEAN, YAMLDebugDisableFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_debug_disable_fun);
-    
-    auto yaml_debug_is_enabled_fun = ScalarFunction("yaml_debug_is_enabled", {}, LogicalType::BOOLEAN, YAMLDebugIsEnabledFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_debug_is_enabled_fun);
-    
-    auto yaml_debug_value_to_yaml_fun = ScalarFunction("yaml_debug_value_to_yaml", {LogicalType::ANY}, yaml_type, YAMLDebugValueToYAMLFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_debug_value_to_yaml_fun);
-}
 
 //===--------------------------------------------------------------------===//
 // Style Management Functions

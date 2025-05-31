@@ -259,33 +259,6 @@ SELECT yaml_extract_string('name: John', 'bad_path');
 ----
 YAML path must start with '$'
 
-# Test debug functions
-query T
-SELECT yaml_debug_is_enabled();
-----
-false
-
-statement ok
-SELECT yaml_debug_enable();
-
-query T
-SELECT yaml_debug_is_enabled();
-----
-true
-
-query T
-SELECT yaml_debug_value_to_yaml({'name': 'John'});
-----
-{name: John}
-
-statement ok
-SELECT yaml_debug_disable();
-
-query T
-SELECT yaml_debug_is_enabled();
-----
-false
-
 # Test integration with read_yaml
 statement ok
 CREATE TABLE yaml_data AS 

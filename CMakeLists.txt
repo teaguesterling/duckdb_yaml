@@ -18,7 +18,6 @@ set(EXTENSION_SOURCES
   src/yaml_extension.cpp
   src/yaml_reader.cpp
   src/yaml_types.cpp
-  src/yaml_debug.cpp
   src/yaml_column_types.cpp
   src/yaml_scalar_functions.cpp
   src/yaml_extraction_functions.cpp
