@@ -4,6 +4,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -179,23 +180,37 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
                 }
                 
                 if (!might_be_temporal) {
-                    // Check if it's an integer
-                    idx_t pos;
-                    int64_t int_val = std::stoll(value, &pos);
-                    if (pos == value.size()) {
-                        return value; // It's an integer, return as is
+                    // Check if it's an integer using DuckDB's Value casting
+                    try {
+                        Value string_val(value);
+                        Value int_val = string_val.DefaultCastAs(LogicalType::BIGINT);
+                        // If casting succeeded and the result converts back to the same string, it's a valid integer
+                        if (int_val.ToString() == value) {
+                            return value; // It's an integer, return as is
+                        }
+                    } catch (...) {
+                        // Not a valid integer, continue
                     }
                     
-                    // Check if it's a double
-                    double double_val = std::stod(value, &pos);
-                    if (pos == value.size()) {
+                    // Check if it's a double using DuckDB's Value casting
+                    try {
+                        Value string_val(value);
+                        Value double_val = string_val.DefaultCastAs(LogicalType::DOUBLE);
+                        double numeric_val = double_val.GetValue<double>();
+                        
                         // Check for special floating point values
-                        if (std::isinf(double_val)) {
+                        if (std::isinf(numeric_val)) {
                             return value[0] == '-' ? "\"-Infinity\"" : "\"Infinity\"";
-                        } else if (std::isnan(double_val)) {
+                        } else if (std::isnan(numeric_val)) {
                             return "\"NaN\"";
                         }
-                        return value; // It's a double, return as is
+                        
+                        // Check if the double converts back to the same string representation
+                        if (double_val.ToString() == value) {
+                            return value; // It's a double, return as is
+                        }
+                    } catch (...) {
+                        // Not a valid double, continue
                     }
                 }
             } catch (...) {
@@ -316,13 +331,12 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                         needs_quotes = true;
                     }
                     
-                    // Check if it looks like a number
+                    // Check if it looks like a number using DuckDB's Value casting
                     try {
-                        idx_t pos;
-                        std::stod(str_val, &pos);
-                        if (pos == str_val.size()) {
-                            needs_quotes = true; // It looks like a number
-                        }
+                        Value string_val(str_val);
+                        Value double_val = string_val.DefaultCastAs(LogicalType::DOUBLE);
+                        // If casting succeeded, it looks like a number
+                        needs_quotes = true;
                     } catch (...) {
                         // Not a number
                     }
