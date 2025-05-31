@@ -1,0 +1,31 @@
+{
+  "name": "yaml",
+  "description": "YAML file format support for DuckDB with full YAML type integration",
+  "version": "0.1.0",
+  "language": "C++",
+  "dependencies": ["yaml-cpp"],
+  "repository": "https://github.com/teaguesterling/duckdb_yaml",
+  "license": "MIT",
+  "maintainers": ["Teague Sterling"],
+  "categories": ["File Formats", "Data Import/Export"],
+  "functions": {
+    "table_functions": [
+      "read_yaml",
+      "read_yaml_objects"
+    ],
+    "scalar_functions": [
+      "yaml_to_json",
+      "yaml_extract",
+      "yaml_extract_string",
+      "yaml_exists",
+      "yaml_type",
+      "yaml_valid",
+      "yaml_get_default_style",
+      "yaml_set_default_style"
+    ],
+    "copy_functions": [
+      "copy_format_yaml"
+    ]
+  },
+  "types": ["YAML"]
+}

@@ -2,6 +2,23 @@
 
 This extension allows DuckDB to read YAML files directly into tables and provides full YAML type support with conversion functions. It enables seamless integration of YAML data within SQL queries.
 
+## Installation
+
+### From Community Extensions (Coming Soon)
+
+```sql
+INSTALL yaml FROM community;
+LOAD yaml;
+```
+
+### From Source
+
+```bash
+git clone https://github.com/teaguesterling/duckdb_yaml
+cd duckdb_yaml
+make release
+```
+
 ## AI-written Extension
 Claude.ai wrote 99% of the code in this project over the course of a weekend.
 

@@ -1,0 +1,73 @@
+name: Build and Test
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  linux:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build
+        
+    - name: Build extension
+      run: |
+        make release
+        
+    - name: Run tests
+      run: |
+        make test
+        
+  macos:
+    name: macOS Build
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        
+    - name: Install dependencies
+      run: |
+        brew install ninja
+        
+    - name: Build extension
+      run: |
+        make release
+        
+    - name: Run tests
+      run: |
+        make test
+        
+  windows:
+    name: Windows Build
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        
+    - name: Install dependencies
+      run: |
+        choco install ninja
+        
+    - name: Build extension
+      shell: bash
+      run: |
+        make release
+        
+    - name: Run tests
+      shell: bash
+      run: |
+        make test
