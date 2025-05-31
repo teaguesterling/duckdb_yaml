@@ -1,0 +1,93 @@
+# name: test/yaml_reader/yaml_json_yaml_columns.test
+# description: Test reading YAML files with explicit JSON and YAML column types
+# group: [yaml]
+
+require json
+
+require yaml
+
+# Test reading YAML with YAML column type
+statement ok
+CREATE TABLE yaml_columns AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'YAML', 'is_active': 'YAML'});
+
+# Verify the column types
+query IIIIII
+DESCRIBE yaml_columns;
+----
+name	yaml	YES	NULL	NULL	NULL
+age	TINYINT	YES	NULL	NULL	NULL
+is_active	yaml	YES	NULL	NULL	NULL
+
+# Verify the data - name and is_active should be YAML strings
+query TTT
+SELECT name, age::VARCHAR, is_active FROM yaml_columns;
+----
+John	30	true
+
+# Test with complex nested data
+statement ok
+CREATE TABLE nested_yaml AS
+SELECT * FROM read_yaml('test/yaml/nested.yaml', columns={'person': 'JSON'});
+
+# Check what's actually in the table
+query T
+SELECT person FROM nested_yaml;
+----
+{"name":"John Doe","age":30,"is_active":true}
+
+# Verify that person is stored as JSON
+query I
+SELECT json_valid(person) FROM nested_yaml;
+----
+true
+
+# Test multi-document with YAML type
+statement ok
+CREATE TABLE multi_yaml AS
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=true, columns={'name': 'YAML', 'id': 'INTEGER'});
+
+query TI
+SELECT name, id FROM multi_yaml ORDER BY id;
+----
+John	1
+Jane	2
+Bob	3
+
+# Test reading YAML with JSON column type
+statement ok
+CREATE TABLE json_columns AS 
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'JSON', 'age': 'INTEGER'});
+
+# Verify the column types
+query IIIIII
+DESCRIBE json_columns;
+----
+name	JSON	YES	NULL	NULL	NULL
+age	INTEGER	YES	NULL	NULL	NULL
+is_active	BOOLEAN	YES	NULL	NULL	NULL
+
+# Verify the data - name should be a JSON string
+query TII
+SELECT name, age, is_active FROM json_columns;
+----
+"John"	30	true
+
+# Test conversion between YAML and JSON columns
+statement ok
+CREATE TABLE conversion_test AS
+SELECT 
+    name::JSON as name_json,
+    name::YAML as name_yaml,
+    yaml_to_json(name::YAML)::JSON as converted_json
+FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'YAML'});
+
+# All three should be valid JSON
+query III
+SELECT 
+    json_valid(name_json),
+    yaml_valid(name_yaml),
+    json_valid(converted_json)
+FROM conversion_test;
+----
+true	true	true

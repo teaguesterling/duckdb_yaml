@@ -24,8 +24,10 @@ void YAMLFunctions::Register(DatabaseInstance &db) {
 
 
 void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
-    // Basic YAML validity check
-    ScalarFunction yaml_valid("yaml_valid", {LogicalType::VARCHAR}, LogicalType::BOOLEAN, 
+    auto yaml_type = YAMLTypes::YAMLType();
+    
+    // Basic YAML validity check for VARCHAR
+    ScalarFunction yaml_valid_varchar("yaml_valid", {LogicalType::VARCHAR}, LogicalType::BOOLEAN, 
         [](DataChunk &args, ExpressionState &state, Vector &result) {
             auto &input_vector = args.data[0];
             
@@ -46,7 +48,19 @@ void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
                 });
         });
     
-    ExtensionUtil::RegisterFunction(db, yaml_valid);
+    // YAML validity check for YAML type (always returns true for valid YAML objects)
+    ScalarFunction yaml_valid_yaml("yaml_valid", {yaml_type}, LogicalType::BOOLEAN, 
+        [](DataChunk &args, ExpressionState &state, Vector &result) {
+            // YAML types are already validated, so they're always valid
+            auto &input_vector = args.data[0];
+            UnaryExecutor::ExecuteWithNulls<string_t, bool>(input_vector, result, args.size(),
+                [&](string_t yaml_str, ValidityMask &mask, idx_t idx) {
+                    return mask.RowIsValid(idx); // Return true if not NULL
+                });
+        });
+    
+    ExtensionUtil::RegisterFunction(db, yaml_valid_varchar);
+    ExtensionUtil::RegisterFunction(db, yaml_valid_yaml);
 }
 
 void YAMLFunctions::RegisterConversionFunctions(DatabaseInstance &db) {

@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_utils.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -212,6 +213,48 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type) {
     if (!node) {
         return Value(target_type); // NULL value
+    }
+
+    // Handle JSON type conversion - applies to all node types
+    if ((target_type.HasAlias() && target_type.GetAlias() == "json") || 
+        target_type.ToString() == "JSON") {
+        // First convert YAML node to YAML string, then use the same path as yaml_to_json function
+        YAML::Emitter out;
+        yaml_utils::ConfigureEmitter(out, yaml_utils::YAMLFormat::BLOCK);
+        out << node;
+        std::string yaml_str = out.c_str();
+        
+        // Now parse and convert to JSON using the same logic as yaml_to_json
+        try {
+            const auto docs = yaml_utils::ParseYAML(yaml_str, true);
+            std::string json_str;
+            if (docs.empty()) {
+                json_str = "null";
+            } else if (docs.size() == 1) {
+                json_str = yaml_utils::YAMLNodeToJSON(docs[0]);
+            } else {
+                json_str = "[";
+                for (idx_t doc_idx = 0; doc_idx < docs.size(); doc_idx++) {
+                    if (doc_idx > 0) {
+                        json_str += ",";
+                    }
+                    json_str += yaml_utils::YAMLNodeToJSON(docs[doc_idx]);
+                }
+                json_str += "]";
+            }
+            return Value(json_str);
+        } catch (const std::exception& e) {
+            return Value(target_type); // Return NULL on error
+        }
+    }
+
+    // Handle YAML type conversion - applies to all node types
+    if (target_type.HasAlias() && target_type.GetAlias() == "yaml") {
+        // Emit as YAML string
+        YAML::Emitter out;
+        yaml_utils::ConfigureEmitter(out, yaml_utils::YAMLFormat::FLOW);
+        out << node;
+        return Value(out.c_str());
     }
 
     // Handle based on YAML node type

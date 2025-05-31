@@ -23,7 +23,7 @@ SELECT yaml_valid('');
 false
 
 query T
-SELECT yaml_valid(NULL);
+SELECT yaml_valid(NULL::VARCHAR);
 ----
 NULL
 
