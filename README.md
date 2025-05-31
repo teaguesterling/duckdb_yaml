@@ -242,7 +242,6 @@ The YAML extension now includes comprehensive automatic type detection:
 Current limitations:
 - No streaming support for large files yet
 - Path expressions not yet implemented
-- Explicit column type specification not yet implemented
 
 ## Planned Features
 
