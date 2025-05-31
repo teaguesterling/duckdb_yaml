@@ -1,0 +1,54 @@
+name: Community Extension CI
+on:
+  workflow_dispatch:
+    inputs:
+      duckdb_version:
+        description: 'DuckDB Version'
+        required: true
+        default: 'v1.0.0'
+        type: string
+      extension_name:
+        description: 'Extension Name'
+        required: true
+        default: 'yaml'
+        type: string
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # Community extensions test against multiple platforms
+        platform: [
+          { os: ubuntu-latest, name: linux_amd64 },
+          { os: ubuntu-latest, name: linux_arm64, arch: aarch64 },
+          { os: macos-latest, name: osx_amd64 },
+          { os: macos-latest, name: osx_arm64, arch: arm64 },
+          { os: windows-latest, name: windows_amd64 }
+        ]
+    
+    runs-on: ${{ matrix.platform.os }}
+    name: Build ${{ matrix.platform.name }}
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        
+    - name: Setup DuckDB version
+      run: |
+        echo "Building against DuckDB ${{ inputs.duckdb_version }}"
+        
+    - name: Build extension
+      run: |
+        make release
+        
+    - name: Test extension
+      if: ${{ !matrix.platform.arch }}  # Skip tests for cross-compiled builds
+      run: |
+        make test
+        
+    - name: Upload extension binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.extension_name }}-${{ matrix.platform.name }}
+        path: build/release/extension/${{ inputs.extension_name }}/${{ inputs.extension_name }}.duckdb_extension
