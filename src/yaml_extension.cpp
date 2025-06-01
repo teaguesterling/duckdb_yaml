@@ -41,10 +41,6 @@ void YamlExtension::Load(DuckDB &db) {
     
     // Add replacement scan for YAML files
     config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
-    
-    // Also register file extensions using AddExtensionOption for backward compatibility
-    //config.AddExtensionOption("yaml", "read_yaml");
-    //config.AddExtensionOption("yml", "read_yaml");
 }
 
 std::string YamlExtension::Name() {

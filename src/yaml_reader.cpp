@@ -741,16 +741,16 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context,
     vector<YAML::Node> row_nodes;
 
     // Read and process all files
-    for (const auto& f : files) {
+    for (const auto& file_path : files) {
         try {
-            auto docs = ReadYAMLFile(context, f, options);
+            auto docs = ReadYAMLFile(context, file_path, options);
             auto file_nodes = ExtractRowNodes(docs, options.expand_root_sequence);
 
             // Add nodes from this file
             row_nodes.insert(row_nodes.end(), file_nodes.begin(), file_nodes.end());
         } catch (const std::exception &e) {
             if (!options.ignore_errors) {
-                throw IOException("Error processing YAML file '" + f + "': " + string(e.what()));
+                throw IOException("Error processing YAML file '" + file_path + "': " + string(e.what()));
             }
             // With ignore_errors=true, we allow continuing with other files
         }
@@ -1003,13 +1003,13 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
     vector<YAML::Node> all_docs;
 
     // Read and process all files
-    for (const auto& f : files) {
+    for (const auto& file_path : files) {
         try {
-            auto docs = ReadYAMLFile(context, f, options);
+            auto docs = ReadYAMLFile(context, file_path, options);
             all_docs.insert(all_docs.end(), docs.begin(), docs.end());
         } catch (const std::exception &e) {
             if (!options.ignore_errors) {
-                throw IOException("Error processing YAML file '" + f + "': " + string(e.what()));
+                throw IOException("Error processing YAML file '" + file_path + "': " + string(e.what()));
             }
             // With ignore_errors=true, we allow continuing with other files
         }
@@ -1086,9 +1086,9 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 
     // Handle value column specially (non-map documents)
     if (bind_data.names.size() == 1 && bind_data.names[0] == "value") {
-        for (idx_t i = 0; i < max_count; i++) {
+        for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
             // Get the current YAML node
-            YAML::Node node = bind_data.yaml_docs[bind_data.current_doc + i];
+            YAML::Node node = bind_data.yaml_docs[bind_data.current_doc + doc_idx];
 
             // Convert to DuckDB value
             Value val = YAMLNodeToValue(node, bind_data.types[0]);
@@ -1099,9 +1099,9 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
         }
     } else {
         // Normal case - process map documents
-        for (idx_t i = 0; i < max_count; i++) {
+        for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
             // Get the current YAML node
-            YAML::Node node = bind_data.yaml_docs[bind_data.current_doc + i];
+            YAML::Node node = bind_data.yaml_docs[bind_data.current_doc + doc_idx];
 
             // Process each column
             for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
@@ -1151,9 +1151,9 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
     output.Reset();
 
     // Fill the output
-    for (idx_t i = 0; i < max_count; i++) {
+    for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
         // Get the current YAML node
-        YAML::Node node = bind_data.yaml_docs[bind_data.current_row + i];
+        YAML::Node node = bind_data.yaml_docs[bind_data.current_row + doc_idx];
 
         // Convert to DuckDB value
         Value val = YAMLNodeToValue(node, bind_data.types[0]);

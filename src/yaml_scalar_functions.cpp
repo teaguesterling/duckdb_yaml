@@ -111,20 +111,20 @@ static void ValueToYAMLFunction(DataChunk& args, ExpressionState& state, Vector&
     auto& input = args.data[0];
 
     // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
+    for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
         try {
             // Extract the value from the input vector
-            Value value = input.GetValue(i);
+            Value value = input.GetValue(row_idx);
 
             // Use the regular version with flow format for consistent YAML objects
             std::string yaml_str = yaml_utils::ValueToYAMLString(value, yaml_utils::YAMLFormat::FLOW);
-            result.SetValue(i, Value(yaml_str));
+            result.SetValue(row_idx, Value(yaml_str));
         } catch (const std::exception& e) {
             // If there's a known exception, return a descriptive message
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         } catch (...) {
             // For unknown exceptions, just return null
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         }
     }
 }
@@ -165,8 +165,8 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
     // Just validate parameters, don't store custom bind data (following struct_update pattern)
 
     // Process parameters (arguments beyond the first one)
-    for (idx_t i = 1; i < arguments.size(); i++) {
-        auto &child = arguments[i];
+    for (idx_t param_idx = 1; param_idx < arguments.size(); param_idx++) {
+        auto &child = arguments[param_idx];
         string param_name = StringUtil::Lower(child->alias);
 
 
@@ -222,25 +222,24 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
         } else {
             throw InvalidInputException("Unknown parameter '%s' for format_yaml", param_name);
         }
-        // TODO: Add support for other parameters like orient, indent, quote
     }
 
     // Process each row
-    for (idx_t i = 0; i < args.size(); i++) {
+    for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
         // Extract the value from the input vector
-        Value value = input.GetValue(i);
+        Value value = input.GetValue(row_idx);
 
         // YAML generation using determined parameters
         try {
             // Format the value as YAML with the specified style
             std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
-            result.SetValue(i, Value(yaml_str));
+            result.SetValue(row_idx, Value(yaml_str));
         } catch (const std::exception& e) {
             // Only catch YAML generation errors, return null for data conversion issues
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         } catch (...) {
             // For unknown YAML generation exceptions, return null
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         }
     }
 }
@@ -272,8 +271,8 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(DatabaseInstance &db) {
 static void YAMLSetDefaultStyleFunction(DataChunk& args, ExpressionState& state, Vector& result) {
     auto& input = args.data[0];
 
-    for (idx_t i = 0; i < args.size(); i++) {
-        Value style_value = input.GetValue(i);
+    for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
+        Value style_value = input.GetValue(row_idx);
 
         if (style_value.IsNull()) {
             throw InvalidInputException("YAML style cannot be NULL");

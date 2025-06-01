@@ -225,8 +225,8 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
             
             // If all else fails, treat as string and escape JSON special characters
             std::string result = "\"";
-            for (char c : value) {
-                switch (c) {
+            for (char ch : value) {
+                switch (ch) {
                     case '\"': result += "\\\""; break;
                     case '\\': result += "\\\\"; break;
                     case '\b': result += "\\b"; break;
@@ -237,12 +237,12 @@ std::string YAMLNodeToJSON(const YAML::Node& node) {
                     default: {
                         constexpr unsigned char MIN_PRINTABLE_CHAR = 32;
                         constexpr idx_t UNICODE_BUFFER_SIZE = 8;
-                        if (static_cast<unsigned char>(c) < MIN_PRINTABLE_CHAR) {
+                        if (static_cast<unsigned char>(ch) < MIN_PRINTABLE_CHAR) {
                             char buf[UNICODE_BUFFER_SIZE];
-                            snprintf(buf, sizeof(buf), "\\u%04x", c);
+                            snprintf(buf, sizeof(buf), "\\u%04x", ch);
                             result += buf;
                         } else {
-                            result += c;
+                            result += ch;
                         }
                     }
                 }
@@ -342,12 +342,12 @@ void EmitValueToYAML(YAML::Emitter& out, const Value& value) {
                     }
                     
                     // Check for special characters
-                    for (char c : str_val) {
-                        if (c == ':' || c == '{' || c == '}' || c == '[' || c == ']' || 
-                            c == ',' || c == '&' || c == '*' || c == '#' || c == '?' || 
-                            c == '|' || c == '-' || c == '<' || c == '>' || c == '=' || 
-                            c == '!' || c == '%' || c == '@' || c == '\\' || c == '"' ||
-                            c == '\'' || c == '\n' || c == '\t' || c == ' ') {
+                    for (char ch : str_val) {
+                        if (ch == ':' || ch == '{' || ch == '}' || ch == '[' || ch == ']' || 
+                            ch == ',' || ch == '&' || ch == '*' || ch == '#' || ch == '?' || 
+                            ch == '|' || ch == '-' || ch == '<' || ch == '>' || ch == '=' || 
+                            ch == '!' || ch == '%' || ch == '@' || ch == '\\' || ch == '"' ||
+                            ch == '\'' || ch == '\n' || ch == '\t' || ch == ' ') {
                             needs_quotes = true;
                             break;
                         }

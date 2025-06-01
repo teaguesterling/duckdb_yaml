@@ -167,21 +167,21 @@ static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vect
     }
 
     // Process each row with post-processing
-    for (idx_t i = 0; i < args.size(); i++) {
-        Value value = input.GetValue(i);
+    for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
+        Value value = input.GetValue(row_idx);
 
         try {
             // Get the base YAML string
             std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
 
             // Apply layout-specific formatting
-            yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, i);
+            yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, row_idx);
 
-            result.SetValue(i, Value(yaml_str));
+            result.SetValue(row_idx, Value(yaml_str));
         } catch (const std::exception& e) {
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         } catch (...) {
-            result.SetValue(i, Value("null"));
+            result.SetValue(row_idx, Value("null"));
         }
     }
 }
