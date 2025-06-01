@@ -34,7 +34,7 @@ make release
 ```
 
 ## AI-written Extension
-Claude.ai wrote 99% of the code in this project over the course of a weekend.
+Claude.ai wrote 99% of the code in this project as an experiment. The original working version was written over the course of a weekend and refined periodically to until a production-ready state was reached.
 
 ## Features
 
