@@ -11,11 +11,25 @@ INSTALL yaml FROM community;
 LOAD yaml;
 ```
 
+### From GitHub Release
+
+```sql
+-- Install directly from GitHub releases
+INSTALL yaml FROM 'https://github.com/teaguesterling/duckdb_yaml/releases/download/v0.1.0/yaml.duckdb_extension';
+LOAD yaml;
+```
+
 ### From Source
 
 ```bash
 git clone https://github.com/teaguesterling/duckdb_yaml
 cd duckdb_yaml
+make
+
+# To run tests
+make test
+
+# To create release build
 make release
 ```
 
@@ -24,31 +38,46 @@ Claude.ai wrote 99% of the code in this project over the course of a weekend.
 
 ## Features
 
-- Read YAML files into DuckDB tables with `read_yaml`
-- Preserve document structure with `read_yaml_objects`
-- Auto-detect data types from YAML content
-- Support for multi-document YAML files
-- Handle top-level sequences as rows
-- Convert between YAML, JSON, and other types
-- Robust parameter handling and error recovery
-- Direct file path support for easy querying
-- Write query results to YAML files with `COPY TO`
+- **YAML File Reading**: Read YAML files into DuckDB tables with `read_yaml` and `read_yaml_objects`
+- **Native YAML Type**: Full YAML type support with seamless conversion between YAML, JSON, and VARCHAR
+- **Type Detection**: Comprehensive automatic type detection including temporal types (DATE, TIME, TIMESTAMP) and optimal numeric types
+- **YAML Extraction**: Query YAML data with extraction functions (`yaml_extract`, `yaml_type`, `yaml_exists`)
+- **Column Type Specification**: Explicitly define column types when reading YAML files
+- **Multi-Document Support**: Handle files with multiple YAML documents separated by `---`
+- **Sequence Handling**: Automatically expand top-level sequences into rows
+- **YAML Output**: Write query results to YAML files with `COPY TO` in various formats
+- **Direct File Querying**: Query YAML files directly using `FROM 'file.yaml'` syntax
+- **Error Recovery**: Continue processing valid documents even when some have errors
 
 ## Usage
 
-### Quickstart
+### Quick Start
+
 ```sql
--- Load extension
+-- Load the extension
 LOAD yaml;
 
--- Query YAML file directly
-FROM 'data/*.yml'
+-- Query YAML files directly
+SELECT * FROM 'data/config.yaml';
+SELECT * FROM 'data/*.yml' WHERE active = true;
 
--- Create YAML type
+-- Create a table with YAML column
 CREATE TABLE configs(id INTEGER, config YAML);
 
--- Convert between YAML and JSON
-SELECT yaml_to_json(config) FROM configs;
+-- Insert YAML data
+INSERT INTO configs VALUES 
+    (1, 'environment: prod\nport: 8080'),
+    (2, '{environment: dev, port: 3000}');
+
+-- Query YAML data
+SELECT 
+    id,
+    yaml_extract_string(config, '$.environment') AS env,
+    yaml_extract(config, '$.port') AS port
+FROM configs;
+
+-- Convert YAML to JSON for complex queries
+SELECT yaml_to_json(config) AS json_config FROM configs;
 ```
 
 ### Loading the Extension
@@ -82,10 +111,12 @@ CREATE TABLE events AS
 SELECT * FROM read_yaml('events.yaml');
 -- Given YAML:
 -- - date: 2024-01-15
+--   time: 14:30:00
+--   timestamp: 2024-01-15T14:30:00Z
 --   count: 42
 --   active: true
 --   score: 3.14
--- Results in columns: date DATE, count TINYINT, active BOOLEAN, score DOUBLE
+-- Results in columns: date DATE, time TIME, timestamp TIMESTAMP, count TINYINT, active BOOLEAN, score DOUBLE
 ```
 
 #### With Parameters
@@ -105,11 +136,19 @@ SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 
 -- Set maximum file size in bytes (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
+
+-- Specify explicit column types
+SELECT * FROM read_yaml('file.yaml', columns={
+    'id': 'INTEGER',
+    'name': 'VARCHAR',
+    'created': 'TIMESTAMP'
+});
 ```
 
-### YAML Type and Conversions
+### YAML Type and Functions
 
-The extension provides a YAML type for storing and manipulating YAML data:
+#### YAML Type
+The extension provides a native YAML type for storing and manipulating YAML data:
 
 ```sql
 -- Create table with YAML column
@@ -122,18 +161,55 @@ features:
   - logging
   - metrics');
 
--- Convert YAML to JSON
-SELECT id, yaml_to_json(config) AS config_json FROM configs;
-
--- Convert JSON to YAML
-SELECT json_to_yaml('{"name":"John","age":30}') AS yaml_config;
-
--- Convert any value to YAML
-SELECT value_to_yaml([1, 2, 3]) AS yaml_array;
-
 -- Cast between types
 SELECT config::JSON FROM configs;
 SELECT '{"name":"John"}'::JSON::YAML;
+```
+
+#### Conversion Functions
+
+```sql
+-- Convert YAML to JSON
+SELECT yaml_to_json(config) AS config_json FROM configs;
+
+-- Convert any value to YAML
+SELECT value_to_yaml({name: 'John', age: 30}) AS yaml_struct;
+SELECT value_to_yaml([1, 2, 3]) AS yaml_array;
+
+-- Convert JSON to YAML using cast
+SELECT '{"name":"John","age":30}'::JSON::YAML AS yaml_data;
+
+-- Format YAML with specific style
+SELECT format_yaml(config, 'block') FROM configs;  -- block style
+SELECT format_yaml(config, 'flow') FROM configs;   -- flow style (inline)
+
+-- Validate YAML
+SELECT yaml_valid('invalid: yaml: data');  -- returns false
+SELECT yaml_valid(config) FROM configs;    -- returns true for YAML type
+```
+
+#### Extraction Functions
+
+```sql
+-- Extract data from YAML using path expressions
+SELECT yaml_extract(config, '$.server') AS server FROM configs;
+SELECT yaml_extract_string(config, '$.features[0]') AS first_feature FROM configs;
+
+-- Check data types and existence
+SELECT yaml_type(config) AS root_type FROM configs;  -- returns 'object'
+SELECT yaml_type(config, '$.features') AS features_type FROM configs;  -- returns 'array'
+SELECT yaml_exists(config, '$.port') AS has_port FROM configs;  -- returns true
+```
+
+#### Style Management
+
+```sql
+-- Set default YAML output style
+SELECT yaml_set_default_style('block');  -- Use block style by default
+SELECT yaml_set_default_style('flow');   -- Use flow style by default
+
+-- Check current default style
+SELECT yaml_get_default_style();  -- returns current setting
 ```
 
 ### Direct File Path Support
@@ -199,26 +275,82 @@ When using `LAYOUT document` with `STYLE block`, rows are separated by `---` (YA
 
 The YAML extension provides robust error handling capabilities:
 
- * Use `ignore_errors=true` to continue processing despite errors in some files
- * With `ignore_errors=true` and multi-document YAML, valid documents are still processed even if some have errors
- * When providing a file list, parsing continues with the next file if an error occurs in one file
+```sql
+-- Continue processing despite errors in some files
+SELECT * FROM read_yaml(['good.yaml', 'bad.yaml', 'also_good.yaml'], 
+    ignore_errors=true);
+
+-- Process valid documents even if some are malformed
+SELECT * FROM read_yaml('mixed_valid_invalid.yaml', 
+    multi_document=true, 
+    ignore_errors=true);
+
+-- Check if YAML strings are valid
+SELECT 
+    yaml_string,
+    yaml_valid(yaml_string) AS is_valid
+FROM raw_yaml_data;
+```
+
+Error handling behavior:
+- With `ignore_errors=false` (default): Stops on first error
+- With `ignore_errors=true`: Skips invalid files/documents and continues
+- Invalid documents in multi-document files are skipped individually
+- File access errors are reported but processing continues with remaining files
 
 ### Accessing YAML Data
 
-Access YAML data using standard SQL operations:
+You can access YAML data using the extraction functions or by converting to JSON:
 
 ```sql
--- Access values via JSON conversion
+-- Using YAML extraction functions (recommended)
+SELECT yaml_extract_string(config, '$.server') AS server FROM configs;
+SELECT yaml_extract(config, '$.features[0]') AS first_feature FROM configs;
+
+-- Using JSON conversion for complex queries
 SELECT json_extract_string(yaml_to_json(config), '$.server') AS server FROM configs;
 
 -- Filter based on YAML content
 SELECT * FROM configs 
-WHERE json_extract_string(yaml_to_json(config), '$.environment') = 'production';
+WHERE yaml_extract_string(config, '$.environment') = 'production';
 
 -- Join with YAML data
-SELECT c.id, json_extract_int(yaml_to_json(c.config), '$.port') AS port
+SELECT c.id, yaml_extract(c.config, '$.port') AS port
 FROM configs c
-JOIN environments e ON json_extract_string(yaml_to_json(c.config), '$.environment') = e.name;
+JOIN environments e ON yaml_extract_string(c.config, '$.environment') = e.name;
+```
+
+### Column Type Specification
+
+You can specify explicit column types when reading YAML files:
+
+```sql
+-- Basic type specification
+SELECT * FROM read_yaml('data.yaml', columns={
+    'id': 'INTEGER',
+    'name': 'VARCHAR',
+    'price': 'DECIMAL(10,2)',
+    'created_at': 'TIMESTAMP'
+});
+
+-- Complex nested types
+SELECT * FROM read_yaml('config.yaml', columns={
+    'server': 'STRUCT(host VARCHAR, port INTEGER)',
+    'features': 'VARCHAR[]',
+    'settings': 'MAP(VARCHAR, VARCHAR)'
+});
+
+-- Mix explicit types with auto-detection
+SELECT * FROM read_yaml('mixed.yaml', 
+    auto_detect=true,
+    columns={'id': 'INTEGER'}  -- Only 'id' uses explicit type
+);
+
+-- Specify YAML or JSON columns to preserve structure
+SELECT * FROM read_yaml('nested.yaml', columns={
+    'config': 'YAML',      -- Keep as YAML for later processing
+    'metadata': 'JSON'     -- Convert to JSON type
+});
 ```
 
 ## Multi-document and Sequence Handling
@@ -245,28 +377,248 @@ Both formats produce the same result when read with `read_yaml()`.
 
 ## Type Detection
 
-The YAML extension now includes comprehensive automatic type detection:
+The YAML extension includes comprehensive automatic type detection:
 
-- **Temporal Types**: Automatically detects DATE, TIMESTAMP, and TIME values
-- **Numeric Types**: Intelligently chooses between TINYINT, SMALLINT, INTEGER, BIGINT, and DOUBLE based on value ranges
-- **Boolean Values**: Case-insensitive detection of various formats (true/false, yes/no, on/off, y/n, t/f)
-- **Special Values**: Handles infinity (inf, -inf) and NaN values
-- **Null Values**: Recognizes null, ~, and empty strings as NULL
-- **Mixed Types**: Arrays with mixed types automatically fall back to VARCHAR[]
+### Temporal Types
+- **DATE**: ISO format (2024-01-15), slash format (01/15/2024), dot format (15.01.2024)
+- **TIME**: Standard format (14:30:00), with milliseconds (14:30:00.123)
+- **TIMESTAMP**: ISO 8601 with timezone (2024-01-15T14:30:00Z), without timezone
+
+### Numeric Types
+- **TINYINT**: -128 to 127
+- **SMALLINT**: -32,768 to 32,767
+- **INTEGER**: -2,147,483,648 to 2,147,483,647
+- **BIGINT**: Larger integers
+- **DOUBLE**: Decimals, scientific notation (1.23e-4), special values (inf, -inf, nan)
+
+### Other Types
+- **BOOLEAN**: true/false, yes/no, on/off, y/n, t/f (case-insensitive)
+- **NULL**: null, ~, Null, NULL, empty string
+- **VARCHAR**: Default for unrecognized patterns
+
+### Array Handling
+- Homogeneous arrays: `INTEGER[]`, `VARCHAR[]`, etc.
+- Mixed-type arrays: Fall back to `VARCHAR[]`
+- Empty arrays: Default to `VARCHAR[]`
 
 ## Known Limitations
 
-Current limitations:
-- No streaming support for large files yet
-- Path expressions not yet implemented
+- YAML anchors and aliases are resolved during parsing but not preserved
+- Streaming support for very large files not yet implemented
+- YAML comments are not preserved
+- Maximum file size limited by memory (default 16MB, configurable)
 
-## Planned Features
+## Future Enhancements
 
-- YAML path expressions and extraction functions
-- Streaming support for large files
-- Explicit column type specification via 'columns' parameter
-- YAML modification functions
-- Support for YAML anchors and aliases
+### Planned Functions (JSON Parity)
+
+The extension will implement a comprehensive set of YAML functions mirroring DuckDB's JSON capabilities:
+
+#### Extraction/Access Functions
+```sql
+-- Already implemented ✅
+yaml_extract(yaml, path) → yaml
+yaml_extract_string(yaml, path) → varchar
+yaml_exists(yaml, path) → boolean
+yaml_type(yaml [, path]) → varchar
+
+-- Planned ⏳
+yaml_extract_path(yaml, path_elem1, path_elem2, ...) → yaml
+yaml_extract_path_text(yaml, path_elem1, path_elem2, ...) → varchar
+yaml_array_length(yaml [, path]) → bigint
+yaml_keys(yaml [, path]) → varchar[]
+yaml_structure(yaml) → yaml  -- Returns structure with types
+```
+
+#### Transformation/Unnesting Functions
+```sql
+yaml_array_elements(yaml) → table(yaml)
+yaml_array_elements_text(yaml) → table(varchar)
+yaml_each(yaml) → table(key varchar, value yaml)
+yaml_each_text(yaml) → table(key varchar, value varchar)
+yaml_object_keys(yaml) → table(varchar)
+yaml_tree(yaml) → table  -- Recursive unnesting
+yaml_populate_record(base anyelement, yaml) → anyelement
+yaml_populate_recordset(base anyelement, yaml) → table
+yaml_to_record(yaml) → record
+yaml_to_recordset(yaml) → table
+```
+
+#### Construction Functions
+```sql
+-- Already implemented ✅
+value_to_yaml(any) → yaml
+
+-- Planned ⏳
+to_yaml(any) → yaml  -- Alias for value_to_yaml
+row_to_yaml(record) → yaml
+yaml_build_array(...) → yaml
+yaml_build_object(...) → yaml
+yaml_object(keys varchar[], values varchar[]) → yaml
+yaml_object(text[]) → yaml  -- From key-value pairs
+array_to_yaml(anyarray) → yaml
+```
+
+#### Aggregate Functions
+```sql
+yaml_agg(any) → yaml
+yaml_agg_strict(any) → yaml  -- Excludes NULLs
+yaml_object_agg(key varchar, value any) → yaml
+yaml_object_agg_strict(key varchar, value any) → yaml
+yaml_merge_agg(yaml) → yaml  -- Merges multiple YAML objects
+```
+
+#### Utility/Manipulation Functions
+```sql
+-- Already implemented ✅
+yaml_valid(varchar) → boolean
+yaml_to_json(yaml) → json
+format_yaml(any, style := 'flow'|'block') → varchar
+
+-- Planned ⏳
+yaml_strip_nulls(yaml) → yaml
+yaml_pretty(yaml) → varchar  -- Pretty print
+yaml_merge(yaml1, yaml2) → yaml
+yaml_merge_patch(target yaml, patch yaml) → yaml
+yaml_contains(yaml, yaml) → boolean
+yaml_contained_in(yaml, yaml) → boolean
+yaml_equal(yaml, yaml) → boolean
+```
+
+#### YAML-Specific Functions
+```sql
+yaml_aliases(yaml) → table(anchor varchar, references bigint)
+yaml_merge_keys(yaml) → yaml  -- Resolve YAML merge keys (<<)
+yaml_documents(yaml) → table(yaml)  -- Split multi-document YAML
+yaml_combine_documents(yaml[]) → yaml  -- Combine to multi-document
+yaml_matches_schema(yaml, schema) → boolean
+yaml_validate_schema(schema) → boolean
+```
+
+#### Operators (if supported by DuckDB)
+```sql
+yaml -> path → yaml           -- Extract field/element
+yaml ->> path → varchar       -- Extract as text
+yaml #> path[] → yaml         -- Extract path
+yaml #>> path[] → varchar     -- Extract path as text
+yaml @> yaml → boolean        -- Contains
+yaml <@ yaml → boolean        -- Contained by
+yaml ? key → boolean          -- Key exists
+yaml || yaml → yaml          -- Concatenate/merge
+yaml - key → yaml            -- Delete key
+```
+
+### Implementation Priority
+
+**Phase 1 - Core Functions** (High Priority):
+- `yaml_array_length` - Essential for array operations
+- `yaml_keys` - Get object keys
+- `yaml_array_elements` - Unnest arrays into rows
+- `yaml_each` - Iterate over key-value pairs
+- `yaml_build_object` - Construct YAML objects
+- `yaml_agg` - Aggregate values into YAML
+
+**Phase 2 - Advanced Features**:
+- `->` and `->>` operators for path extraction
+- `yaml_merge` and `yaml_contains` for object operations
+- `yaml_strip_nulls` for data cleaning
+- Aggregate functions for complex data transformations
+
+**Phase 3 - YAML-Specific Features**:
+- Schema validation functions
+- Multi-document handling utilities
+- YAML anchor and merge key resolution
+
+### Other Enhancements
+
+- Streaming support for very large files
+- Preserve YAML comments and formatting in round-trip operations
+- Advanced path expressions with wildcards and filters
+- Performance optimizations for large-scale data processing
+
+## Examples
+
+### Working with Configuration Files
+
+```yaml
+# config.yaml
+database:
+  host: localhost
+  port: 5432
+  credentials:
+    username: admin
+    password: secret
+features:
+  - authentication
+  - logging
+  - monitoring
+settings:
+  timeout: 30
+  retries: 3
+```
+
+```sql
+-- Load and query the configuration
+CREATE TABLE app_config AS 
+SELECT * FROM read_yaml('config.yaml');
+
+-- Extract nested values
+SELECT 
+    yaml_extract_string(database, '$.host') AS db_host,
+    yaml_extract(database, '$.port') AS db_port,
+    yaml_extract_string(database, '$.credentials.username') AS db_user,
+    yaml_extract(features, '$[0]') AS first_feature,
+    yaml_extract(settings, '$.timeout') AS timeout_seconds
+FROM app_config;
+```
+
+### Processing Log Files
+
+```yaml
+# logs.yaml
+- timestamp: 2024-01-15T10:30:00Z
+  level: INFO
+  message: Application started
+  metadata:
+    version: 1.2.3
+- timestamp: 2024-01-15T10:30:15Z
+  level: ERROR
+  message: Database connection failed
+  metadata:
+    retry_count: 3
+    error_code: DB_TIMEOUT
+```
+
+```sql
+-- Analyze log entries
+SELECT 
+    timestamp,
+    level,
+    message,
+    yaml_extract(metadata, '$.error_code') AS error_code
+FROM read_yaml('logs.yaml')
+WHERE level = 'ERROR';
+```
+
+### Data Migration
+
+```sql
+-- Export DuckDB table to YAML
+COPY (
+    SELECT id, name, email, struct_pack(street, city, zip) AS address
+    FROM users
+    WHERE active = true
+) TO 'active_users.yaml' (FORMAT yaml, STYLE block);
+
+-- Import YAML data into DuckDB
+CREATE TABLE imported_users AS
+SELECT * FROM read_yaml('active_users.yaml', columns={
+    'id': 'INTEGER',
+    'name': 'VARCHAR',
+    'email': 'VARCHAR',
+    'address': 'STRUCT(street VARCHAR, city VARCHAR, zip VARCHAR)'
+});
+```
 
 ## Building from Source
 
