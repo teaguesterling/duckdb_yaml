@@ -289,7 +289,7 @@ static void YAMLSetDefaultStyleFunction(DataChunk& args, ExpressionState& state,
             throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str.c_str());
         }
 
-        result.SetValue(i, Value(style_str));
+        result.SetValue(row_idx, Value(style_str));
     }
 }
 
