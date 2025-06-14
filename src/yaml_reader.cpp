@@ -450,22 +450,34 @@ vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_va
 
     // Helper lambda to handle individual file paths
     auto processPath = [&](const string& yaml_path) {
-        // Single file
+
+        // First: check if we're dealing with just a single file that exists
         if (fs.FileExists(yaml_path)) {
             result.push_back(yaml_path);
-        // Single directory
-        } else if (fs.DirectoryExists(yaml_path)) {
-            // Get all YAML files in directory
+            return;
+        }
+        
+        // Second: attempt to use the path as a glob
+        auto glob_files = GetGlobFiles(context, yaml_path);
+        if(glob_files.size() > 0) {
+            result.insert(result.end(), glob_files.begin(), glob_files.end());
+            return;
+        }
+
+        // Third: if it looks like a directory, try to glob out all of the yaml children
+        if(StringUtil::EndsWith(yaml_path, "/")) {
             auto yaml_files = GetGlobFiles(context, fs.JoinPath(yaml_path, "*.yaml"));
             auto yml_files = GetGlobFiles(context, fs.JoinPath(yaml_path, "*.yml"));
             result.insert(result.end(), yaml_files.begin(), yaml_files.end());
             result.insert(result.end(), yml_files.begin(), yml_files.end());
-        // Glob pattern
-        } else if (fs.HasGlob(yaml_path)) {
-            auto glob_files = GetGlobFiles(context, yaml_path);
-            result.insert(result.end(), glob_files.begin(), glob_files.end());
-        // Don't fail if ignore_errors is true
-        } else if (!ignore_errors) {
+            return;
+        }
+
+        if(ignore_errors) {
+            return;
+        } else if (yaml_path.find("://") != string::npos && yaml_path.find("file://") != 0) {
+            throw IOException("Remote file does not exist or is not accessible: " + yaml_path);
+        } else {
             throw IOException("File or directory does not exist: " + yaml_path);
         }
     };
@@ -495,29 +507,41 @@ vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_va
 vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pattern) {
     auto &fs = FileSystem::GetFileSystem(context);
     vector<string> result;
+    bool supports_directory_exists;
+    bool is_directory;
+
+    // Don't both if we can't identify a glob pattern
+    try {
+        if (!fs.HasGlob(pattern)) {
+            return result;
+        }
+    } catch (const NotImplementedException &) {
+        return result;
+    }
+
+    // Check this once up-front and save the FS feature
+    try {
+        is_directory = fs.DirectoryExists(pattern);
+        supports_directory_exists = true;
+    } catch (const NotImplementedException &) {
+        is_directory = false;
+        supports_directory_exists = false;
+    }
 
     // Given a glob path, add any file results (ignoring directories)
-    auto globFileResults = [&result, &fs](const string& glob_path) {
-        for (auto &file : fs.Glob(glob_path)) {
-            if (!fs.DirectoryExists(file.path)) {
+    try {
+        for (auto &file : fs.Glob(pattern)) {
+            if (!supports_directory_exists) {
+                // If we can't check for directories, just add it
+                result.push_back(file.path);
+            } else if (!fs.DirectoryExists(file.path)) {
                 result.push_back(file.path);
             }
         }
-    };
-
-    // Check if it's already a glob pattern
-    if (fs.HasGlob(pattern)) {
-        globFileResults(pattern);
-    } else if (fs.DirectoryExists(pattern)) {
-        // If it's a directory, look for YAML files inside
-        globFileResults(fs.JoinPath(pattern, "*.yaml"));
-        globFileResults(fs.JoinPath(pattern, "*.yml"));
-    } else {
-        // If it's not a directory or glob, pass it through as is
-        result.push_back(pattern);
+    } catch (const NotImplementedException &) {
+        // No glob support
     }
 
-    
     return result;
 }
 

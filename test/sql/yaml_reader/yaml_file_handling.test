@@ -44,7 +44,7 @@ John Doe
 # Test with directory path
 statement ok
 CREATE TABLE dir_files AS 
-SELECT * FROM read_yaml('test/yaml/globs');
+SELECT * FROM read_yaml('test/yaml/globs/');
 
 # Should have records (same as glob)
 query I

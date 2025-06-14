@@ -1,0 +1,54 @@
+# name: test/sql/yaml_reader/yaml_remote_edge_cases.test
+# description: Edge cases for remote YAML reading
+# group: [yaml]
+
+require yaml
+
+require httpfs
+
+# Test 1: URL with special characters
+statement ok
+CREATE TABLE url_special_chars AS 
+SELECT * FROM read_yaml('https://example.com/data%20file.yaml', ignore_errors=true);
+
+# Test 2: URL with query parameters (should work)
+statement ok
+CREATE TABLE url_with_params AS 
+SELECT * FROM read_yaml('https://api.example.com/data.yaml?version=2&format=yaml', ignore_errors=true);
+
+# Test 3: Very long URLs
+statement ok
+SET VARIABLE long_url = 'https://example.com/' || repeat('a', 1000) || '.yaml';
+
+statement ok
+CREATE TABLE long_url_test AS 
+SELECT * FROM read_yaml(getvariable('long_url'), ignore_errors=true);
+
+# Test 4: Multiple remote sources
+statement ok
+CREATE TABLE multi_remote AS 
+SELECT * FROM read_yaml([
+    'https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/2JQS.yaml',
+    'https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/27NA.yaml',
+    'https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/2SXE.yaml'
+], ignore_errors=true);
+
+# Test 5: Remote file with multiple documents
+statement ok
+CREATE TABLE remote_multidoc AS 
+SELECT * FROM read_yaml(
+    'https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/6ZKB.yaml',
+    multi_document=true
+);
+
+# Test 6: Mix of protocols
+require-env S3_TEST_SERVER_AVAILABLE
+require aws
+
+statement ok
+CREATE TABLE mixed_protocols AS 
+SELECT * FROM read_yaml([
+    'test/yaml/simple.yaml',                    -- Local
+    'https://example.com/config.yaml',          -- HTTP
+    's3://test-bucket/data.yaml'                -- S3
+], ignore_errors=true);

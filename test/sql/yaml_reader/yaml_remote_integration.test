@@ -1,0 +1,40 @@
+# name: test/sql/yaml_reader/yaml_remote_integration.test
+# description: Integration tests for YAML with remote filesystems
+# group: [yaml]
+
+require yaml
+
+require httpfs
+
+# Test extracting data from remote YAML
+statement ok
+CREATE TABLE remote_data AS 
+SELECT * FROM 'https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/2JQS.yaml';
+
+# Test YAML functions on remote data
+query I
+SELECT yaml_valid(yaml) FROM (
+    SELECT * FROM read_yaml_objects('https://raw.githubusercontent.com/yaml/yaml-test-suite/main/src/2JQS.yaml')
+) LIMIT 1;
+----
+true
+
+# Test COPY FROM remote YAML to local
+statement ok
+CREATE TABLE copy_from_remote AS 
+SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml';
+
+# Test complex remote YAML processing
+statement ok
+CREATE TABLE processed_remote AS
+SELECT 
+    name,
+    yaml_extract_string(on, '$.push.branches[0]') as main_branch,
+    yaml_exists(on, '$.pull_request') as has_pr_trigger
+FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml'
+WHERE name IS NOT NULL;
+
+query I
+SELECT COUNT(*) > 0 FROM processed_remote;
+----
+true

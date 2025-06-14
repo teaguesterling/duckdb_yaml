@@ -1,0 +1,151 @@
+# name: test/sql/yaml_reader/yaml_remote_filesystems.test
+# description: Test YAML reading from remote filesystems (HTTP, S3, etc.)
+# group: [yaml]
+
+require yaml
+
+# Test 1: HTTP/HTTPS file reading
+require httpfs
+
+# Test reading a real YAML file from GitHub
+statement ok
+CREATE TABLE github_workflow AS 
+SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml';
+
+# Verify we got data
+query I
+SELECT COUNT(*) > 0 FROM github_workflow;
+----
+true
+
+# Test with read_yaml function explicitly
+statement ok
+CREATE TABLE github_workflow2 AS 
+SELECT * FROM read_yaml('https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml');
+
+query I
+SELECT COUNT(*) > 0 FROM github_workflow2;
+----
+true
+
+# Test HTTP with non-existent file
+statement error
+SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/does_not_exist.yaml';
+----
+IO Error: Remote file does not exist or is not accessible
+
+# Test HTTP with ignore_errors
+statement ok
+CREATE TABLE http_ignore_errors AS 
+SELECT * FROM read_yaml([
+    'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml',
+    'https://raw.githubusercontent.com/duckdb/duckdb/main/does_not_exist.yaml'
+], ignore_errors=true);
+
+# Should have data from the first file only
+query I
+SELECT COUNT(*) > 0 FROM http_ignore_errors;
+----
+true
+
+# Test 2: S3 file reading (requires S3 extension and credentials)
+require-env S3_TEST_SERVER_AVAILABLE
+
+require aws
+
+# These tests require S3 test server or real S3 credentials
+# Set up test data on S3 first
+statement ok
+CREATE TABLE s3_yaml AS 
+SELECT * FROM 's3://test-bucket/test-data/simple.yaml';
+
+query I
+SELECT name FROM s3_yaml;
+----
+John
+
+# Test S3 with non-existent file
+statement error
+SELECT * FROM 's3://test-bucket/does_not_exist.yaml';
+----
+IO Error: Remote file does not exist or is not accessible
+
+# Test 3: Mixed local and remote files
+statement ok
+CREATE TABLE mixed_sources AS 
+SELECT * FROM read_yaml([
+    'test/yaml/simple.yaml',
+    'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/LinuxRelease.yml'
+], ignore_errors=true);
+
+# Should have data from both sources
+query I
+SELECT COUNT(*) > 0 FROM mixed_sources;
+----
+true
+
+# Test 4: Ensure local file operations still work correctly
+
+# Test local file
+statement ok
+CREATE TABLE local_file AS 
+SELECT * FROM 'test/yaml/simple.yaml';
+
+query I
+SELECT name FROM local_file;
+----
+John
+
+# Test local glob pattern
+statement ok
+CREATE TABLE local_glob AS 
+SELECT * FROM 'test/yaml/sequence_*.yaml';
+
+query I
+SELECT COUNT(*) > 0 FROM local_glob;
+----
+true
+
+# Test local directory
+statement ok
+CREATE TABLE local_dir AS 
+SELECT * FROM 'test/yaml/';
+
+query I
+SELECT COUNT(*) > 0 FROM local_dir;
+----
+true
+
+# Test 5: Error handling for unsupported operations
+
+# HTTP doesn't support glob patterns
+statement error
+SELECT * FROM 'https://raw.githubusercontent.com/*.yaml';
+----
+IO Error: Remote file does not exist or is not accessible
+
+# HTTP doesn't support directory listing
+statement error
+SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/.github/workflows/';
+----
+IO Error: Remote file does not exist or is not accessible
+
+# Test 6: Different remote protocols (if available)
+
+# Google Cloud Storage (requires GCS extension)
+require-env GCS_TEST_SERVER_AVAILABLE
+
+require gcs
+
+statement ok
+CREATE TABLE gcs_yaml AS 
+SELECT * FROM 'gcs://test-bucket/data.yaml';
+
+# Azure Blob Storage (requires Azure extension)
+require-env AZURE_TEST_SERVER_AVAILABLE
+
+require azure
+
+statement ok
+CREATE TABLE azure_yaml AS 
+SELECT * FROM 'azure://test-container/data.yaml';
