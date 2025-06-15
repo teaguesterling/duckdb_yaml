@@ -17,6 +17,11 @@ include_directories(src/include)
 set(EXTENSION_SOURCES
   src/yaml_extension.cpp
   src/yaml_reader.cpp
+  src/yaml_reader_types.cpp
+  src/yaml_reader_parsing.cpp
+  src/yaml_reader_files.cpp
+  src/yaml_reader_functions.cpp
+  src/yaml_reader_column_bind.cpp
   src/yaml_types.cpp
   src/yaml_column_types.cpp
   src/yaml_scalar_functions.cpp
