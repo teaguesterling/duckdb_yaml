@@ -329,6 +329,9 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 		case YAML::NodeType::Sequence: {
 			if (target_type.id() != LogicalTypeId::LIST) {
 				return Value(target_type); // NULL if not expecting a list
+			} else if(node.size() == 0) {
+				// Empty lists need an explicit type (ISSUE #8)
+				return Value::LIST(target_type, {});
 			}
 
 			// Get child type for list

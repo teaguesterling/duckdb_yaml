@@ -4,7 +4,7 @@ This extension allows DuckDB to read YAML files directly into tables and provide
 
 ## Installation
 
-### From Community Extensions (Coming Soon)
+### From Community Extensions
 
 ```sql
 INSTALL yaml FROM community;
@@ -28,9 +28,6 @@ make
 
 # To run tests
 make test
-
-# To create release build
-make release
 ```
 
 ## AI-written Extension
