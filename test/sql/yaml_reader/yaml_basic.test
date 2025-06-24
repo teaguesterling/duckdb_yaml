@@ -78,3 +78,8 @@ query I
 SELECT person.skills.programming[1].language FROM file_yaml;
 ----
 Python
+
+query I
+SELECT * FROM read_yaml('test/yaml/empty_list.yaml');
+----
+[]
