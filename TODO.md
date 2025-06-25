@@ -19,7 +19,7 @@
 - [x] Value to YAML conversion (initial implementation)
 - [x] Fix segfault in value_to_yaml function with debug mode implementation
 - [x] Improve tests for multi-line YAML strings (resolved using flow-style)
-- [ ] Explicit column type specification via 'columns' parameter
+- [x] Explicit column type specification via 'columns' parameter
 - [x] Complete YAML scalar function suite (13 functions with 59 test assertions)
 - [x] COPY TO YAML functionality with style and layout parameters
 - [x] Comprehensive type detection (dates, timestamps, numeric sizing, booleans, special values)
@@ -37,8 +37,8 @@
 
 ## Additional Features
 
-- [ ] Enhance read_yaml_objects to optionally return YAML type
-- [ ] Column specification for complex YAML structures
+- [x] Enhance read_yaml_objects to optionally return YAML type
+- [x] Column specification for complex YAML structures
 - [ ] Schema extraction helpers
 - [x] YAML validation functions (yaml_valid)
 - [x] YAML extraction functions (yaml_extract, yaml_extract_string, yaml_exists, yaml_type)
