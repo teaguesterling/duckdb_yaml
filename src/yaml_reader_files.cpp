@@ -1,6 +1,7 @@
 #include "yaml_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/file_glob_options.hpp"
 
 namespace duckdb {
 
@@ -67,39 +68,37 @@ vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_va
 vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pattern) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	vector<string> result;
-	bool supports_directory_exists;
-	bool is_directory;
+	
 
-	// Don't both if we can't identify a glob pattern
+	// Don't bother if we can't identify a glob pattern
+	// For S3 URLs, we'll let GlobFiles handle the detection
 	try {
-		if (!fs.HasGlob(pattern)) {
-			return result;
-		}
-	} catch (const NotImplementedException &) {
-		return result;
-	}
-
-	// Check this once up-front and save the FS feature
-	try {
-		is_directory = fs.DirectoryExists(pattern);
-		supports_directory_exists = true;
-	} catch (const NotImplementedException &) {
-		is_directory = false;
-		supports_directory_exists = false;
-	}
-
-	// Given a glob path, add any file results (ignoring directories)
-	try {
-		for (auto &file : fs.Glob(pattern)) {
-			if (!supports_directory_exists) {
-				// If we can't check for directories, just add it
-				result.push_back(file.path);
-			} else if (!fs.DirectoryExists(file.path)) {
-				result.push_back(file.path);
+		bool has_glob = fs.HasGlob(pattern);
+		if (!has_glob) {
+			// For remote URLs, still try GlobFiles as it has better S3 support
+			if (pattern.find("://") == string::npos || pattern.find("file://") == 0) {
+				return result;
 			}
 		}
 	} catch (const NotImplementedException &) {
-		// No glob support
+		// If HasGlob is not implemented, still try GlobFiles for remote URLs
+		if (pattern.find("://") == string::npos || pattern.find("file://") == 0) {
+			return result;
+		}
+	}
+
+	// GlobFiles already handles filtering out directories, so we don't need to check
+
+	// Use GlobFiles which handles extension auto-loading and directory filtering
+	try {
+		auto glob_files = fs.GlobFiles(pattern, context, FileGlobOptions::ALLOW_EMPTY);
+		for (auto &file : glob_files) {
+			result.push_back(file.path);
+		}
+	} catch (const NotImplementedException &) {
+		// No glob support available
+	} catch (const std::exception &) {
+		// Other glob errors - return empty result
 	}
 
 	return result;
