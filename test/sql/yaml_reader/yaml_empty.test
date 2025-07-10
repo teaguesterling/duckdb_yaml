@@ -1,0 +1,11 @@
+# name: test/yaml/yaml_basic.test
+# description: Basic YAML reader functionality tests
+# group: [yaml]
+
+require yaml
+
+query I
+SELECT * FROM read_yaml('test/yaml/empty_list.yaml');
+----
+[]
+
