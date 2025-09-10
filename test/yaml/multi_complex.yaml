@@ -11,6 +11,7 @@ user:
   id: 2
   profile:
     name: Jane
+    age: 42
     skills:
       - JavaScript
       - CSS

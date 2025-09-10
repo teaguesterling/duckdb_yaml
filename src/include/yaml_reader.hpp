@@ -265,6 +265,15 @@ private:
     static vector<YAML::Node> RecoverPartialYAMLDocuments(const string &yaml_content);
 
     /**
+     * @brief Helper function to merge two struct types, preserving fields from both
+     *
+     * @param type1 First struct type
+     * @param type2 Second struct type
+     * @return LogicalType A merged struct with fields from both inputs
+     */
+    static LogicalType MergeStructTypes(const LogicalType &type1, const LogicalType &type2);
+
+    /**
      * @brief Bind the columns parameter for explicit type specification
      * 
      * @param context Client context

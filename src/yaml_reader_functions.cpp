@@ -8,6 +8,50 @@
 
 namespace duckdb {
 
+// Helper function to merge two struct types, preserving fields from both
+// This is crucial for handling nested properties that might exist in some documents but not others
+// For example, if document1 has {user: {profile: {name: "John"}}} and 
+// document2 has {user: {profile: {name: "Jane", age: 42}}},
+// we need to make sure the final schema includes both name and age in the profile struct
+LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const LogicalType &type2) {
+	if (type1.id() != LogicalTypeId::STRUCT || type2.id() != LogicalTypeId::STRUCT) {
+		return LogicalType::VARCHAR; // Fallback if either is not a struct
+	}
+
+	// Get child types from both structs
+	auto struct1_children = StructType::GetChildTypes(type1);
+	auto struct2_children = StructType::GetChildTypes(type2);
+
+	// Start with all children from the first struct
+	child_list_t<LogicalType> merged_children = struct1_children;
+
+	// Add any new fields from the second struct
+	for (const auto &child2 : struct2_children) {
+		bool found = false;
+		for (size_t i = 0; i < merged_children.size(); i++) {
+			if (merged_children[i].first == child2.first) {
+				// Field exists in both structs, recursively merge if both are structs
+				if (merged_children[i].second.id() == LogicalTypeId::STRUCT && 
+				    child2.second.id() == LogicalTypeId::STRUCT) {
+					merged_children[i].second = MergeStructTypes(merged_children[i].second, child2.second);
+				} else if (merged_children[i].second.id() != child2.second.id()) {
+					// Different types, default to VARCHAR
+					merged_children[i].second = LogicalType::VARCHAR;
+				}
+				found = true;
+				break;
+			}
+		}
+		
+		// Add new field if not found in first struct
+		if (!found) {
+			merged_children.push_back(child2);
+		}
+	}
+
+	return LogicalType::STRUCT(merged_children);
+}
+
 // Bind data structure for read_yaml
 struct YAMLReadRowsBindData : public TableFunctionData {
 	YAMLReadRowsBindData(string file_path, YAMLReader::YAMLReadOptions options)
@@ -264,7 +308,13 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 					value_type = LogicalType::VARCHAR;
 				}
 
-				if (detected_types[key].id() != value_type.id()) {
+				// Special handling for struct types to merge nested properties
+				// This fixes issues where nested fields like 'profile.age' might only exist in some documents
+				// Without this logic, fields that aren't present in the first document would be missing from the schema
+				if (detected_types[key].id() == LogicalTypeId::STRUCT && value_type.id() == LogicalTypeId::STRUCT) {
+					// Merge the two struct definitions recursively to preserve all fields
+					detected_types[key] = MergeStructTypes(detected_types[key], value_type);
+				} else if (detected_types[key].id() != value_type.id()) {
 					detected_types[key] = LogicalType::VARCHAR;
 				}
 			}
