@@ -1,0 +1,54 @@
+# name: test/sql/yaml_reader/yaml_glob_structs.test
+# description: Test struct handling across multiple files with glob patterns, specifically for fields with dots and slashes
+# group: [yaml]
+
+require yaml
+
+# Test reading multiple YAML files with glob pattern
+statement ok
+CREATE TABLE glob_structs AS 
+SELECT * FROM read_yaml('test/yaml/glob_test/*.yaml') WHERE kind = 'Domain';
+
+# Verify the number of rows
+query I
+SELECT COUNT(*) FROM glob_structs;
+----
+4
+
+# Check that struct types are preserved across files
+query T
+SELECT typeof(metadata.annotations) FROM glob_structs LIMIT 1;
+----
+STRUCT("example.com/maintainer" VARCHAR, "github.com/owner" VARCHAR, "some/path/resource" VARCHAR)
+
+# Verify that we can access struct fields with dots and slashes in property names
+query III
+SELECT 
+  metadata.name, 
+  metadata.annotations."example.com/maintainer",
+  metadata.annotations."some/path/resource"
+FROM glob_structs 
+WHERE metadata.annotations."example.com/maintainer" IS NOT NULL
+ORDER BY metadata.name;
+----
+domain1	john.doe	/api/v1/domains
+domain2	jane.doe	NULL
+domain4	bob.smith	NULL
+
+# Verify that we can filter on fields with dots and slashes
+query I
+SELECT COUNT(*) 
+FROM glob_structs 
+WHERE metadata.annotations."some/path/resource" IS NOT NULL;
+----
+2
+
+# Verify that we can access fields with dots and slashes that only exist in some files
+query II
+SELECT 
+  metadata.name,
+  metadata.annotations."github.com/owner"
+FROM glob_structs
+WHERE metadata.annotations."github.com/owner" IS NOT NULL;
+----
+domain3	acme

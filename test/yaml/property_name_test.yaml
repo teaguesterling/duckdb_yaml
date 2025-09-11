@@ -1,0 +1,25 @@
+---
+# Test case with dots and slashes in property names
+entry1:
+  name: Entry One
+  metadata:
+    example.com/label: frontend
+    kubernetes.io/name: test-pod
+    path/to/resource: /api/v1/pods
+  nested.property:
+    sub.field: value1
+    another/field: value2
+---
+# Test case with dots and slashes but in jagged structure
+entry2:
+  name: Entry Two
+  metadata:
+    simple: value
+---
+entry3:
+  name: Entry Three
+  metadata:
+    example.com/label: backend
+    kubernetes.io/name: other-pod
+  nested.property:
+    different.field: value3

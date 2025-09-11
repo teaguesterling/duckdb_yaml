@@ -1,13 +1,26 @@
-build
-.idea
-cmake-build-debug
-duckdb_unittest_tempdir/
-.DS_Store
-testext
-test/python/__pycache__/
-.Rhistory
-*.sw[poq]
+# Build directories
+build/
+build*/
+cmake-build-debug/
+custom_build/
 
-**/.claude/settings.local.json
+# IDE and editor files
+.idea/
+.DS_Store
+*.sw[poq]
+.Rhistory
+
+# Testing directories
 duckdb_unittest_tempdir/
+testext/
+test/python/__pycache__/
+
+# vcpkg files and directories
+vcpkg_installed/
+
+# DuckDB files
 duckdb-community-extensions/
+duckdb
+
+# Claude AI local settings
+**/.claude/settings.local.json

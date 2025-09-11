@@ -10,3 +10,11 @@
     contact:
       email: jane@example.com
       phone: 555-5678
+- id: 3
+  user:
+    name: Alice Johnson
+    annotations:
+      example.com/role: admin
+    contact:
+      email: alice@example.com
+      phone: 555-9012

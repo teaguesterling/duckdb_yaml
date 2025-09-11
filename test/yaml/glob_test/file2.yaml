@@ -1,0 +1,19 @@
+---
+kind: Domain
+metadata:
+  name: domain3
+  title: Third Domain
+  annotations:
+    example.com/maintainer: null
+    github.com/owner: acme
+    some/path/resource: /api/v2/domains
+---
+kind: Domain
+metadata:
+  name: domain4
+  title: Fourth Domain
+  description: A test domain
+  annotations:
+    example.com/maintainer: bob.smith
+    some/path/resource: null
+    github.com/owner: null

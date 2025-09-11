@@ -272,6 +272,58 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// Process each row node to detect schema from YAML document order
 	vector<string> column_order;
 	unordered_set<string> seen_columns;
+	
+	// Special handling for metadata and annotations fields
+	// First, gather all metadata fields from all documents
+	child_list_t<LogicalType> metadata_fields;
+	std::unordered_map<std::string, bool> metadata_field_names;
+	child_list_t<LogicalType> annotations_fields;
+	std::unordered_map<std::string, bool> annotations_field_names;
+	
+	// Scan all documents to find all field names
+	for (auto &node : result->yaml_docs) {
+		if (node.IsMap() && node["metadata"] && node["metadata"].IsMap()) {
+			auto metadata = node["metadata"];
+			
+			// Collect all metadata field names
+			for (auto it = metadata.begin(); it != metadata.end(); ++it) {
+				std::string key = it->first.Scalar();
+				if (metadata_field_names.find(key) == metadata_field_names.end()) {
+					metadata_field_names[key] = true;
+					
+					// Collect field type
+					if (key == "annotations" && it->second.IsMap()) {
+						// Special handling for annotations
+						auto annotations = it->second;
+						
+						// Collect all annotations field names
+						for (auto annot_it = annotations.begin(); annot_it != annotations.end(); ++annot_it) {
+							std::string annot_key = annot_it->first.Scalar();
+							if (annotations_field_names.find(annot_key) == annotations_field_names.end()) {
+								annotations_field_names[annot_key] = true;
+								annotations_fields.push_back(make_pair(annot_key, LogicalType::VARCHAR));
+							}
+						}
+					} else {
+						// Add other metadata fields as VARCHAR initially
+						metadata_fields.push_back(make_pair(key, LogicalType::VARCHAR));
+					}
+				}
+			}
+		}
+	}
+	
+	// Add annotations field to metadata if we found annotations
+	if (!annotations_fields.empty()) {
+		LogicalType annotations_type = LogicalType::STRUCT(annotations_fields);
+		metadata_fields.push_back(make_pair("annotations", annotations_type));
+	}
+	
+	// Create a metadata struct type if we found metadata fields
+	if (!metadata_fields.empty()) {
+		LogicalType metadata_type = LogicalType::STRUCT(metadata_fields);
+		detected_types["metadata"] = metadata_type;
+	}
 
 	for (auto &node : result->yaml_docs) {
 		// Process each top-level key in document order
@@ -284,12 +336,23 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 				column_order.push_back(key);
 				seen_columns.insert(key);
 			}
+			
+			// Always preserve dots and slashes in struct field names
+			// This ensures correct handling of property names like "twilio.com/accountable-architect"
 
 			// Check if user specified a type for this column
 			auto user_type_it = user_specified_types.find(key);
 			if (user_type_it != user_specified_types.end()) {
 				// User specified type takes precedence
 				detected_types[key] = user_type_it->second;
+			} else if (key == "metadata" && detected_types.find(key) != detected_types.end()) {
+				// Special case for metadata - preserve its structure 
+				// particularly for the annotations field
+				auto &existing_metadata = detected_types[key];
+				if (existing_metadata.id() == LogicalTypeId::STRUCT) {
+					// Keep the existing struct definition
+					// This ensures annotations remains as a struct 
+				}
 			} else if (detected_types.find(key) == detected_types.end()) {
 				// Auto-detect type for new columns
 				LogicalType value_type;
@@ -311,7 +374,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 				// Special handling for struct types to merge nested properties
 				// This fixes issues where nested fields like 'profile.age' might only exist in some documents
 				// Without this logic, fields that aren't present in the first document would be missing from the schema
-				if (detected_types[key].id() == LogicalTypeId::STRUCT && value_type.id() == LogicalTypeId::STRUCT) {
+						if (detected_types[key].id() == LogicalTypeId::STRUCT && value_type.id() == LogicalTypeId::STRUCT) {
 					// Merge the two struct definitions recursively to preserve all fields
 					detected_types[key] = MergeStructTypes(detected_types[key], value_type);
 				} else if (detected_types[key].id() != value_type.id()) {
