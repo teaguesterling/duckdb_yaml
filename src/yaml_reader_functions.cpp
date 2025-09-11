@@ -338,7 +338,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			}
 			
 			// Always preserve dots and slashes in struct field names
-			// This ensures correct handling of property names like "twilio.com/accountable-architect"
+			// This ensures correct handling of property names like "example.com/my-property"
 
 			// Check if user specified a type for this column
 			auto user_type_it = user_specified_types.find(key);
