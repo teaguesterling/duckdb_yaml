@@ -1,3 +1,5 @@
+[![DuckDB Community Extension](https://img.shields.io/badge/yaml-DuckDB_Community_Extension-blue?logo=duckdb)](https://duckdb.org/community_extensions/extensions/yaml.html)
+
 # YAML Extension for DuckDB
 
 This extension allows DuckDB to read YAML files directly into tables and provides full YAML type support with conversion functions. It enables seamless integration of YAML data within SQL queries.
