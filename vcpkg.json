@@ -1,5 +1,13 @@
 {
   "dependencies": [
     "yaml-cpp"
-  ]
+  ],
+  "vcpkg-configuration": {
+    "overlay-ports": [
+        "./extension-ci-tools/vcpkg_ports"
+    ],
+    "overlay-triplets": [
+        "./extension-ci-tools/toolchains"
+    ]
+  }
 }
