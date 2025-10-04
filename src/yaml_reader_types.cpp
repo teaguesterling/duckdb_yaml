@@ -41,10 +41,12 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 			bool might_be_temporal = false;
 			if (scalar_value.find('-') != std::string::npos || scalar_value.find(':') != std::string::npos ||
 			    scalar_value.find('T') != std::string::npos) {
-				// Don't skip potential negative numbers
-				might_be_temporal = scalar_value.find('-') == std::string::npos;
+				// Don't skip potential negative numbers - only temporal if it's not just a negative sign
+				might_be_temporal = (scalar_value.find(':') != std::string::npos || scalar_value.find('T') != std::string::npos) ||
+				                   (scalar_value.find('-') != std::string::npos && scalar_value[0] != '-');
 
-				// Try to parse as date
+				if (might_be_temporal) {
+					// Try to parse as date
 				idx_t pos = 0;
 				date_t date_result;
 				bool special = false;
@@ -67,6 +69,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 				if (Time::TryConvertTime(scalar_value.c_str(), scalar_value.length(), pos, time_result, false) &&
 				    pos == scalar_value.length()) {
 					return LogicalType::TIME;
+				}
 				}
 			}
 

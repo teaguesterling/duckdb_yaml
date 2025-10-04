@@ -30,16 +30,16 @@ static void LoadInternal(ExtensionLoader &loader) {
 
     // Register YAML copy functions
     RegisterYAMLCopyFunctions(loader);
-}
 
-void YamlExtension::Load(ExtensionLoader &loader) {
-    LoadInternal(loader);
-    
     // Register YAML files as automatically recognized by DuckDB
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
     
     // Add replacement scan for YAML files
     config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
+}
+
+void YamlExtension::Load(ExtensionLoader &loader) {
+    LoadInternal(loader);
 }
 
 std::string YamlExtension::Name() {

@@ -254,6 +254,25 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
     format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
     format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
     loader.RegisterFunction(format_yaml_fun);
+    
+    // Register yaml() constructor function (parses YAML string to YAML type)
+    auto yaml_constructor_fun = ScalarFunction("yaml", {LogicalType::VARCHAR}, yaml_type, 
+        [](DataChunk &args, ExpressionState &state, Vector &result) {
+            UnaryExecutor::Execute<string_t, string_t>(
+                args.data[0], result, args.size(),
+                [&](string_t input) {
+                    string input_str = input.GetString();
+                    // Validate that it's valid YAML by parsing it
+                    try {
+                        YAML::Load(input_str);
+                        // If parsing succeeds, return the input as a YAML value
+                        return StringVector::AddString(result, input_str);
+                    } catch (const YAML::Exception &e) {
+                        throw InvalidInputException("Invalid YAML: %s", e.what());
+                    }
+                });
+        });
+    loader.RegisterFunction(yaml_constructor_fun);
 }
 
 

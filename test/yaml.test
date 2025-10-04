@@ -4,20 +4,26 @@
 
 # Before we load the extension, this will fail
 statement error
-SELECT yaml('Sam');
+SELECT yaml('name: John');
 ----
 Catalog Error: Scalar Function with name yaml does not exist!
 
 # Require statement will ensure this test is run with this extension loaded
 require yaml
 
-# Confirm the extension works
+# Test yaml() constructor function with valid YAML
 query I
-SELECT yaml('Sam');
+SELECT yaml('name: John');
 ----
-Yaml Sam 🐥
+name: John
 
+# Test yaml() constructor function with complex YAML
 query I
-SELECT yaml_openssl_version('Michael') ILIKE 'Yaml Michael, my linked OpenSSL version is OpenSSL%';
+SELECT yaml('{"name": "John", "age": 30}');
 ----
-true
+{"name": "John", "age": 30}
+
+# Test yaml() constructor function with invalid YAML should fail
+statement error
+SELECT yaml('invalid: yaml: content:');
+----
