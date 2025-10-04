@@ -13,7 +13,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -64,7 +63,7 @@ public:
      * 
      * @param db The database instance to register the functions with
      */
-    static void RegisterFunction(DatabaseInstance &db);
+    static void RegisterFunction(ExtensionLoader &loader);
 
     /**
      * @brief Replace a yaml file string with 'read_yaml'

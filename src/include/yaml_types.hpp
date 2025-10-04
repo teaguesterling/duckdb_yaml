@@ -11,7 +11,7 @@ public:
     static LogicalType YAMLType();
     
     //! Register the YAML type and conversion functions
-    static void Register(DatabaseInstance &db);
+    static void Register(ExtensionLoader &loader);
 };
 
 } // namespace duckdb

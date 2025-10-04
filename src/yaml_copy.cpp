@@ -7,7 +7,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "yaml_formatting.hpp"
@@ -186,18 +185,18 @@ static void CopyFormatYAMLFunction(DataChunk& args, ExpressionState& state, Vect
     }
 }
 
-void RegisterYAMLCopyFunctions(DatabaseInstance& db) {
+void RegisterYAMLCopyFunctions(ExtensionLoader &loader) {
     // Register the COPY TO function
     auto copy_function = CopyFunction("yaml");
     copy_function.extension = "yaml";
     copy_function.plan = CopyToYAMLPlan;
-    ExtensionUtil::RegisterFunction(db, copy_function);
+    loader.RegisterFunction(copy_function);
 
     // Register copy_format_yaml function for COPY TO post-processing
     auto copy_format_yaml_fun = ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
     copy_format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
     copy_format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
-    ExtensionUtil::RegisterFunction(db, copy_format_yaml_fun);
+    loader.RegisterFunction(copy_format_yaml_fun);
 }
 
 CopyFunction GetYAMLCopyFunction() {

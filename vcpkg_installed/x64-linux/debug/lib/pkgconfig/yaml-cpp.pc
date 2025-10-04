@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+includedir=${prefix}/../include
+libdir=${prefix}/lib
+
+Name: Yaml-cpp
+Description: A YAML parser and emitter for C++
+Version: 0.8.0
+
+Libs: "-L${libdir}" -lyaml-cppd
+Requires: 
+Cflags: "-I${includedir}"

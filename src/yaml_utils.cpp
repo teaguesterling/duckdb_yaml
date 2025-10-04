@@ -123,7 +123,7 @@ static bool TryDetectDateOrTimestamp(const std::string& value, std::string& json
     
     // Try to parse as timestamp
     timestamp_t timestamp_result;
-    if (Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result) == TimestampCastResult::SUCCESS) {
+    if (Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result, false) == TimestampCastResult::SUCCESS) {
         // Successfully parsed as timestamp, format it in ISO 8601 format with Z suffix for JSON compatibility
         auto timestamp_str = Timestamp::ToString(timestamp_result);
         // Check if timestamp already has timezone info

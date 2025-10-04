@@ -5,7 +5,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/copy_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/config.hpp"
 
 #include "yaml_extension.hpp"
@@ -16,28 +15,28 @@
 
 namespace duckdb {
 
-static void LoadInternal(DatabaseInstance &instance) {
+static void LoadInternal(ExtensionLoader &loader) {
     // Register YAML reader
-    YAMLReader::RegisterFunction(instance);
+    YAMLReader::RegisterFunction(loader);
 
     // Register YAML functions
-    YAMLFunctions::Register(instance);
+    YAMLFunctions::Register(loader);
 
     // Register YAML extraction functions
-    YAMLExtractionFunctions::Register(instance);
+    YAMLExtractionFunctions::Register(loader);
 
     // Register YAML types
-    YAMLTypes::Register(instance);
+    YAMLTypes::Register(loader);
 
     // Register YAML copy functions
-    RegisterYAMLCopyFunctions(instance);
+    RegisterYAMLCopyFunctions(loader);
 }
 
-void YamlExtension::Load(DuckDB &db) {
-    LoadInternal(*db.instance);
+void YamlExtension::Load(ExtensionLoader &loader) {
+    LoadInternal(loader);
     
     // Register YAML files as automatically recognized by DuckDB
-    auto &config = DBConfig::GetConfig(*db.instance);
+    auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
     
     // Add replacement scan for YAML files
     config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
@@ -59,14 +58,14 @@ std::string YamlExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void yaml_init(duckdb::DatabaseInstance &db) {
-    duckdb::DuckDB db_wrapper(db);
-    db_wrapper.LoadExtension<duckdb::YamlExtension>();
+DUCKDB_CPP_EXTENSION_ENTRY(yaml, loader) {
+    duckdb::LoadInternal(loader);
 }
 
 DUCKDB_EXTENSION_API const char *yaml_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
+
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN

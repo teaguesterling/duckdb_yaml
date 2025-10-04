@@ -1,0 +1,273 @@
+mkdir -p build/release
+cmake  -DEXTENSION_STATIC_BUILD=1  -DDUCKDB_EXTENSION_CONFIGS='/mnt/aux-data/teague/Projects/duckdb_yaml/extension_config.cmake'   -DOSX_BUILD_ARCH=   -DVCPKG_BUILD=1 -DCMAKE_TOOLCHAIN_FILE='/home/teague/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake' -DDUCKDB_EXPLICIT_PLATFORM='' -DCUSTOM_LINKER= -DOVERRIDE_GIT_DESCRIBE="" -DUNITTEST_ROOT_DIRECTORY="/mnt/aux-data/teague/Projects/duckdb_yaml/" -DBENCHMARK_ROOT_DIRECTORY="/mnt/aux-data/teague/Projects/duckdb_yaml/" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DBUILD_EXTENSION_TEST_DEPS=default  -DVCPKG_MANIFEST_DIR='/mnt/aux-data/teague/Projects/duckdb_yaml/' -DCMAKE_BUILD_TYPE=Release -S "./duckdb/" -B build/release
+-- Running vcpkg install
+Detecting compiler hash for triplet x64-linux...
+Compiler found: /usr/bin/c++
+The following packages are already installed:
+  * vcpkg-cmake:x64-linux@2024-04-23
+  * vcpkg-cmake-config:x64-linux@2024-05-23
+    yaml-cpp:x64-linux@0.8.0#3
+yaml-cpp provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(yaml-cpp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE yaml-cpp::yaml-cpp)
+
+yaml-cpp provides pkg-config modules:
+
+  # A YAML parser and emitter for C++
+  yaml-cpp
+
+All requested installations completed successfully in: 60.1 us
+-- Running vcpkg install - done
+-- git hash b390a7c376, version v1.5.0-dev195, extension folder b390a7c376
+-- Extensions will be deployed to: /home/teague/Projects/duckdb_yaml/build/release/repository
+-- Load extension 'yaml' from '/home/teague/Projects/duckdb_yaml' @ b4ee729
+-- Load extension 'json' from '/home/teague/Projects/duckdb_yaml/duckdb/extensions' @ b390a7c376
+-- Load extension 'core_functions' from '/home/teague/Projects/duckdb_yaml/duckdb/extensions' @ b390a7c376
+-- Load extension 'parquet' from '/home/teague/Projects/duckdb_yaml/duckdb/extensions' @ b390a7c376
+-- Load extension 'jemalloc' from '/home/teague/Projects/duckdb_yaml/duckdb/extensions' @ b390a7c376
+CMake Deprecation Warning at /home/teague/Projects/duckdb_yaml/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- Extensions linked into DuckDB: [yaml, json, core_functions, parquet, jemalloc]
+-- Tests loaded for extensions: [yaml]
+-- Configuring done (1.7s)
+-- Generating done (0.5s)
+-- Build files have been written to: /home/teague/Projects/duckdb_yaml/build/release
+cmake --build build/release --config Release
+gmake[1]: Entering directory '/mnt/aux-data/teague/Projects/duckdb_yaml/build/release'
+[  6%] Built target duckdb_zstd
+[  7%] Built target duckdb_platform_binary
+[  7%] Built target duckdb_platform
+[  7%] Built target duckdb_optimizer
+[  7%] Built target duckdb_optimizer_compressed_materialization
+[  7%] Built target duckdb_optimizer_join_order
+[  7%] Built target duckdb_optimizer_matcher
+[  7%] Built target duckdb_optimizer_pullup
+[  8%] Built target duckdb_optimizer_pushdown
+[  8%] Built target duckdb_optimizer_rules
+[  8%] Built target duckdb_optimizer_statistics_expr
+[  8%] Built target duckdb_optimizer_statistics_op
+[  8%] Built target duckdb_planner
+[  9%] Built target duckdb_planner_expression
+[  9%] Built target duckdb_bind_expression
+[  9%] Built target duckdb_bind_query_node
+[  9%] Built target duckdb_bind_statement
+[  9%] Built target duckdb_bind_tableref
+[ 10%] Built target duckdb_expression_binders
+[ 10%] Built target duckdb_planner_filter
+[ 10%] Built target duckdb_planner_operator
+[ 10%] Built target duckdb_planner_subquery
+[ 10%] Built target duckdb_parser
+[ 10%] Built target duckdb_constraints
+[ 10%] Built target duckdb_expression
+[ 10%] Built target duckdb_parsed_data
+[ 10%] Built target duckdb_query_node
+[ 10%] Built target duckdb_statement
+[ 10%] Built target duckdb_parser_tableref
+[ 10%] Built target duckdb_transformer_constraint
+[ 10%] Built target duckdb_transformer_expression
+[ 10%] Built target duckdb_transformer_helpers
+[ 10%] Built target duckdb_transformer_statement
+[ 11%] Built target duckdb_transformer_tableref
+[ 11%] Built target duckdb_function
+[ 11%] Built target duckdb_func_aggr
+[ 11%] Built target duckdb_aggr_distr
+[ 11%] Built target duckdb_func_cast
+[ 11%] Built target duckdb_union_cast
+[ 12%] Built target duckdb_variant_cast
+[ 12%] Built target duckdb_func_pragma
+[ 12%] Built target duckdb_func_scalar
+[ 12%] Built target duckdb_func_compressed_materialization
+[ 12%] Built target duckdb_func_date
+[ 13%] Built target duckdb_func_generic_main
+[ 13%] Built target duckdb_func_list_nested
+[ 13%] Built target duckdb_function_map
+[ 13%] Built target duckdb_func_ops_main
+[ 13%] Built target duckdb_func_seq
+[ 14%] Built target duckdb_func_string_main
+[ 14%] Built target duckdb_func_string_regexp
+[ 14%] Built target duckdb_func_struct_main
+[ 14%] Built target duckdb_func_variant_main
+[ 14%] Built target duckdb_func_system
+[ 14%] Built target duckdb_func_table
+[ 15%] Built target duckdb_table_func_system
+[ 15%] Built target duckdb_func_table_version
+[ 16%] Built target duckdb_arrow_conversion
+[ 17%] Built target duckdb_func_window
+[ 17%] Built target duckdb_catalog
+[ 17%] Built target duckdb_catalog_entries
+[ 17%] Built target duckdb_catalog_entries_dependency
+[ 18%] Built target duckdb_catalog_default_entries
+[ 18%] Built target duckdb_common
+[ 18%] Built target duckdb_adbc
+[ 18%] Built target duckdb_adbc_nanoarrow
+[ 18%] Built target duckdb_common_arrow
+[ 18%] Built target duckdb_common_arrow_appender
+[ 19%] Built target duckdb_common_crypto
+[ 19%] Built target duckdb_common_enums
+[ 19%] Built target duckdb_common_exception
+[ 19%] Built target duckdb_common_multi_file
+[ 19%] Built target duckdb_common_operators
+[ 19%] Built target duckdb_progress_bar
+[ 19%] Built target duckdb_common_tree_renderer
+[ 19%] Built target duckdb_row_operations
+[ 20%] Built target duckdb_common_serializer
+[ 20%] Built target duckdb_sort
+[ 20%] Built target duckdb_sorting
+[ 20%] Built target duckdb_common_types
+[ 20%] Built target duckdb_common_types_column
+[ 20%] Built target duckdb_common_types_row
+[ 20%] Built target duckdb_value_operations
+[ 21%] Built target duckdb_vector_operations
+[ 21%] Built target duckdb_logging
+[ 21%] Built target duckdb_execution
+[ 21%] Built target duckdb_expression_executor
+[ 21%] Built target duckdb_nested_loop_join
+[ 21%] Built target duckdb_operator_aggregate
+[ 21%] Built target duckdb_csv_buffer_manager
+[ 21%] Built target duckdb_csv_encode
+[ 21%] Built target duckdb_csv_scanner
+[ 21%] Built target duckdb_csv_sniffer
+[ 22%] Built target duckdb_csv_state_machine
+[ 22%] Built target duckdb_operator_csv_table_function
+[ 22%] Built target duckdb_csv_util
+[ 22%] Built target duckdb_operator_filter
+[ 22%] Built target duckdb_operator_helper
+[ 23%] Built target duckdb_operator_join
+[ 23%] Built target duckdb_operator_order
+[ 23%] Built target duckdb_operator_persistent
+[ 23%] Built target duckdb_operator_projection
+[ 23%] Built target duckdb_operator_scan
+[ 23%] Built target duckdb_operator_schema
+[ 24%] Built target duckdb_operator_set
+[ 24%] Built target duckdb_physical_plan
+[ 24%] Built target duckdb_execution_index
+[ 24%] Built target duckdb_execution_index_art
+[ 24%] Built target duckdb_sample
+[ 24%] Built target duckdb_main
+[ 25%] Built target duckdb_main_capi
+[ 25%] Built target duckdb_main_capi_cast
+[ 25%] Built target duckdb_generated_extension_loader
+[ 26%] Built target duckdb_main_extension
+[ 26%] Built target duckdb_common_http
+[ 26%] Built target duckdb_main_relation
+[ 26%] Built target duckdb_main_secret
+[ 26%] Built target duckdb_main_settings
+[ 26%] Built target duckdb_main_buffered_data
+[ 26%] Built target duckdb_main_chunk_scan_state
+[ 26%] Built target duckdb_parallel
+[ 26%] Built target duckdb_storage
+[ 27%] Built target duckdb_storage_buffer
+[ 27%] Built target duckdb_storage_checkpoint
+[ 27%] Built target duckdb_storage_compression
+[ 27%] Built target duckdb_storage_compression_chimp
+[ 27%] Built target duckdb_storage_compression_alp
+[ 27%] Built target duckdb_storage_compression_roaring
+[ 28%] Built target duckdb_storage_compression_dictionary
+[ 28%] Built target duckdb_storage_compression_dict_fsst
+[ 28%] Built target duckdb_storage_metadata
+[ 28%] Built target duckdb_storage_serialization
+[ 28%] Built target duckdb_storage_statistics
+[ 28%] Built target duckdb_storage_table
+[ 28%] Built target duckdb_transaction
+[ 30%] Built target duckdb_verification
+[ 31%] Built target duckdb_core_functions_algebraic
+[ 32%] Built target duckdb_core_functions_distributive
+[ 32%] Built target duckdb_core_functions_holistic
+[ 32%] Built target duckdb_core_functions_nested
+[ 32%] Built target duckdb_core_functions_regression
+[ 32%] Built target duckdb_core_functions_array
+[ 32%] Built target duckdb_core_functions_bit
+[ 32%] Built target duckdb_core_functions_blob
+[ 32%] Built target duckdb_core_functions_date
+[ 32%] Built target duckdb_core_functions_debug
+[ 32%] Built target duckdb_core_functions_enum
+[ 32%] Built target duckdb_core_functions_generic
+[ 32%] Built target duckdb_core_functions_list
+[ 32%] Built target duckdb_core_functions_map
+[ 33%] Built target duckdb_core_functions_math
+[ 33%] Built target duckdb_core_functions_operators
+[ 33%] Built target duckdb_core_functions_random
+[ 33%] Built target duckdb_core_functions_string
+[ 34%] Built target duckdb_core_functions_struct
+[ 34%] Built target duckdb_core_functions_union
+[ 34%] Built target duckdb_parquet_decoders
+[ 34%] Built target duckdb_parquet_readers
+[ 35%] Built target duckdb_parquet_reader_variant
+[ 35%] Built target duckdb_parquet_writers
+[ 46%] Built target jemalloc
+[ 46%] Built target duckdb_fmt
+[ 48%] Built target duckdb_pg_query
+[ 52%] Built target duckdb_re2
+[ 53%] Built target duckdb_miniz
+[ 53%] Built target duckdb_utf8proc
+[ 54%] Built target duckdb_hyperloglog
+[ 55%] Built target duckdb_skiplistlib
+[ 55%] Built target duckdb_fastpforlib
+[ 59%] Built target duckdb_mbedtls
+[ 60%] Built target duckdb_fsst
+[ 60%] Built target duckdb_yyjson
+[ 60%] Built target jemalloc_extension
+[ 69%] Built target parquet_extension
+[ 69%] Built target core_functions_extension
+[ 74%] Built target json_extension
+[ 74%] Building CXX object extension/yaml/CMakeFiles/yaml_extension.dir/src/yaml_reader_types.cpp.o
+/home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp: In static member function ‘static duckdb::LogicalType duckdb::YAMLReader::DetectYAMLType(const YAML::Node&)’:
+/home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp:59:67: error: no matching function for call to ‘duckdb::Timestamp::TryConvertTimestamp(const char*, std::__cxx11::basic_string<char>::size_type, duckdb::timestamp_t&)’
+   59 |                                 if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result) ==
+      |                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/value.hpp:16,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/catalog/catalog_entry.hpp:17,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/catalog/catalog.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/serializer/write_stream.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/serializer/buffered_file_writer.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/main/connection.hpp:12,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/src/include/yaml_reader.hpp:12,
+                 from /home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp:1:
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:152:47: note: candidate: ‘static duckdb::TimestampCastResult duckdb::Timestamp::TryConvertTimestamp(const char*, duckdb::idx_t, duckdb::timestamp_t&, bool, duckdb::optional_ptr<int>, bool)’
+  152 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+      |                                               ^~~~~~~~~~~~~~~~~~~
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:152:47: note:   candidate expects 6 arguments, 3 provided
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:156:47: note: candidate: ‘static duckdb::TimestampCastResult duckdb::Timestamp::TryConvertTimestamp(const char*, duckdb::idx_t, duckdb::timestamp_ns_t&)’
+  156 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
+      |                                               ^~~~~~~~~~~~~~~~~~~
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:156:111: note:   no known conversion for argument 3 from ‘duckdb::timestamp_t’ to ‘duckdb::timestamp_ns_t&’
+  156 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
+      |                                                                                               ~~~~~~~~~~~~~~~~^~~~~~
+/home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp: In static member function ‘static duckdb::Value duckdb::YAMLReader::YAMLNodeToValue(const YAML::Node&, const duckdb::LogicalType&)’:
+/home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp:313:67: error: no matching function for call to ‘duckdb::Timestamp::TryConvertTimestamp(const char*, std::__cxx11::basic_string<char>::size_type, duckdb::timestamp_t&)’
+  313 |                                 if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result) ==
+      |                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/value.hpp:16,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/catalog/catalog_entry.hpp:17,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/catalog/catalog.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/serializer/write_stream.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/serializer/buffered_file_writer.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/main/connection.hpp:12,
+                 from /home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb.hpp:11,
+                 from /home/teague/Projects/duckdb_yaml/src/include/yaml_reader.hpp:12,
+                 from /home/teague/Projects/duckdb_yaml/src/yaml_reader_types.cpp:1:
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:152:47: note: candidate: ‘static duckdb::TimestampCastResult duckdb::Timestamp::TryConvertTimestamp(const char*, duckdb::idx_t, duckdb::timestamp_t&, bool, duckdb::optional_ptr<int>, bool)’
+  152 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+      |                                               ^~~~~~~~~~~~~~~~~~~
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:152:47: note:   candidate expects 6 arguments, 3 provided
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:156:47: note: candidate: ‘static duckdb::TimestampCastResult duckdb::Timestamp::TryConvertTimestamp(const char*, duckdb::idx_t, duckdb::timestamp_ns_t&)’
+  156 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
+      |                                               ^~~~~~~~~~~~~~~~~~~
+/home/teague/Projects/duckdb_yaml/duckdb/src/include/duckdb/common/types/timestamp.hpp:156:111: note:   no known conversion for argument 3 from ‘duckdb::timestamp_t’ to ‘duckdb::timestamp_ns_t&’
+  156 |         DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
+      |                                                                                               ~~~~~~~~~~~~~~~~^~~~~~
+gmake[3]: *** [extension/yaml/CMakeFiles/yaml_extension.dir/build.make:107: extension/yaml/CMakeFiles/yaml_extension.dir/src/yaml_reader_types.cpp.o] Error 1
+gmake[2]: *** [CMakeFiles/Makefile2:9462: extension/yaml/CMakeFiles/yaml_extension.dir/all] Error 2
+gmake[1]: *** [Makefile:136: all] Error 2
+gmake[1]: Leaving directory '/mnt/aux-data/teague/Projects/duckdb_yaml/build/release'
+make: *** [extension-ci-tools/makefiles/duckdb_extension.Makefile:161: release] Error 2

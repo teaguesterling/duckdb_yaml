@@ -1,6 +1,5 @@
 #include "yaml_scalar_functions.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "yaml-cpp/yaml.h"
@@ -12,16 +11,15 @@
 
 namespace duckdb {
 
-void YAMLFunctions::Register(DatabaseInstance &db) {
+void YAMLFunctions::Register(ExtensionLoader &loader) {
     // Register validation and basic functions
-    RegisterValidationFunction(db);
-    RegisterConversionFunctions(db);
-    RegisterYAMLTypeFunctions(db);
-    RegisterStyleFunctions(db);
+    RegisterValidationFunction(loader);
+    RegisterYAMLTypeFunctions(loader);
+    RegisterStyleFunctions(loader);
 }
 
 
-void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
+void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
     auto yaml_type = YAMLTypes::YAMLType();
     
     // Basic YAML validity check for VARCHAR
@@ -57,13 +55,8 @@ void YAMLFunctions::RegisterValidationFunction(DatabaseInstance &db) {
                 });
         });
     
-    ExtensionUtil::RegisterFunction(db, yaml_valid_varchar);
-    ExtensionUtil::RegisterFunction(db, yaml_valid_yaml);
-}
-
-void YAMLFunctions::RegisterConversionFunctions(DatabaseInstance &db) {
-    // Conversion functions are already registered in YAMLTypes::Register()
-    // This function is kept for future expansion
+    loader.RegisterFunction(yaml_valid_varchar);
+    loader.RegisterFunction(yaml_valid_yaml);
 }
 
 //===--------------------------------------------------------------------===//
@@ -244,23 +237,23 @@ static void FormatYAMLFunction(DataChunk& args, ExpressionState& state, Vector& 
     }
 }
 
-void YAMLFunctions::RegisterYAMLTypeFunctions(DatabaseInstance &db) {
+void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
     // Get the YAML type
     auto yaml_type = YAMLTypes::YAMLType();
     
     // Register yaml_to_json function
     auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_to_json_fun);
+    loader.RegisterFunction(yaml_to_json_fun);
     
     // Register value_to_yaml function (single parameter, returns YAML type)
     auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
-    ExtensionUtil::RegisterFunction(db, value_to_yaml_fun);
+    loader.RegisterFunction(value_to_yaml_fun);
 
     // Register format_yaml function with named parameters (returns VARCHAR for display/formatting)
     auto format_yaml_fun = ScalarFunction("format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLFunction, FormatYAMLBind);
     format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
     format_yaml_fun.varargs = LogicalType::ANY;  // Allow variable number of arguments
-    ExtensionUtil::RegisterFunction(db, format_yaml_fun);
+    loader.RegisterFunction(format_yaml_fun);
 }
 
 
@@ -302,13 +295,13 @@ static void YAMLGetDefaultStyleFunction(DataChunk& args, ExpressionState& state,
     result_data[0] = StringVector::AddString(result, format_name.c_str(), format_name.length());
 }
 
-void YAMLFunctions::RegisterStyleFunctions(DatabaseInstance &db) {
+void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
     // Register default style management functions
     auto yaml_set_default_style_fun = ScalarFunction("yaml_set_default_style", {LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLSetDefaultStyleFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_set_default_style_fun);
+    loader.RegisterFunction(yaml_set_default_style_fun);
 
     auto yaml_get_default_style_fun = ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_get_default_style_fun);
+    loader.RegisterFunction(yaml_get_default_style_fun);
 }
 
 } // namespace duckdb

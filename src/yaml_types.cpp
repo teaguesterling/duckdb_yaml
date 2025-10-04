@@ -1,7 +1,6 @@
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "yaml_formatting.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
@@ -136,20 +135,20 @@ static bool YAMLToVarcharCast(Vector& source, Vector& result, idx_t count, CastP
 // Registration
 //===--------------------------------------------------------------------===//
 
-void YAMLTypes::Register(DatabaseInstance& db) {
+void YAMLTypes::Register(ExtensionLoader &loader) {
     // Get the YAML type
     auto yaml_type = YAMLType();
     
     // Register the YAML type alias in the catalog
-    ExtensionUtil::RegisterType(db, "yaml", yaml_type);
-    
+    loader.RegisterType("yaml", yaml_type);
+
     // Register YAML<->JSON cast functions
-    ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::JSON(), YAMLToJSONCast);
-    ExtensionUtil::RegisterCastFunction(db, LogicalType::JSON(), yaml_type, JSONToYAMLCast);
+    loader.RegisterCastFunction(yaml_type, LogicalType::JSON(), YAMLToJSONCast);
+    loader.RegisterCastFunction(LogicalType::JSON(), yaml_type, JSONToYAMLCast);
 
     // Register YAML<->VARCHAR cast functions
-    ExtensionUtil::RegisterCastFunction(db, LogicalType::VARCHAR, yaml_type, VarcharToYAMLCast);
-    ExtensionUtil::RegisterCastFunction(db, yaml_type, LogicalType::VARCHAR, YAMLToVarcharCast);
+    loader.RegisterCastFunction(LogicalType::VARCHAR, yaml_type, VarcharToYAMLCast);
+    loader.RegisterCastFunction(yaml_type, LogicalType::VARCHAR, YAMLToVarcharCast);
 }
 
 } // namespace duckdb

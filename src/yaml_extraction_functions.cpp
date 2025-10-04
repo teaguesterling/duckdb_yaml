@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
@@ -304,7 +303,7 @@ static void YAMLExistsFunction(DataChunk &args, ExpressionState &state, Vector &
 // Registration
 //===--------------------------------------------------------------------===//
 
-void YAMLExtractionFunctions::Register(DatabaseInstance &db) {
+void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
     // Get the YAML type
     auto yaml_type = YAMLTypes::YAMLType();
     
@@ -312,19 +311,19 @@ void YAMLExtractionFunctions::Register(DatabaseInstance &db) {
     ScalarFunctionSet yaml_type_set("yaml_type");
     yaml_type_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::VARCHAR, YAMLTypeUnaryFunction));
     yaml_type_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeBinaryFunction));
-    ExtensionUtil::RegisterFunction(db, yaml_type_set);
+    loader.RegisterFunction(yaml_type_set);
     
     // yaml_extract function  
     auto yaml_extract_fun = ScalarFunction("yaml_extract", {yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_extract_fun);
+    loader.RegisterFunction(yaml_extract_fun);
     
     // yaml_extract_string function
     auto yaml_extract_string_fun = ScalarFunction("yaml_extract_string", {yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_extract_string_fun);
+    loader.RegisterFunction(yaml_extract_string_fun);
     
     // yaml_exists function
     auto yaml_exists_fun = ScalarFunction("yaml_exists", {yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction);
-    ExtensionUtil::RegisterFunction(db, yaml_exists_fun);
+    loader.RegisterFunction(yaml_exists_fun);
 }
 
 } // namespace duckdb

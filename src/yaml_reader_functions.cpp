@@ -3,7 +3,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include <unordered_set>
 
 namespace duckdb {

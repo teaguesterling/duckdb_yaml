@@ -56,7 +56,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 
 				// Try to parse as timestamp
 				timestamp_t timestamp_result;
-				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result) ==
+				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
 				    TimestampCastResult::SUCCESS) {
 					return LogicalType::TIMESTAMP;
 				}
@@ -310,7 +310,7 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 				return Value(target_type); // NULL if conversion fails
 			} else if (target_type.id() == LogicalTypeId::TIMESTAMP) {
 				timestamp_t timestamp_result;
-				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result) ==
+				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
 				    TimestampCastResult::SUCCESS) {
 					return Value::TIMESTAMP(timestamp_result);
 				}

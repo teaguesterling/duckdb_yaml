@@ -2,7 +2,6 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -26,7 +25,7 @@ unique_ptr<TableRef> YAMLReader::ReadYAMLReplacement(ClientContext &context, Rep
 	return std::move(table_function);
 }
 
-void YAMLReader::RegisterFunction(DatabaseInstance &db) {
+void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	// Create read_yaml table function
 	TableFunction read_yaml("read_yaml", {LogicalType::ANY}, YAMLReadRowsFunction, YAMLReadRowsBind);
 
@@ -39,7 +38,7 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
 	read_yaml.named_parameters["columns"] = LogicalType::ANY;
 
 	// Register the function
-	ExtensionUtil::RegisterFunction(db, read_yaml);
+	loader.RegisterFunction(read_yaml);
 
 	// Register the object-based reader
 	TableFunction read_yaml_objects("read_yaml_objects", {LogicalType::ANY}, YAMLReadObjectsFunction,
@@ -49,7 +48,7 @@ void YAMLReader::RegisterFunction(DatabaseInstance &db) {
 	read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
 	read_yaml_objects.named_parameters["multi_document"] = LogicalType::BOOLEAN;
 	read_yaml_objects.named_parameters["columns"] = LogicalType::ANY;
-	ExtensionUtil::RegisterFunction(db, read_yaml_objects);
+	loader.RegisterFunction(read_yaml_objects);
 }
 
 } // namespace duckdb

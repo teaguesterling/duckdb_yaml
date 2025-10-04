@@ -9,7 +9,7 @@ const vector<string> yaml_extensions = {"yaml", "yml"};
 
 class YamlExtension : public Extension {
 public:
-	void Load(DuckDB &db) override;
+	void Load(ExtensionLoader &loader) override;
 	std::string Name() override;
         std::string Version() const override;
 };
@@ -18,6 +18,6 @@ public:
 CopyFunction GetYAMLCopyFunction();
 
 // Register YAML copy functions
-void RegisterYAMLCopyFunctions(DatabaseInstance& db);
+void RegisterYAMLCopyFunctions(ExtensionLoader &loader);
 
 } // namespace duckdb
