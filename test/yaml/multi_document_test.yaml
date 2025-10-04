@@ -1,0 +1,16 @@
+---
+# Document 1
+metadata:
+  example.com/role: viewer
+  kubernetes.io/name: test-pod
+  nested.property:
+    sub.field: value1
+---
+# Document 2
+metadata:
+  simple: value
+---
+# Document 3
+metadata:
+  example.com/role: editor
+  kubernetes.io/name: other-pod

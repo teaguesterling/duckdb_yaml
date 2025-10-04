@@ -1,0 +1,6 @@
+metadata:
+  example.com/role: admin
+  kubernetes.io/name: test-pod-1
+  annotations:
+    key.with.dots: value1
+    path/to/resource: /api/v1/pods
