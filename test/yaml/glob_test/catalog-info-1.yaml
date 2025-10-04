@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Domain
+metadata:
+  name: catalog-info-1
+  annotations:
+    example.com/maintainer: team-alpha
+    github.com/owner: org-alpha
+spec:
+  owner: team-alpha

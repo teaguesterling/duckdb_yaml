@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Domain
+metadata:
+  name: catalog-info-4
+  annotations:
+    example.com/maintainer: team-delta
+    app.kubernetes.io/managed-by: flux
+    deployment.kubernetes.io/revision: "42"
+spec:
+  owner: team-delta

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Domain
+metadata:
+  name: catalog-info-2
+  annotations:
+    example.com/maintainer: team-beta
+    some/path/resource: resource-b
+    kubernetes.io/version: v1.2.3
+spec:
+  owner: team-beta

@@ -9,10 +9,10 @@ statement ok
 CREATE TABLE simple_objects AS 
 SELECT * FROM read_yaml_objects('test/yaml/simple.yaml');
 
-query I
-SELECT yaml FROM simple_objects;
+query III
+SELECT yaml.name, yaml.age, yaml.is_active FROM simple_objects;
 ----
-{'name': John, 'age': 30, 'is_active': true}
+John	30	true
 
 query I
 SELECT yaml.name FROM simple_objects;

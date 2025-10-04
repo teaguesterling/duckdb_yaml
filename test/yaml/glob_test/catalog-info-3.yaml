@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Domain
+metadata:
+  name: catalog-info-3
+  annotations:
+    github.com/owner: org-gamma
+    some/path/resource: resource-c
+    app.kubernetes.io/managed-by: helm
+spec:
+  owner: team-gamma

@@ -1,0 +1,58 @@
+# name: test/sql/yaml_reader/yaml_glob_structs.test
+# description: Test struct handling across multiple files with glob patterns, specifically for fields with dots and slashes
+# group: [yaml]
+
+require yaml
+
+# Test reading multiple YAML files with glob pattern
+statement ok
+CREATE TABLE glob_structs AS 
+SELECT * FROM read_yaml('test/yaml/glob_test/*.yaml') WHERE kind = 'Domain';
+
+# Verify the number of rows
+query I
+SELECT COUNT(*) FROM glob_structs;
+----
+4
+
+# Check that struct types are preserved across files with all fields from all files
+query T
+SELECT typeof(metadata.annotations) FROM glob_structs LIMIT 1;
+----
+STRUCT("example.com/maintainer" VARCHAR, "github.com/owner" VARCHAR, "some/path/resource" VARCHAR, "kubernetes.io/version" VARCHAR, "app.kubernetes.io/managed-by" VARCHAR, "deployment.kubernetes.io/revision" VARCHAR)
+
+# Verify that we can access struct fields with dots and slashes in property names
+# Note: NULL values for fields not present in specific files
+query IIII
+SELECT 
+  metadata.name, 
+  metadata.annotations."example.com/maintainer",
+  metadata.annotations."github.com/owner",
+  metadata.annotations."kubernetes.io/version"
+FROM glob_structs 
+ORDER BY metadata.name;
+----
+catalog-info-1	team-alpha	org-alpha	NULL
+catalog-info-2	team-beta	NULL	v1.2.3
+catalog-info-3	NULL	org-gamma	NULL
+catalog-info-4	team-delta	NULL	NULL
+
+# Test filtering on fields with special characters (should find file 3)
+query I
+SELECT COUNT(*) FROM glob_structs 
+WHERE metadata.annotations."app.kubernetes.io/managed-by" = 'helm';
+----
+1
+
+# Verify that struct fields are accessible even when not present in all files
+query III
+SELECT 
+  metadata.name,
+  metadata.annotations."example.com/maintainer",
+  metadata.annotations."deployment.kubernetes.io/revision"
+FROM glob_structs 
+WHERE metadata.name IN ('catalog-info-1', 'catalog-info-4')
+ORDER BY metadata.name;
+----
+catalog-info-1	team-alpha	NULL
+catalog-info-4	team-delta	42

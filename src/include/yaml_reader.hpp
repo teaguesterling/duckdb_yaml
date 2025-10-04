@@ -194,6 +194,14 @@ private:
     static LogicalType DetectYAMLType(const YAML::Node &node);
 
     /**
+     * @brief Detect YAML type across multiple documents with jagged schema support
+     * 
+     * @param nodes Vector of YAML nodes to inspect for merged schema
+     * @return LogicalType The detected DuckDB type with merged fields
+     */
+    static LogicalType DetectJaggedYAMLType(const vector<YAML::Node> &nodes);
+
+    /**
      * @brief Convert a YAML node to a DuckDB value
      * 
      * @param node YAML node to convert
