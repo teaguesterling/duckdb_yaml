@@ -15,13 +15,19 @@ require yaml
 query I
 SELECT yaml('name: John');
 ----
-name: John
+{name: John}
 
 # Test yaml() constructor function with complex YAML
 query I
 SELECT yaml('{"name": "John", "age": 30}');
 ----
-{"name": "John", "age": 30}
+{name: John, age: 30}
+
+# Test yaml() with quoting.
+query I
+SELECT yaml('{"name": "Doe, John", "age": 30}');
+----
+{name: "Doe, John", age: 30}
 
 # Test yaml() constructor function with invalid YAML should fail
 statement error
