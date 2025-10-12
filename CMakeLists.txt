@@ -26,6 +26,7 @@ set(EXTENSION_SOURCES
   src/yaml_column_types.cpp
   src/yaml_scalar_functions.cpp
   src/yaml_extraction_functions.cpp
+  src/yaml_unnest_functions.cpp
   src/yaml_copy.cpp
   src/yaml_utils.cpp
   src/yaml_formatting.cpp

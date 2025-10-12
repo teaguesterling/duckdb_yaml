@@ -12,6 +12,7 @@
 #include "yaml_types.hpp"
 #include "yaml_scalar_functions.hpp"
 #include "yaml_extraction_functions.hpp"
+#include "yaml_unnest_functions.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
     // Register YAML extraction functions
     YAMLExtractionFunctions::Register(loader);
+
+    // Register YAML unnest functions (Phase 1 Core Functions)
+    YAMLUnnestFunctions::Register(loader);
 
     // Register YAML types
     YAMLTypes::Register(loader);
