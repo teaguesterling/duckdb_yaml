@@ -407,11 +407,84 @@ The YAML extension includes comprehensive automatic type detection:
 - YAML comments are not preserved
 - Maximum file size limited by memory (default 16MB, configurable)
 
+## Advanced YAML Functions
+
+### Query and Analysis Functions
+
+#### Array and Object Analysis
+```sql
+-- Get the length of a YAML array
+SELECT yaml_array_length('[1, 2, 3, 4, 5]'::YAML);  -- Returns: 5
+
+-- Get array length from nested path
+SELECT yaml_array_length('{items: [a, b, c]}'::YAML, '$.items');  -- Returns: 3
+
+-- Get all keys from a YAML object
+SELECT yaml_keys('{name: John, age: 30, city: NYC}'::YAML);  -- Returns: [name, age, city]
+
+-- Get keys from nested object
+SELECT yaml_keys('{person: {id: 1, email: test@example.com}}'::YAML, '$.person');  -- Returns: [id, email]
+```
+
+#### Unnesting Functions (Table Functions)
+```sql
+-- Unnest array elements into rows
+SELECT * FROM yaml_array_elements('[1, 2, 3]'::YAML);
+-- Returns:
+-- 1
+-- 2
+-- 3
+
+-- Unnest array of objects
+SELECT * FROM yaml_array_elements('[{name: Alice}, {name: Bob}]'::YAML);
+-- Returns:
+-- {name: Alice}
+-- {name: Bob}
+
+-- Unnest object into key-value pairs
+SELECT * FROM yaml_each('{name: John, age: 30, active: true}'::YAML) ORDER BY key;
+-- Returns:
+-- active | true
+-- age    | 30
+-- name   | John
+```
+
+#### Construction Functions
+```sql
+-- Build YAML objects from key-value pairs
+SELECT yaml_build_object('name', 'John', 'age', 30, 'active', true);
+-- Returns: {name: John, age: 30, active: true}
+
+-- Build empty object
+SELECT yaml_build_object();  -- Returns: {}
+
+-- Build object with YAML values
+SELECT yaml_build_object('data', '[1, 2, 3]'::YAML, 'nested', '{key: value}'::YAML);
+-- Returns: {data: [1, 2, 3], nested: {key: value}}
+```
+
+#### Combined Usage Patterns
+```sql
+-- Get keys and use in queries
+SELECT key, value
+FROM yaml_each(config)
+WHERE yaml_array_length(value, '$.items') > 3;
+
+-- Unnest and aggregate
+SELECT category, yaml_build_object('items', yaml_agg(item))
+FROM items
+GROUP BY category;
+
+-- Filter based on array length
+SELECT * FROM configs
+WHERE yaml_array_length(settings, '$.features') >= 5;
+```
+
 ## Future Enhancements
 
 ### Planned Functions (JSON Parity)
 
-The extension will implement a comprehensive set of YAML functions mirroring DuckDB's JSON capabilities:
+The extension will continue implementing additional YAML functions for complete JSON parity:
 
 #### Extraction/Access Functions
 ```sql
@@ -420,20 +493,23 @@ yaml_extract(yaml, path) → yaml
 yaml_extract_string(yaml, path) → varchar
 yaml_exists(yaml, path) → boolean
 yaml_type(yaml [, path]) → varchar
+yaml_array_length(yaml [, path]) → bigint  -- ✅ NEW
+yaml_keys(yaml [, path]) → varchar[]  -- ✅ NEW
 
 -- Planned ⏳
 yaml_extract_path(yaml, path_elem1, path_elem2, ...) → yaml
 yaml_extract_path_text(yaml, path_elem1, path_elem2, ...) → varchar
-yaml_array_length(yaml [, path]) → bigint
-yaml_keys(yaml [, path]) → varchar[]
 yaml_structure(yaml) → yaml  -- Returns structure with types
 ```
 
 #### Transformation/Unnesting Functions
 ```sql
-yaml_array_elements(yaml) → table(yaml)
+-- Already implemented ✅
+yaml_array_elements(yaml) → table(yaml)  -- ✅ NEW
+yaml_each(yaml) → table(key varchar, value yaml)  -- ✅ NEW
+
+-- Planned ⏳
 yaml_array_elements_text(yaml) → table(varchar)
-yaml_each(yaml) → table(key varchar, value yaml)
 yaml_each_text(yaml) → table(key varchar, value varchar)
 yaml_object_keys(yaml) → table(varchar)
 yaml_tree(yaml) → table  -- Recursive unnesting
@@ -447,12 +523,12 @@ yaml_to_recordset(yaml) → table
 ```sql
 -- Already implemented ✅
 value_to_yaml(any) → yaml
+yaml_build_object(...) → yaml  -- ✅ NEW
 
 -- Planned ⏳
 to_yaml(any) → yaml  -- Alias for value_to_yaml
 row_to_yaml(record) → yaml
 yaml_build_array(...) → yaml
-yaml_build_object(...) → yaml
 yaml_object(keys varchar[], values varchar[]) → yaml
 yaml_object(text[]) → yaml  -- From key-value pairs
 array_to_yaml(anyarray) → yaml
@@ -460,7 +536,8 @@ array_to_yaml(anyarray) → yaml
 
 #### Aggregate Functions
 ```sql
-yaml_agg(any) → yaml
+-- Planned ⏳
+yaml_agg(any) → yaml  -- In progress, state management debugging
 yaml_agg_strict(any) → yaml  -- Excludes NULLs
 yaml_object_agg(key varchar, value any) → yaml
 yaml_object_agg_strict(key varchar, value any) → yaml
