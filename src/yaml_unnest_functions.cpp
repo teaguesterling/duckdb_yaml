@@ -496,23 +496,19 @@ static void YAMLBuildObjectFunction(DataChunk &args, ExpressionState &state, Vec
 //===--------------------------------------------------------------------===//
 
 struct YAMLAggState {
-    vector<string> *elements;  // Use pointer to make it trivially move constructible
-
-    YAMLAggState() : elements(nullptr) {}
+    idx_t count;        // Number of elements
+    idx_t size;         // Total size in bytes
+    idx_t alloc_size;   // Allocated size
+    char *dataptr;      // Buffer containing all YAML strings separated by null bytes
 };
 
 struct YAMLAggFunction {
     template <class STATE>
     static void Initialize(STATE &state) {
-        state.elements = nullptr;
-    }
-
-    template <class STATE>
-    static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-        if (state.elements) {
-            delete state.elements;
-            state.elements = nullptr;
-        }
+        state.count = 0;
+        state.size = 0;
+        state.alloc_size = 0;
+        state.dataptr = nullptr;
     }
 
     static bool IgnoreNull() {
@@ -520,8 +516,38 @@ struct YAMLAggFunction {
     }
 };
 
+static void YAMLAggStoreString(YAMLAggState &state, const char *input_data, idx_t input_size,
+                                ArenaAllocator &allocator) {
+    // Calculate required size (string + null terminator)
+    idx_t required_size = state.size + input_size + 1;
+
+    if (!state.dataptr) {
+        // First iteration: allocate space
+        state.alloc_size = MaxValue<idx_t>(1024, NextPowerOfTwo(required_size));
+        state.dataptr = char_ptr_cast(allocator.Allocate(state.alloc_size));
+        state.size = 0;
+    } else if (required_size > state.alloc_size) {
+        // Need more space: reallocate
+        const auto old_size = state.alloc_size;
+        while (state.alloc_size < required_size) {
+            state.alloc_size *= 2;
+        }
+        state.dataptr = char_ptr_cast(
+            allocator.Reallocate(data_ptr_cast(state.dataptr), old_size, state.alloc_size));
+    }
+
+    // Copy the string and add null terminator
+    memcpy(state.dataptr + state.size, input_data, input_size);
+    state.size += input_size;
+    state.dataptr[state.size] = '\0';
+    state.size += 1;
+    state.count += 1;
+}
+
 static void YAMLAggUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                           Vector &state_vector, idx_t count) {
+    D_ASSERT(input_count == 1);
+
     UnifiedVectorFormat input_data;
     inputs[0].ToUnifiedFormat(count, input_data);
 
@@ -534,13 +560,12 @@ static void YAMLAggUpdate(Vector inputs[], AggregateInputData &aggr_input_data, 
         }
 
         auto &state = *states[i];
-        if (!state.elements) {
-            state.elements = new vector<string>();
-        }
-        auto input_str = UnifiedVectorFormat::GetData<string_t>(input_data)[idx].GetString();
 
-        // Store the YAML string directly
-        state.elements->push_back(input_str);
+        // Get the value and convert to YAML string
+        Value val = inputs[0].GetValue(idx);
+        string yaml_str = val.ToString();
+
+        YAMLAggStoreString(state, yaml_str.c_str(), yaml_str.size(), aggr_input_data.allocator);
     }
 }
 
@@ -553,14 +578,33 @@ static void YAMLAggCombine(Vector &state_vector, Vector &combined_vector, Aggreg
         auto &source = *states_source[i];
         auto &target = *states_target[i];
 
-        if (!source.elements) {
+        if (!source.dataptr || source.count == 0) {
             continue;
         }
-        if (!target.elements) {
-            target.elements = new vector<string>();
+
+        // Calculate required size
+        idx_t required_size = target.size + source.size;
+
+        if (!target.dataptr) {
+            // First iteration: allocate space
+            target.alloc_size = MaxValue<idx_t>(1024, NextPowerOfTwo(required_size));
+            target.dataptr = char_ptr_cast(aggr_input_data.allocator.Allocate(target.alloc_size));
+            target.size = 0;
+            target.count = 0;
+        } else if (required_size > target.alloc_size) {
+            // Need more space: reallocate
+            const auto old_size = target.alloc_size;
+            while (target.alloc_size < required_size) {
+                target.alloc_size *= 2;
+            }
+            target.dataptr = char_ptr_cast(
+                aggr_input_data.allocator.Reallocate(data_ptr_cast(target.dataptr), old_size, target.alloc_size));
         }
 
-        target.elements->insert(target.elements->end(), source.elements->begin(), source.elements->end());
+        // Copy all source data
+        memcpy(target.dataptr + target.size, source.dataptr, source.size);
+        target.size += source.size;
+        target.count += source.count;
     }
 }
 
@@ -571,15 +615,21 @@ static void YAMLAggFinalize(Vector &state_vector, AggregateInputData &aggr_input
     for (idx_t i = 0; i < count; i++) {
         auto &state = *states[i];
 
-        if (!state.elements || state.elements->empty()) {
+        if (!state.dataptr || state.count == 0) {
             // Empty array
             result.SetValue(offset + i, Value("[]"));
             continue;
         }
 
-        // Build YAML array from stored strings
+        // Parse the buffer and build YAML array
         YAML::Node array_node;
-        for (const auto &elem_str : *state.elements) {
+        idx_t offset_idx = 0;
+
+        for (idx_t j = 0; j < state.count; j++) {
+            // Get the next null-terminated string
+            const char *elem_str = state.dataptr + offset_idx;
+            idx_t elem_len = strlen(elem_str);
+
             try {
                 YAML::Node node = YAML::Load(elem_str);
                 array_node.push_back(node);
@@ -587,6 +637,8 @@ static void YAMLAggFinalize(Vector &state_vector, AggregateInputData &aggr_input
                 // If parsing fails, treat as scalar string
                 array_node.push_back(elem_str);
             }
+
+            offset_idx += elem_len + 1;
         }
 
         // Convert to YAML string
@@ -596,8 +648,7 @@ static void YAMLAggFinalize(Vector &state_vector, AggregateInputData &aggr_input
         out.SetSeqFormat(YAML::Flow);
         out << array_node;
 
-        string yaml_str = out.c_str();
-        result.SetValue(offset + i, Value(yaml_str));
+        result.SetValue(offset + i, Value(out.c_str()));
     }
 }
 
@@ -633,22 +684,21 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
     yaml_build_object_fun.varargs = LogicalType::ANY;
     loader.RegisterFunction(yaml_build_object_fun);
 
-    // yaml_agg aggregate function - DISABLED: State management needs debugging
-    // TODO: Fix state management issue causing crashes
-    // auto yaml_agg_fun = AggregateFunction(
-    //     "yaml_agg",
-    //     {LogicalType::ANY},
-    //     yaml_type,
-    //     AggregateFunction::StateSize<YAMLAggState>,
-    //     AggregateFunction::StateInitialize<YAMLAggState, YAMLAggFunction>,
-    //     YAMLAggUpdate,
-    //     YAMLAggCombine,
-    //     YAMLAggFinalize,
-    //     nullptr, // simple_update
-    //     nullptr, // bind
-    //     AggregateFunction::StateDestroy<YAMLAggState, YAMLAggFunction>
-    // );
-    // loader.RegisterFunction(yaml_agg_fun);
+    // yaml_agg aggregate function
+    auto yaml_agg_fun = AggregateFunction(
+        "yaml_agg",
+        {LogicalType::ANY},
+        yaml_type,
+        AggregateFunction::StateSize<YAMLAggState>,
+        AggregateFunction::StateInitialize<YAMLAggState, YAMLAggFunction>,
+        YAMLAggUpdate,
+        YAMLAggCombine,
+        YAMLAggFinalize,
+        nullptr,  // simple_update
+        nullptr,  // bind
+        nullptr   // destructor
+    );
+    loader.RegisterFunction(yaml_agg_fun);
 }
 
 } // namespace duckdb

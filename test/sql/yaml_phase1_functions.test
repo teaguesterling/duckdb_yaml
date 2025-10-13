@@ -188,79 +188,79 @@ SELECT yaml_build_object('data', '[1, 2, 3]'::YAML, 'nested', '{key: value}'::YA
 {data: [1, 2, 3], nested: {key: value}}
 
 #===--------------------------------------------------------------------===#
-# yaml_agg tests - DISABLED: State management issues need to be fixed
+# yaml_agg tests
 #===--------------------------------------------------------------------===#
 
-# # Test basic aggregation
-# statement ok
-# CREATE TABLE test_agg AS SELECT * FROM (VALUES (1), (2), (3), (4), (5)) t(x);
+# Test basic aggregation
+statement ok
+CREATE TABLE test_agg AS SELECT * FROM (VALUES (1), (2), (3), (4), (5)) t(x);
 
-# query I
-# SELECT yaml_agg(x) FROM test_agg;
-# ----
-# [1, 2, 3, 4, 5]
+query I
+SELECT yaml_agg(x) FROM test_agg;
+----
+[1, 2, 3, 4, 5]
 
-# # Test aggregation with strings
-# statement ok
-# CREATE TABLE test_agg_str AS SELECT * FROM (VALUES ('apple'), ('banana'), ('cherry')) t(fruit);
-# 
-# query I
-# SELECT yaml_agg(fruit) FROM test_agg_str;
-# ----
-# [apple, banana, cherry]
-# 
-# # Test aggregation with YAML values
-# statement ok
-# CREATE TABLE test_agg_yaml AS SELECT * FROM (VALUES ('{name: Alice}'::YAML), ('{name: Bob}'::YAML), ('{name: Charlie}'::YAML)) t(person);
-# 
-# query I
-# SELECT yaml_agg(person) FROM test_agg_yaml;
-# ----
-# [{name: Alice}, {name: Bob}, {name: Charlie}]
-# 
-# # Test aggregation with GROUP BY
-# statement ok
-# CREATE TABLE test_agg_group AS SELECT * FROM (VALUES (1, 'a'), (1, 'b'), (2, 'c'), (2, 'd')) t(grp, val);
-# 
-# query II
-# SELECT grp, yaml_agg(val) FROM test_agg_group GROUP BY grp ORDER BY grp;
-# ----
-# 1	[a, b]
-# 2	[c, d]
-# 
-# # Test aggregation with empty result
-# statement ok
-# CREATE TABLE test_agg_empty AS SELECT * FROM (VALUES (1)) t(x) WHERE FALSE;
-# 
-# query I
-# SELECT yaml_agg(x) FROM test_agg_empty;
-# ----
-# []
-# 
-# # Test aggregation ignores NULLs
-# statement ok
-# CREATE TABLE test_agg_null AS SELECT * FROM (VALUES (1), (NULL), (2), (NULL), (3)) t(x);
-# 
-# query I
-# SELECT yaml_agg(x) FROM test_agg_null;
-# ----
-# [1, 2, 3]
-# 
-# #===--------------------------------------------------------------------===#
-# # Combined usage tests
-# #===--------------------------------------------------------------------===#
-# 
-# # Build object and get keys
-# query I
-# SELECT yaml_keys(yaml_build_object('a', 1, 'b', 2, 'c', 3));
-# ----
-# [a, b, c]
-# 
-# # Unnest array and aggregate back
-# query I
-# SELECT yaml_agg(value) FROM yaml_array_elements('[1, 2, 3, 4, 5]'::YAML);
-# ----
-# [1, 2, 3, 4, 5]
+# Test aggregation with strings
+statement ok
+CREATE TABLE test_agg_str AS SELECT * FROM (VALUES ('apple'), ('banana'), ('cherry')) t(fruit);
+
+query I
+SELECT yaml_agg(fruit) FROM test_agg_str;
+----
+[apple, banana, cherry]
+
+# Test aggregation with YAML values
+statement ok
+CREATE TABLE test_agg_yaml AS SELECT * FROM (VALUES ('{name: Alice}'::YAML), ('{name: Bob}'::YAML), ('{name: Charlie}'::YAML)) t(person);
+
+query I
+SELECT yaml_agg(person) FROM test_agg_yaml;
+----
+[{name: Alice}, {name: Bob}, {name: Charlie}]
+
+# Test aggregation with GROUP BY
+statement ok
+CREATE TABLE test_agg_group AS SELECT * FROM (VALUES (1, 'a'), (1, 'b'), (2, 'c'), (2, 'd')) t(grp, val);
+
+query II
+SELECT grp, yaml_agg(val) FROM test_agg_group GROUP BY grp ORDER BY grp;
+----
+1	[a, b]
+2	[c, d]
+
+# Test aggregation with empty result
+statement ok
+CREATE TABLE test_agg_empty AS SELECT * FROM (VALUES (1)) t(x) WHERE FALSE;
+
+query I
+SELECT yaml_agg(x) FROM test_agg_empty;
+----
+[]
+
+# Test aggregation ignores NULLs
+statement ok
+CREATE TABLE test_agg_null AS SELECT * FROM (VALUES (1), (NULL), (2), (NULL), (3)) t(x);
+
+query I
+SELECT yaml_agg(x) FROM test_agg_null;
+----
+[1, 2, 3]
+
+#===--------------------------------------------------------------------===#
+# Combined usage tests
+#===--------------------------------------------------------------------===#
+
+# Build object and get keys
+query I
+SELECT yaml_keys(yaml_build_object('a', 1, 'b', 2, 'c', 3));
+----
+[a, b, c]
+
+# Unnest array and aggregate back
+query I
+SELECT yaml_agg(value) FROM yaml_array_elements('[1, 2, 3, 4, 5]'::YAML);
+----
+[1, 2, 3, 4, 5]
 
 # Unnest object and build it back
 query I
@@ -271,14 +271,14 @@ ORDER BY key;
 {age: 30}
 {name: Alice}
 
-# # Get array length from aggregated values
-# statement ok
-# CREATE TABLE test_combined AS SELECT * FROM (VALUES (1), (2), (3)) t(x);
+# Get array length from aggregated values
+statement ok
+CREATE TABLE test_combined AS SELECT * FROM (VALUES (1), (2), (3)) t(x);
 
-# query I
-# SELECT yaml_array_length(yaml_agg(x)) FROM test_combined;
-# ----
-# 3
+query I
+SELECT yaml_array_length(yaml_agg(x)) FROM test_combined;
+----
+3
 
 # Test with read_yaml integration
 statement ok
