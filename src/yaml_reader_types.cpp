@@ -180,96 +180,29 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 }
 
 // Helper function to detect YAML type across multiple documents with jagged schema support
+// Uses MergeStructTypes to recursively merge nested struct fields from all documents
 LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 	if (nodes.empty()) {
 		return LogicalType::VARCHAR;
 	}
 
-	// Use first node as base, but merge struct types
-	LogicalType base_type = DetectYAMLType(nodes[0]);
-	
-	// If it's not a struct, just return the base type
-	if (base_type.id() != LogicalTypeId::STRUCT) {
-		return base_type;
-	}
-	
-	// For structs, we need to merge all fields from all documents
-	child_list_t<LogicalType> merged_fields;
-	std::unordered_map<std::string, LogicalType> field_types;
-	
-	// Special handling for metadata and annotations fields
-	child_list_t<LogicalType> metadata_fields;
-	std::unordered_map<std::string, bool> metadata_field_names;
-	child_list_t<LogicalType> annotations_fields;
-	std::unordered_map<std::string, bool> annotations_field_names;
-	
-	// First, collect all fields from all documents
-	for (const auto &node : nodes) {
-		if (!node.IsMap()) continue;
-		
-		for (auto it = node.begin(); it != node.end(); ++it) {
-			std::string key = it->first.Scalar();
-			
-			// Special handling for metadata field
-			if (key == "metadata" && it->second.IsMap()) {
-				auto metadata = it->second;
-				
-				// Collect all metadata field names
-				for (auto meta_it = metadata.begin(); meta_it != metadata.end(); ++meta_it) {
-					std::string meta_key = meta_it->first.Scalar();
-					
-					// Handle annotations specially - always process to collect all fields
-					if (meta_key == "annotations" && meta_it->second.IsMap()) {
-						auto annotations = meta_it->second;
-						
-						// Collect all annotations field names from this document
-						for (auto annot_it = annotations.begin(); annot_it != annotations.end(); ++annot_it) {
-							std::string annot_key = annot_it->first.Scalar();
-							if (annotations_field_names.find(annot_key) == annotations_field_names.end()) {
-								annotations_field_names[annot_key] = true;
-								annotations_fields.push_back(make_pair(annot_key, LogicalType::VARCHAR));
-							}
-						}
-						// Mark annotations as seen for non-annotation processing
-						metadata_field_names[meta_key] = true;
-					} else if (metadata_field_names.find(meta_key) == metadata_field_names.end()) {
-						metadata_field_names[meta_key] = true;
-						metadata_fields.push_back(make_pair(meta_key, LogicalType::VARCHAR));
-					}
-				}
-			} else {
-				// Handle regular fields
-				if (field_types.find(key) == field_types.end()) {
-					field_types[key] = DetectYAMLType(it->second);
-				} else {
-					// Merge types if they differ
-					LogicalType current_type = DetectYAMLType(it->second);
-					if (field_types[key].id() != current_type.id()) {
-						field_types[key] = LogicalType::VARCHAR; // Default to VARCHAR for mixed types
-					}
-				}
-			}
+	// Use first node as base type
+	LogicalType merged_type = DetectYAMLType(nodes[0]);
+
+	// Merge types from all subsequent documents
+	for (size_t i = 1; i < nodes.size(); i++) {
+		LogicalType node_type = DetectYAMLType(nodes[i]);
+
+		// If both are structs, merge them recursively
+		if (merged_type.id() == LogicalTypeId::STRUCT && node_type.id() == LogicalTypeId::STRUCT) {
+			merged_type = MergeStructTypes(merged_type, node_type);
+		} else if (merged_type.id() != node_type.id()) {
+			// Different types, fall back to VARCHAR
+			merged_type = LogicalType::VARCHAR;
 		}
 	}
-	
-	// Add annotations field to metadata if we found annotations
-	if (!annotations_fields.empty()) {
-		LogicalType annotations_type = LogicalType::STRUCT(annotations_fields);
-		metadata_fields.push_back(make_pair("annotations", annotations_type));
-	}
-	
-	// Create a metadata struct type if we found metadata fields
-	if (!metadata_fields.empty()) {
-		LogicalType metadata_type = LogicalType::STRUCT(metadata_fields);
-		field_types["metadata"] = metadata_type;
-	}
-	
-	// Build final struct with all fields
-	for (const auto &field : field_types) {
-		merged_fields.push_back(make_pair(field.first, field.second));
-	}
-	
-	return LogicalType::STRUCT(merged_fields);
+
+	return merged_type;
 }
 
 // Helper function to convert YAML node to DuckDB value

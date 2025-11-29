@@ -38,6 +38,7 @@ Claude.ai wrote 99% of the code in this project as an experiment. The original w
 ## Features
 
 - **YAML File Reading**: Read YAML files into DuckDB tables with `read_yaml` and `read_yaml_objects`
+- **Frontmatter Extraction**: Extract YAML frontmatter from Markdown, MDX, Astro, RST, and other text files
 - **Native YAML Type**: Full YAML type support with seamless conversion between YAML, JSON, and VARCHAR
 - **Type Detection**: Comprehensive automatic type detection including temporal types (DATE, TIME, TIMESTAMP) and optimal numeric types
 - **YAML Extraction**: Query YAML data with extraction functions (`yaml_extract`, `yaml_type`, `yaml_exists`)
@@ -142,6 +143,73 @@ SELECT * FROM read_yaml('file.yaml', columns={
     'name': 'VARCHAR',
     'created': 'TIMESTAMP'
 });
+```
+
+### Reading Frontmatter
+
+Extract YAML frontmatter from Markdown, MDX, Astro, reStructuredText, and other text files. Frontmatter is YAML metadata enclosed between `---` delimiters at the start of a file.
+
+```sql
+-- Read frontmatter from Markdown blog posts
+SELECT title, author, date, tags
+FROM read_yaml_frontmatter('posts/*.md');
+
+-- Query documentation metadata across different formats
+SELECT title, sidebar_position, tags
+FROM read_yaml_frontmatter('docs/**/*.{md,mdx,rst}');
+
+-- Get raw YAML instead of expanded columns
+SELECT frontmatter FROM read_yaml_frontmatter('posts/*.md', as_yaml_objects:=true);
+
+-- Include file content after frontmatter
+SELECT title, content FROM read_yaml_frontmatter('posts/*.md', content:=true);
+
+-- Include filename for tracking source
+SELECT filename, title FROM read_yaml_frontmatter('posts/*.md', filename:=true);
+```
+
+#### Supported File Types
+
+Frontmatter works with any text file that uses `---` delimiters:
+
+| Format | Extension | Common Use |
+|--------|-----------|------------|
+| Markdown | `.md` | Blog posts, documentation |
+| MDX | `.mdx` | Docusaurus, interactive docs |
+| Astro | `.astro` | Astro components |
+| reStructuredText | `.rst` | Python documentation |
+| Nunjucks | `.njk` | Eleventy templates |
+| Plain text | `.txt` | Notes, any text file |
+
+#### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `as_yaml_objects` | `false` | If `true`, return raw YAML in a single column. If `false`, expand fields as columns. |
+| `content` | `false` | Include the file body (after frontmatter) as a `content` column |
+| `filename` | `false` | Include a `filename` column with the source file path |
+| `union_by_name` | `true` | Merge schemas when files have different frontmatter fields |
+
+#### Example: Analyzing a Blog
+
+```sql
+-- Find all draft posts
+SELECT filename, title, date
+FROM read_yaml_frontmatter('content/posts/*.md', filename:=true)
+WHERE draft = true;
+
+-- Get posts by tag
+SELECT title, date, tags
+FROM read_yaml_frontmatter('content/posts/*.md')
+WHERE list_contains(tags, 'tutorial')
+ORDER BY date DESC;
+
+-- Export blog metadata to CSV
+COPY (
+    SELECT title, author, date, tags
+    FROM read_yaml_frontmatter('content/posts/*.md')
+    ORDER BY date DESC
+) TO 'blog_index.csv';
 ```
 
 ### YAML Type and Functions

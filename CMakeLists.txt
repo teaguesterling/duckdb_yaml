@@ -22,6 +22,7 @@ set(EXTENSION_SOURCES
   src/yaml_reader_files.cpp
   src/yaml_reader_functions.cpp
   src/yaml_reader_column_bind.cpp
+  src/yaml_frontmatter.cpp
   src/yaml_types.cpp
   src/yaml_column_types.cpp
   src/yaml_scalar_functions.cpp

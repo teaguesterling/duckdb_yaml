@@ -1,0 +1,76 @@
+# name: test/sql/yaml_reader/yaml_frontmatter.test
+# description: Test YAML frontmatter handling with jagged schemas (varying fields across files)
+# group: [yaml]
+
+require yaml
+
+# Test 1: Read a single frontmatter YAML file
+query IIIII
+SELECT title, author, date, draft, tags FROM read_yaml('test/yaml/frontmatter/fm1.yaml');
+----
+My First Blog Post	John Doe	2024-01-15	false	[programming, duckdb]
+
+# Test 2: Read multiple frontmatter files with glob - tests jagged schema detection
+# Files have varying fields: draft, category, featured, reading_time, custom_field
+statement ok
+CREATE TABLE frontmatter AS
+SELECT * FROM read_yaml('test/yaml/frontmatter/fm*.yaml');
+
+# Verify row count
+query I
+SELECT COUNT(*) FROM frontmatter;
+----
+3
+
+# Test 3: Verify all fields from all files are accessible (jagged schema merging)
+# This is the key test - fields that only exist in some files should still be in the schema
+query IIIIIIII
+SELECT
+    title,
+    author,
+    date,
+    draft,
+    category,
+    featured,
+    reading_time,
+    custom_field
+FROM frontmatter
+ORDER BY date;
+----
+My First Blog Post	John Doe	2024-01-15	false	NULL	NULL	NULL	NULL
+Second Post	Jane Smith	2024-02-20	NULL	tutorials	true	NULL	NULL
+Third Post	Bob Wilson	2024-03-10	true	NULL	NULL	5	some value
+
+# Test 4: Verify tags array works across files
+query II
+SELECT title, tags FROM frontmatter ORDER BY date;
+----
+My First Blog Post	[programming, duckdb]
+Second Post	[sql]
+Third Post	[yaml, extensions]
+
+# Test 5: Filter on fields that don't exist in all files
+query II
+SELECT title, category FROM frontmatter WHERE category IS NOT NULL;
+----
+Second Post	tutorials
+
+query II
+SELECT title, reading_time FROM frontmatter WHERE reading_time IS NOT NULL;
+----
+Third Post	5
+
+# Test 6: Filter on boolean fields with mixed presence
+query II
+SELECT title, draft FROM frontmatter WHERE draft = true;
+----
+Third Post	true
+
+query II
+SELECT title, featured FROM frontmatter WHERE featured = true;
+----
+Second Post	true
+
+# Clean up
+statement ok
+DROP TABLE frontmatter;

@@ -1,0 +1,122 @@
+# name: test/sql/yaml_reader/yaml_frontmatter_reader.test
+# description: Test read_yaml_frontmatter function for extracting YAML frontmatter from files
+# group: [yaml]
+
+require yaml
+
+# Test 1: Default mode expands fields as columns
+query IIIII
+SELECT title, author, date, draft, tags FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md');
+----
+My First Blog Post	John Doe	2024-01-15	false	[programming, duckdb]
+
+# Test 2: as_yaml_objects=true returns raw YAML string
+query I
+SELECT typeof(frontmatter) FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', as_yaml_objects:=true);
+----
+YAML
+
+# Test 3: Raw YAML content is correctly extracted
+query I
+SELECT frontmatter::VARCHAR LIKE '%title: My First Blog Post%' FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', as_yaml_objects:=true);
+----
+true
+
+# Test 4: Multiple files with glob pattern - jagged schema merging
+query IIII
+SELECT title, author, date, category FROM read_yaml_frontmatter('test/yaml/frontmatter/post*.md') ORDER BY date;
+----
+My First Blog Post	John Doe	2024-01-15	NULL
+Second Post	Jane Smith	2024-02-20	tutorials
+Third Post	Bob Wilson	2024-03-10	NULL
+
+# Test 5: Filename column
+query II
+SELECT filename, title FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', filename:=true);
+----
+test/yaml/frontmatter/post1.md	My First Blog Post
+
+# Test 6: Content column includes body after frontmatter
+query II
+SELECT title, content LIKE '%# My First Blog Post%' as has_heading FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', content:=true);
+----
+My First Blog Post	true
+
+# Test 7: Content column in raw YAML mode
+query II
+SELECT frontmatter::VARCHAR LIKE '%title:%' as has_title, content LIKE '%# My First Blog Post%' as has_heading FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', as_yaml_objects:=true, content:=true);
+----
+true	true
+
+# Test 8: Jagged schema - fields present in some files but not others
+query IIII
+SELECT title, draft, featured, custom_field FROM read_yaml_frontmatter('test/yaml/frontmatter/post*.md') ORDER BY title;
+----
+My First Blog Post	false	NULL	NULL
+Second Post	NULL	true	NULL
+Third Post	true	NULL	some value
+
+# Test 9: union_by_name=false uses first file schema only
+# (post1.md has: title, author, date, tags, draft - no category, featured, reading_time, custom_field)
+query I
+SELECT COUNT(*) FROM (DESCRIBE SELECT * FROM read_yaml_frontmatter('test/yaml/frontmatter/post*.md', union_by_name:=false));
+----
+5
+
+# Test 10: Reading pure YAML files (no --- delimiters) returns empty result in as_yaml_objects mode
+# because there's no frontmatter to extract
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/simple.yaml', as_yaml_objects:=true);
+----
+0
+
+# Test 11: All parameters combined
+query IIIII
+SELECT filename LIKE '%post1.md', title, draft, content LIKE '%content%' as has_content_word, length(content) > 0 as has_content FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', filename:=true, content:=true);
+----
+true	My First Blog Post	false	true	true
+
+# Test 12: Multiple files with filename and content
+query III
+SELECT filename LIKE '%post%.md', title, length(content) > 0 FROM read_yaml_frontmatter('test/yaml/frontmatter/post*.md', filename:=true, content:=true) ORDER BY title;
+----
+true	My First Blog Post	true
+true	Second Post	true
+true	Third Post	true
+
+# Test 13: reStructuredText files (.rst) - common in Python documentation
+query III
+SELECT title, author, toc FROM read_yaml_frontmatter('test/yaml/frontmatter/doc.rst');
+----
+API Reference	Documentation Team	true
+
+# Test 14: Nunjucks templates (.njk) - used in Eleventy and other SSGs
+query III
+SELECT title, layout, description FROM read_yaml_frontmatter('test/yaml/frontmatter/template.njk');
+----
+Base Template	base	Main layout template for all pages
+
+# Test 15: Plain text files (.txt) - frontmatter works in any text file
+query IIII
+SELECT title, date, attendees, action_items FROM read_yaml_frontmatter('test/yaml/frontmatter/notes.txt');
+----
+Meeting Notes	2024-03-15	[Alice, Bob, Charlie]	3
+
+# Test 16: Astro components (.astro) - frontmatter defines component metadata
+query IIII
+SELECT title, component, props, slot FROM read_yaml_frontmatter('test/yaml/frontmatter/component.astro');
+----
+Card Component	Card	[title, description, image]	true
+
+# Test 17: MDX files (.mdx) - Markdown with JSX, used in Docusaurus
+query IIII
+SELECT title, sidebar_label, sidebar_position, tags FROM read_yaml_frontmatter('test/yaml/frontmatter/page.mdx');
+----
+Interactive Documentation	Getting Started	1	[tutorial, beginner]
+
+# Test 18: Mix of different file types with glob - demonstrates cross-format support
+# 8 files have frontmatter with titles, 3 pure YAML files have NULL (no --- delimiters)
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter/*') WHERE title IS NOT NULL;
+----
+8

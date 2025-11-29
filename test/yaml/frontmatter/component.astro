@@ -1,0 +1,15 @@
+---
+title: Card Component
+component: Card
+props:
+  - title
+  - description
+  - image
+slot: true
+---
+<article class="card">
+    <img src={image} alt={title} />
+    <h2>{title}</h2>
+    <p>{description}</p>
+    <slot />
+</article>

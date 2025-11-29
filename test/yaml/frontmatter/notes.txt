@@ -1,0 +1,18 @@
+---
+title: Meeting Notes
+date: 2024-03-15
+attendees:
+  - Alice
+  - Bob
+  - Charlie
+action_items: 3
+---
+
+Meeting Notes - Q1 Planning
+
+Discussed roadmap for next quarter.
+
+Action Items:
+1. Alice to prepare budget proposal
+2. Bob to review technical specs
+3. Charlie to schedule follow-up

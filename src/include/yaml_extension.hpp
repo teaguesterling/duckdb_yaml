@@ -20,4 +20,7 @@ CopyFunction GetYAMLCopyFunction();
 // Register YAML copy functions
 void RegisterYAMLCopyFunctions(ExtensionLoader &loader);
 
+// Register YAML frontmatter reader function
+void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader);
+
 } // namespace duckdb

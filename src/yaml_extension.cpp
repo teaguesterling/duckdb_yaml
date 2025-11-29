@@ -35,6 +35,9 @@ static void LoadInternal(ExtensionLoader &loader) {
     // Register YAML copy functions
     RegisterYAMLCopyFunctions(loader);
 
+    // Register YAML frontmatter reader
+    RegisterYAMLFrontmatterFunction(loader);
+
     // Register YAML files as automatically recognized by DuckDB
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
     

@@ -1,0 +1,13 @@
+---
+title: Second Post
+author: Jane Smith
+date: 2024-02-20
+tags:
+  - sql
+category: tutorials
+featured: true
+---
+
+# Second Post
+
+Another blog post with different frontmatter fields.

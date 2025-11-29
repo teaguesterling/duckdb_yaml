@@ -146,6 +146,7 @@ private:
      */
     static vector<string> GetFilePaths(ClientContext &context, const string &file_path);
 
+public:
     /**
      * @brief Get files from a Value (which can be a string or list of strings)
      *
@@ -155,6 +156,8 @@ private:
      * @return vector<string> List of resolved file paths
      */
     static vector<string> GetFiles(ClientContext &context, const Value &path_value, bool ignore_errors);
+
+private:
 
     /**
      * @brief Get files from a glob pattern
@@ -185,9 +188,10 @@ private:
     static void DetectSchema(const YAML::Node &node, vector<string> &names, 
                            vector<LogicalType> &types, const YAMLReadOptions &options);
 
+public:
     /**
      * @brief Detect the type of a YAML node
-     * 
+     *
      * @param node YAML node to inspect
      * @return LogicalType The detected DuckDB type
      */
