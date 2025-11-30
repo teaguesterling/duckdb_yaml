@@ -267,6 +267,11 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 			string frontmatter = extracted.first;
 			string body = extracted.second;
 
+			// Skip files with no frontmatter
+			if (frontmatter.empty()) {
+				continue;
+			}
+
 			idx_t col_idx = 0;
 
 			// Filename column
@@ -276,39 +281,29 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 
 			if (!bind_data.options.as_yaml_objects) {
 				// Default: parse frontmatter and extract fields as columns
-				if (!frontmatter.empty()) {
-					try {
-						YAML::Node node = YAML::Load(frontmatter);
+				try {
+					YAML::Node node = YAML::Load(frontmatter);
 
-						if (node.IsMap()) {
-							// Process each column (skip filename if present)
-							idx_t start_col = bind_data.options.include_filename ? 1 : 0;
-							idx_t end_col = bind_data.options.include_content ?
-							                bind_data.names.size() - 1 : bind_data.names.size();
+					if (node.IsMap()) {
+						// Process each column (skip filename if present)
+						idx_t start_col = bind_data.options.include_filename ? 1 : 0;
+						idx_t end_col = bind_data.options.include_content ?
+						                bind_data.names.size() - 1 : bind_data.names.size();
 
-							for (idx_t i = start_col; i < end_col; i++) {
-								const string &col_name = bind_data.names[i];
-								YAML::Node value = node[col_name];
+						for (idx_t i = start_col; i < end_col; i++) {
+							const string &col_name = bind_data.names[i];
+							YAML::Node value = node[col_name];
 
-								if (value) {
-									output.SetValue(col_idx, count,
-									                YAMLReader::YAMLNodeToValue(value, bind_data.types[i]));
-								} else {
-									output.SetValue(col_idx, count, Value(bind_data.types[i]));
-								}
-								col_idx++;
+							if (value) {
+								output.SetValue(col_idx, count,
+								                YAMLReader::YAMLNodeToValue(value, bind_data.types[i]));
+							} else {
+								output.SetValue(col_idx, count, Value(bind_data.types[i]));
 							}
-						} else {
-							// Non-map frontmatter - set all fields to NULL
-							idx_t start_col = bind_data.options.include_filename ? 1 : 0;
-							idx_t end_col = bind_data.options.include_content ?
-							                bind_data.names.size() - 1 : bind_data.names.size();
-							for (idx_t i = start_col; i < end_col; i++) {
-								output.SetValue(col_idx++, count, Value(bind_data.types[i]));
-							}
+							col_idx++;
 						}
-					} catch (...) {
-						// Parse error - set all fields to NULL
+					} else {
+						// Non-map frontmatter - set all fields to NULL
 						idx_t start_col = bind_data.options.include_filename ? 1 : 0;
 						idx_t end_col = bind_data.options.include_content ?
 						                bind_data.names.size() - 1 : bind_data.names.size();
@@ -316,8 +311,8 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 							output.SetValue(col_idx++, count, Value(bind_data.types[i]));
 						}
 					}
-				} else {
-					// No frontmatter - set all fields to NULL
+				} catch (...) {
+					// Parse error - set all fields to NULL
 					idx_t start_col = bind_data.options.include_filename ? 1 : 0;
 					idx_t end_col = bind_data.options.include_content ?
 					                bind_data.names.size() - 1 : bind_data.names.size();
@@ -327,11 +322,7 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 				}
 			} else {
 				// Return frontmatter as YAML string
-				if (!frontmatter.empty()) {
-					output.SetValue(col_idx++, count, Value(frontmatter));
-				} else {
-					output.SetValue(col_idx++, count, Value(bind_data.types[col_idx - 1]));
-				}
+				output.SetValue(col_idx++, count, Value(frontmatter));
 			}
 
 			// Content column
