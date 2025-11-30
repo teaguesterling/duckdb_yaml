@@ -13,7 +13,6 @@ struct YAMLFrontmatterOptions {
 	bool as_yaml_objects = false;  // If true, expand fields as columns; if false, return single YAML column
 	bool include_content = false;  // If true, include file content after frontmatter
 	bool include_filename = false; // If true, include filename column
-	bool union_by_name = true;     // If true, merge schemas across files
 };
 
 // Bind data for read_yaml_frontmatter
@@ -143,8 +142,6 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 			result->options.include_content = BooleanValue::Get(kv.second);
 		} else if (kv.first == "filename") {
 			result->options.include_filename = BooleanValue::Get(kv.second);
-		} else if (kv.first == "union_by_name") {
-			result->options.union_by_name = BooleanValue::Get(kv.second);
 		}
 	}
 
@@ -155,82 +152,62 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 	}
 
 	if (!result->options.as_yaml_objects) {
-		// Default: expand fields as columns
-		if (result->options.union_by_name) {
-			// Merge schemas from all files
-			unordered_map<string, LogicalType> merged_types;
-			vector<string> column_order;
-			unordered_set<string> seen_columns;
+		// Default: expand fields as columns by merging schemas from all files
+		unordered_map<string, LogicalType> merged_types;
+		vector<string> column_order;
+		unordered_set<string> seen_columns;
 
-			for (const auto &file_path : result->file_paths) {
-				try {
-					string content = ReadFileContent(context, file_path);
-					auto extracted = ExtractFrontmatter(content);
-					string frontmatter = extracted.first;
-					// string body = extracted.second; // unused in this block
+		for (const auto &file_path : result->file_paths) {
+			try {
+				string content = ReadFileContent(context, file_path);
+				auto extracted = ExtractFrontmatter(content);
+				string frontmatter = extracted.first;
 
-					if (frontmatter.empty()) {
-						continue;
-					}
-
-					// Parse the frontmatter YAML
-					YAML::Node node = YAML::Load(frontmatter);
-
-					if (!node.IsMap()) {
-						continue;
-					}
-
-					// Process each field
-					for (auto it = node.begin(); it != node.end(); ++it) {
-						string key = it->first.Scalar();
-
-						// Track column order from first occurrence
-						if (seen_columns.find(key) == seen_columns.end()) {
-							column_order.push_back(key);
-							seen_columns.insert(key);
-						}
-
-						// Detect type
-						LogicalType value_type = YAMLReader::DetectYAMLType(it->second);
-
-						// Merge with existing type
-						auto existing = merged_types.find(key);
-						if (existing == merged_types.end()) {
-							merged_types[key] = value_type;
-						} else if (existing->second.id() == LogicalTypeId::STRUCT &&
-						           value_type.id() == LogicalTypeId::STRUCT) {
-							merged_types[key] = YAMLReader::MergeStructTypes(existing->second, value_type);
-						} else if (existing->second.id() != value_type.id()) {
-							merged_types[key] = LogicalType::VARCHAR;
-						}
-					}
-				} catch (...) {
-					// Skip files that fail to parse
+				if (frontmatter.empty()) {
 					continue;
 				}
-			}
 
-			// Add columns in order
-			for (const auto &col : column_order) {
-				names.push_back(col);
-				return_types.push_back(merged_types[col]);
-			}
-		} else {
-			// Use schema from first file only
-			string content = ReadFileContent(context, result->file_paths[0]);
-			auto extracted = ExtractFrontmatter(content);
-			string frontmatter = extracted.first;
-
-			if (!frontmatter.empty()) {
+				// Parse the frontmatter YAML
 				YAML::Node node = YAML::Load(frontmatter);
 
-				if (node.IsMap()) {
-					for (auto it = node.begin(); it != node.end(); ++it) {
-						names.push_back(it->first.Scalar());
-						return_types.push_back(YAMLReader::DetectYAMLType(it->second));
+				if (!node.IsMap()) {
+					continue;
+				}
+
+				// Process each field
+				for (auto it = node.begin(); it != node.end(); ++it) {
+					string key = it->first.Scalar();
+
+					// Track column order from first occurrence
+					if (seen_columns.find(key) == seen_columns.end()) {
+						column_order.push_back(key);
+						seen_columns.insert(key);
+					}
+
+					// Detect type
+					LogicalType value_type = YAMLReader::DetectYAMLType(it->second);
+
+					// Merge with existing type
+					auto existing = merged_types.find(key);
+					if (existing == merged_types.end()) {
+						merged_types[key] = value_type;
+					} else if (existing->second.id() == LogicalTypeId::STRUCT &&
+					           value_type.id() == LogicalTypeId::STRUCT) {
+						merged_types[key] = YAMLReader::MergeStructTypes(existing->second, value_type);
+					} else if (existing->second.id() != value_type.id()) {
+						merged_types[key] = LogicalType::VARCHAR;
 					}
 				}
+			} catch (...) {
+				// Skip files that fail to parse
+				continue;
 			}
+		}
+
+		// Add columns in order
+		for (const auto &col : column_order) {
+			names.push_back(col);
+			return_types.push_back(merged_types[col]);
 		}
 
 		// If no fields detected, add a dummy column
@@ -383,7 +360,6 @@ void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {
 	read_yaml_frontmatter.named_parameters["as_yaml_objects"] = LogicalType::BOOLEAN;
 	read_yaml_frontmatter.named_parameters["content"] = LogicalType::BOOLEAN;
 	read_yaml_frontmatter.named_parameters["filename"] = LogicalType::BOOLEAN;
-	read_yaml_frontmatter.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 
 	loader.RegisterFunction(read_yaml_frontmatter);
 }

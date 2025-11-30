@@ -188,7 +188,8 @@ Frontmatter works with any text file that uses `---` delimiters:
 | `as_yaml_objects` | `false` | If `true`, return raw YAML in a single column. If `false`, expand fields as columns. |
 | `content` | `false` | Include the file body (after frontmatter) as a `content` column |
 | `filename` | `false` | Include a `filename` column with the source file path |
-| `union_by_name` | `true` | Merge schemas when files have different frontmatter fields |
+
+Schemas are automatically merged across files with different frontmatter fields (jagged schema support). Columns not present in a file will have `NULL` values.
 
 #### Example: Analyzing a Blog
 
