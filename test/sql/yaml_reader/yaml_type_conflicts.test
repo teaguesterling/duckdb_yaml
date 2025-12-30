@@ -1,0 +1,56 @@
+# name: test/sql/yaml_reader/yaml_type_conflicts.test
+# description: Test handling of type conflicts during jagged schema detection
+# group: [yaml_reader]
+#
+# Related issues:
+# - #17: STRUCT to VARCHAR fallback causes data loss
+# - #18: YAMLNodeToValue fails silently for STRUCT when target type is VARCHAR
+# - #19: LIST to VARCHAR fallback causes data loss
+
+require yaml
+
+# Test 1: Reading file with struct metadata alone
+query III
+SELECT name, metadata.author, metadata.version FROM read_yaml('test/yaml/type_conflicts/struct_value.yaml');
+----
+file1	John	1.0
+
+# Test 2: Reading file with scalar metadata alone
+query II
+SELECT name, metadata FROM read_yaml('test/yaml/type_conflicts/scalar_value.yaml');
+----
+file2	simple string value
+
+# Test 3: Reading files with different struct fields - should merge fields
+query IIII
+SELECT name, metadata.author, metadata.version, metadata.extra_field
+FROM read_yaml(['test/yaml/type_conflicts/struct_value.yaml', 'test/yaml/type_conflicts/struct_different.yaml'])
+ORDER BY name;
+----
+file1	John	1.0	NULL
+file3	Jane	NULL	bonus
+
+# Test 4: STRUCT vs scalar conflict - currently causes data loss (BUG #17, #18)
+# When fixed, struct data should be preserved (either as struct or serialized string)
+# Current behavior: struct values become NULL when schema falls back to VARCHAR
+# Expected behavior after fix: struct should serialize to YAML/JSON string
+query II
+SELECT name, metadata IS NULL as metadata_is_null
+FROM read_yaml('test/yaml/type_conflicts/*.yaml')
+ORDER BY name;
+----
+file1	true
+file2	false
+file3	true
+
+# Test 5: LIST vs scalar conflict - same data loss issue (BUG #19)
+# Current behavior: list values become NULL when schema falls back to VARCHAR
+# Expected behavior after fix: list should serialize to "[alpha, beta]" string
+query II
+SELECT name, tags IS NULL as tags_is_null
+FROM read_yaml('test/yaml/type_conflicts/*.yaml')
+ORDER BY name;
+----
+file1	true
+file2	false
+file3	true

@@ -1,0 +1,7 @@
+name: file1
+metadata:
+  author: John
+  version: 1.0
+tags:
+  - alpha
+  - beta
