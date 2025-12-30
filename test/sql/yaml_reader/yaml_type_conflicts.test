@@ -3,9 +3,9 @@
 # group: [yaml_reader]
 #
 # Related issues:
-# - #17: STRUCT to VARCHAR fallback causes data loss
-# - #18: YAMLNodeToValue fails silently for STRUCT when target type is VARCHAR
-# - #19: LIST to VARCHAR fallback causes data loss
+# - #17: STRUCT to VARCHAR fallback causes data loss (FIXED)
+# - #18: YAMLNodeToValue fails silently for STRUCT when target type is VARCHAR (FIXED)
+# - #19: LIST to VARCHAR fallback causes data loss (FIXED)
 
 require yaml
 
@@ -30,27 +30,36 @@ ORDER BY name;
 file1	John	1.0	NULL
 file3	Jane	NULL	bonus
 
-# Test 4: STRUCT vs scalar conflict - currently causes data loss (BUG #17, #18)
-# When fixed, struct data should be preserved (either as struct or serialized string)
-# Current behavior: struct values become NULL when schema falls back to VARCHAR
-# Expected behavior after fix: struct should serialize to YAML/JSON string
+# Test 4: STRUCT vs scalar conflict - falls back to YAML type preserving data
+# When there's a type conflict (STRUCT vs scalar), the schema falls back to YAML type
+# which serializes the values as YAML strings, preserving all data
 query II
 SELECT name, metadata IS NULL as metadata_is_null
 FROM read_yaml('test/yaml/type_conflicts/*.yaml')
 ORDER BY name;
 ----
-file1	true
+file1	false
 file2	false
-file3	true
+file3	false
 
-# Test 5: LIST vs scalar conflict - same data loss issue (BUG #19)
-# Current behavior: list values become NULL when schema falls back to VARCHAR
-# Expected behavior after fix: list should serialize to "[alpha, beta]" string
+# Test 5: LIST vs scalar conflict - falls back to YAML type preserving data
+# When there's a type conflict (LIST vs scalar), the schema falls back to YAML type
+# which serializes the values as YAML strings, preserving all data
 query II
 SELECT name, tags IS NULL as tags_is_null
 FROM read_yaml('test/yaml/type_conflicts/*.yaml')
 ORDER BY name;
 ----
-file1	true
+file1	false
 file2	false
-file3	true
+file3	false
+
+# Test 6: Verify the actual YAML serialization of conflicting types
+query III
+SELECT name, metadata, tags
+FROM read_yaml('test/yaml/type_conflicts/*.yaml')
+ORDER BY name;
+----
+file1	{author: John, version: 1.0}	[alpha, beta]
+file2	simple string value	single-tag
+file3	{author: Jane, created: 2024-01-15, extra_field: bonus}	[gamma]
