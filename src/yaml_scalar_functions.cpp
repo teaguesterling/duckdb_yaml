@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
+#include "yaml_reader.hpp"
 #include "yaml-cpp/yaml.h"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -16,6 +17,7 @@ void YAMLFunctions::Register(ExtensionLoader &loader) {
     RegisterValidationFunction(loader);
     RegisterYAMLTypeFunctions(loader);
     RegisterStyleFunctions(loader);
+    RegisterFromYAMLFunction(loader);
 }
 
 
@@ -321,6 +323,102 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 
     auto yaml_get_default_style_fun = ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
     loader.RegisterFunction(yaml_get_default_style_fun);
+}
+
+//===--------------------------------------------------------------------===//
+// from_yaml Function - Convert YAML to structured types
+//===--------------------------------------------------------------------===//
+
+struct FromYAMLBindData : public FunctionData {
+    LogicalType target_type;
+
+    unique_ptr<FunctionData> Copy() const override {
+        auto result = make_uniq<FromYAMLBindData>();
+        result->target_type = target_type;
+        return std::move(result);
+    }
+
+    bool Equals(const FunctionData &other_p) const override {
+        auto &other = other_p.Cast<FromYAMLBindData>();
+        return target_type == other.target_type;
+    }
+};
+
+static unique_ptr<FunctionData> FromYAMLBind(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+    if (arguments.size() != 2) {
+        throw InvalidInputException("from_yaml requires exactly 2 arguments: yaml_value and structure");
+    }
+
+    auto bind_data = make_uniq<FromYAMLBindData>();
+
+    // The second argument should be a constant structure specification
+    if (arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
+        // If it's a struct type, use it directly
+        bind_data->target_type = arguments[1]->return_type;
+    } else if (arguments[1]->return_type.id() == LogicalTypeId::LIST) {
+        // If it's a list type, use it directly
+        bind_data->target_type = arguments[1]->return_type;
+    } else if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
+        // NULL type defaults to VARCHAR
+        bind_data->target_type = LogicalType::VARCHAR;
+    } else {
+        // For scalar types, use the type directly
+        bind_data->target_type = arguments[1]->return_type;
+    }
+
+    // Set the return type to the target type
+    bound_function.return_type = bind_data->target_type;
+
+    return std::move(bind_data);
+}
+
+static void FromYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+    auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+    auto &bind_data = func_expr.bind_info->Cast<FromYAMLBindData>();
+    auto &target_type = bind_data.target_type;
+
+    auto &yaml_input = args.data[0];
+
+    // Process each row
+    for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
+        Value yaml_value = yaml_input.GetValue(row_idx);
+
+        if (yaml_value.IsNull()) {
+            result.SetValue(row_idx, Value(target_type));
+            continue;
+        }
+
+        try {
+            // Get YAML string and parse it
+            std::string yaml_str = yaml_value.ToString();
+            YAML::Node node = YAML::Load(yaml_str);
+
+            // Convert to the target type using existing conversion function
+            Value converted = YAMLReader::YAMLNodeToValue(node, target_type);
+            result.SetValue(row_idx, converted);
+        } catch (const std::exception &e) {
+            throw InvalidInputException("Error converting YAML to type '%s': %s",
+                                       target_type.ToString(), e.what());
+        }
+    }
+}
+
+void YAMLFunctions::RegisterFromYAMLFunction(ExtensionLoader &loader) {
+    auto yaml_type = YAMLTypes::YAMLType();
+
+    // Register from_yaml function that takes YAML and structure spec
+    // from_yaml(yaml_value, structure) -> structured type
+    auto from_yaml_fun = ScalarFunction("from_yaml", {yaml_type, LogicalType::ANY}, LogicalType::ANY,
+                                        FromYAMLFunction, FromYAMLBind);
+    from_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+    loader.RegisterFunction(from_yaml_fun);
+
+    // Also register version that takes VARCHAR input
+    auto from_yaml_varchar_fun = ScalarFunction("from_yaml", {LogicalType::VARCHAR, LogicalType::ANY},
+                                                LogicalType::ANY, FromYAMLFunction, FromYAMLBind);
+    from_yaml_varchar_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+    loader.RegisterFunction(from_yaml_varchar_fun);
 }
 
 } // namespace duckdb

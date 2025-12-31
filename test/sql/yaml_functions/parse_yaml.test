@@ -1,0 +1,143 @@
+# name: test/sql/yaml_functions/parse_yaml.test
+# description: Test parse_yaml table function
+# group: [yaml_functions]
+
+require yaml
+
+#
+# ============================================================================
+# Basic parse_yaml tests
+# ============================================================================
+#
+
+# Test: Parse simple YAML object
+query III
+SELECT * FROM parse_yaml('name: John
+age: 30
+city: NYC');
+----
+John	30	NYC
+
+# Test: Parse YAML with different types
+query IIII
+SELECT name, typeof(name), age, typeof(age) FROM parse_yaml('name: John
+age: 30');
+----
+John	VARCHAR	30	TINYINT
+
+#
+# ============================================================================
+# Multi-document YAML tests
+# ============================================================================
+#
+
+# Test: Parse multi-document YAML
+query II
+SELECT * FROM parse_yaml('---
+name: John
+age: 30
+---
+name: Jane
+age: 25
+---
+name: Bob
+age: 35');
+----
+John	30
+Jane	25
+Bob	35
+
+# Test: multi_document=false only parses first document
+query II
+SELECT * FROM parse_yaml('---
+name: John
+age: 30
+---
+name: Jane
+age: 25', multi_document=false);
+----
+John	30
+
+#
+# ============================================================================
+# Sequence expansion tests
+# ============================================================================
+#
+
+# Test: Parse YAML sequence (list of objects)
+query II
+SELECT * FROM parse_yaml('- name: Alice
+  score: 95
+- name: Bob
+  score: 87
+- name: Carol
+  score: 92');
+----
+Alice	95
+Bob	87
+Carol	92
+
+# Test: expand_root_sequence=false treats sequence as a single document (not expanded)
+# Note: Currently only map documents are returned as rows
+query I
+SELECT count(*) FROM parse_yaml('[{a: 1}, {a: 2}]', expand_root_sequence=false);
+----
+0
+
+#
+# ============================================================================
+# Complex nested structures
+# ============================================================================
+#
+
+# Test: Parse nested objects
+query II
+SELECT name, address.city FROM parse_yaml('name: John
+address:
+  city: NYC
+  zip: 10001');
+----
+John	NYC
+
+#
+# ============================================================================
+# Edge cases
+# ============================================================================
+#
+
+# Test: Empty YAML returns empty result
+query I
+SELECT count(*) FROM parse_yaml('');
+----
+0
+
+# Test: YAML with null value in object
+query I
+SELECT x FROM parse_yaml('x: ~');
+----
+NULL
+
+# Test: Boolean values
+query II
+SELECT active, typeof(active) FROM parse_yaml('active: true');
+----
+true	BOOLEAN
+
+# Test: Date values
+query II
+SELECT joined, typeof(joined) FROM parse_yaml('joined: 2023-01-15');
+----
+2023-01-15	DATE
+
+#
+# ============================================================================
+# Error cases
+# ============================================================================
+#
+
+# Test: NULL input throws error
+statement error
+SELECT * FROM parse_yaml(NULL);
+----
+parse_yaml input cannot be NULL
+

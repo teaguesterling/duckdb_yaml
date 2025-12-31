@@ -665,4 +665,145 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 	output.SetCardinality(count);
 }
 
+//===--------------------------------------------------------------------===//
+// parse_yaml Table Function - Parse YAML strings into rows
+//===--------------------------------------------------------------------===//
+
+// Bind data structure for parse_yaml (immutable after bind)
+struct ParseYAMLBindData : public TableFunctionData {
+	ParseYAMLBindData() = default;
+
+	vector<YAML::Node> yaml_docs;     // Parsed YAML documents
+	vector<string> names;             // Column names
+	vector<LogicalType> types;        // Column types
+	bool multi_document = true;       // Whether to handle multi-document YAML
+	bool expand_root_sequence = true; // Whether to expand top-level sequences
+};
+
+// Local state for parse_yaml (mutable execution state)
+struct ParseYAMLLocalState : public LocalTableFunctionState {
+	idx_t current_row = 0;
+};
+
+unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, TableFunctionBindInput &input,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs.empty()) {
+		throw BinderException("parse_yaml requires a YAML string parameter");
+	}
+
+	// Get the YAML string
+	Value yaml_value = input.inputs[0];
+	if (yaml_value.IsNull()) {
+		throw BinderException("parse_yaml input cannot be NULL");
+	}
+
+	string yaml_str = yaml_value.ToString();
+
+	auto result = make_uniq<ParseYAMLBindData>();
+
+	// Parse optional parameters
+	for (auto &param : input.named_parameters) {
+		if (param.first == "multi_document") {
+			result->multi_document = param.second.GetValue<bool>();
+		} else if (param.first == "expand_root_sequence") {
+			result->expand_root_sequence = param.second.GetValue<bool>();
+		}
+	}
+
+	// Parse the YAML string
+	try {
+		vector<YAML::Node> docs;
+		if (result->multi_document) {
+			std::stringstream ss(yaml_str);
+			docs = YAML::LoadAll(ss);
+		} else {
+			docs.push_back(YAML::Load(yaml_str));
+		}
+
+		// Extract row nodes (expand sequences if needed)
+		result->yaml_docs = ExtractRowNodes(docs, result->expand_root_sequence);
+	} catch (const YAML::Exception &e) {
+		throw InvalidInputException("Failed to parse YAML: %s", e.what());
+	}
+
+	if (result->yaml_docs.empty()) {
+		// Empty result - return a single yaml column
+		names.emplace_back("yaml");
+		return_types.emplace_back(LogicalType::VARCHAR);
+		result->names = names;
+		result->types = return_types;
+		return std::move(result);
+	}
+
+	// Detect schema from all documents using jagged schema detection
+	LogicalType merged_type = DetectJaggedYAMLType(result->yaml_docs);
+
+	if (merged_type.id() == LogicalTypeId::STRUCT) {
+		// Struct type - use struct fields as columns
+		auto &children = StructType::GetChildTypes(merged_type);
+		for (auto &child : children) {
+			names.push_back(child.first);
+			return_types.push_back(child.second);
+		}
+	} else {
+		// Non-struct type - return single yaml column
+		names.emplace_back("yaml");
+		return_types.emplace_back(merged_type);
+	}
+
+	result->names = names;
+	result->types = return_types;
+	return std::move(result);
+}
+
+unique_ptr<LocalTableFunctionState> YAMLReader::ParseYAMLInit(ExecutionContext &context,
+                                                               TableFunctionInitInput &input,
+                                                               GlobalTableFunctionState *global_state) {
+	return make_uniq<ParseYAMLLocalState>();
+}
+
+void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<ParseYAMLBindData>();
+	auto &local_state = data_p.local_state->Cast<ParseYAMLLocalState>();
+
+	// If we've processed all rows, we're done
+	if (local_state.current_row >= bind_data.yaml_docs.size()) {
+		output.SetCardinality(0);
+		return;
+	}
+
+	// Process up to STANDARD_VECTOR_SIZE rows at a time
+	idx_t count = 0;
+	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, bind_data.yaml_docs.size() - local_state.current_row);
+
+	output.Reset();
+
+	for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
+		YAML::Node node = bind_data.yaml_docs[local_state.current_row + doc_idx];
+
+		if (node.IsMap()) {
+			// Map node - process each field as a column
+			for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
+				const string &col_name = bind_data.names[col_idx];
+				const LogicalType &col_type = bind_data.types[col_idx];
+
+				if (node[col_name]) {
+					Value val = YAMLNodeToValue(node[col_name], col_type);
+					output.SetValue(col_idx, count, val);
+				} else {
+					output.SetValue(col_idx, count, Value(col_type));
+				}
+			}
+		} else if (bind_data.types.size() == 1) {
+			// Non-map node with single column output
+			Value val = YAMLNodeToValue(node, bind_data.types[0]);
+			output.SetValue(0, count, val);
+		}
+		count++;
+	}
+
+	local_state.current_row += count;
+	output.SetCardinality(count);
+}
+
 } // namespace duckdb

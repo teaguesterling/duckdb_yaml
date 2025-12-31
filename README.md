@@ -42,6 +42,7 @@ Claude.ai wrote 99% of the code in this project as an experiment. The original w
 - **Native YAML Type**: Full YAML type support with seamless conversion between YAML, JSON, and VARCHAR
 - **Type Detection**: Comprehensive automatic type detection including temporal types (DATE, TIME, TIMESTAMP) and optimal numeric types
 - **YAML Extraction**: Query YAML data with extraction functions (`yaml_extract`, `yaml_type`, `yaml_exists`)
+- **YAML Parsing**: Parse YAML strings with `parse_yaml` (table) and `from_yaml` (scalar)
 - **Column Type Specification**: Explicitly define column types when reading YAML files
 - **Multi-Document Support**: Handle files with multiple YAML documents separated by `---`
 - **Sequence Handling**: Automatically expand top-level sequences into rows
@@ -283,6 +284,44 @@ SELECT yaml_extract_string(config, '$.features[0]') AS first_feature FROM config
 SELECT yaml_type(config) AS root_type FROM configs;  -- returns 'object'
 SELECT yaml_type(config, '$.features') AS features_type FROM configs;  -- returns 'array'
 SELECT yaml_exists(config, '$.port') AS has_port FROM configs;  -- returns true
+```
+
+#### Parsing Functions
+
+```sql
+-- Parse YAML strings into table rows (table function)
+SELECT * FROM parse_yaml('name: John
+age: 30
+city: NYC');
+-- Returns: name | age | city
+--          John | 30  | NYC
+
+-- Parse multi-document YAML
+SELECT * FROM parse_yaml('---
+name: John
+---
+name: Jane');
+-- Returns two rows
+
+-- Parse YAML sequence
+SELECT * FROM parse_yaml('- name: Alice
+  score: 95
+- name: Bob
+  score: 87');
+-- Returns: name  | score
+--          Alice | 95
+--          Bob   | 87
+
+-- Convert YAML to structured types (scalar function)
+SELECT from_yaml('name: John
+age: 30', {'name': '', 'age': 0});
+-- Returns: {'name': John, 'age': 30}
+
+-- Use with nested structures
+SELECT from_yaml('user:
+  name: John
+  email: john@example.com', {'user': {'name': '', 'email': ''}});
+-- Returns: {'user': {'name': John, 'email': john@example.com}}
 ```
 
 #### Style Management
@@ -592,6 +631,8 @@ yaml_structure(yaml) → yaml  -- Returns structure with types
 -- Already implemented ✅
 yaml_array_elements(yaml) → table(yaml)  -- ✅ NEW
 yaml_each(yaml) → table(key varchar, value yaml)  -- ✅ NEW
+parse_yaml(yaml_string) → table  -- ✅ NEW - Parse YAML string into rows
+from_yaml(yaml_string, structure) → any  -- ✅ NEW - Convert YAML to structured type
 
 -- Planned ⏳
 yaml_array_elements_text(yaml) → table(varchar)

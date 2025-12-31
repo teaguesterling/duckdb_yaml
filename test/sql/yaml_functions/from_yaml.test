@@ -1,0 +1,145 @@
+# name: test/sql/yaml_functions/from_yaml.test
+# description: Test from_yaml scalar function
+# group: [yaml_functions]
+
+require yaml
+
+#
+# ============================================================================
+# Basic from_yaml tests
+# ============================================================================
+#
+
+# Test: Convert YAML to simple struct
+query I
+SELECT from_yaml('name: John', {'name': ''});
+----
+{'name': John}
+
+# Test: Convert YAML to struct with multiple fields
+query I
+SELECT from_yaml('name: John
+age: 30', {'name': '', 'age': 0});
+----
+{'name': John, 'age': 30}
+
+# Test: Return type matches structure specification
+query II
+SELECT typeof(from_yaml('x: 1', {'x': 0})), typeof(from_yaml('x: hello', {'x': ''}));
+----
+STRUCT(x INTEGER)	STRUCT(x VARCHAR)
+
+#
+# ============================================================================
+# Type coercion tests
+# ============================================================================
+#
+
+# Test: Integer coercion
+query I
+SELECT from_yaml('value: 42', {'value': 0});
+----
+{'value': 42}
+
+# Test: Double coercion
+query I
+SELECT from_yaml('value: 3.5', {'value': 0.0});
+----
+{'value': 3.5}
+
+# Test: Boolean coercion
+query I
+SELECT from_yaml('flag: true', {'flag': false});
+----
+{'flag': true}
+
+#
+# ============================================================================
+# Nested structure tests
+# ============================================================================
+#
+
+# Test: Nested struct
+query I
+SELECT from_yaml('user:
+  name: John
+  email: john@example.com', {'user': {'name': '', 'email': ''}});
+----
+{'user': {'name': John, 'email': john@example.com}}
+
+# Test: Deep nesting
+query I
+SELECT from_yaml('a:
+  b:
+    c: deep', {'a': {'b': {'c': ''}}});
+----
+{'a': {'b': {'c': deep}}}
+
+#
+# ============================================================================
+# List/Array tests
+# ============================================================================
+#
+
+# Test: List of integers
+query I
+SELECT from_yaml('numbers: [1, 2, 3]', {'numbers': [0]});
+----
+{'numbers': [1, 2, 3]}
+
+# Test: List of strings
+query I
+SELECT from_yaml('tags: [a, b, c]', {'tags': ['']});
+----
+{'tags': [a, b, c]}
+
+#
+# ============================================================================
+# VARCHAR input tests
+# ============================================================================
+#
+
+# Test: from_yaml works with VARCHAR input (not just YAML type)
+query I
+SELECT from_yaml('key: value'::VARCHAR, {'key': ''});
+----
+{'key': value}
+
+#
+# ============================================================================
+# NULL handling tests
+# ============================================================================
+#
+
+# Test: NULL input returns NULL
+query I
+SELECT from_yaml(NULL::VARCHAR, {'x': 0});
+----
+NULL
+
+# Test: YAML null value
+query I
+SELECT from_yaml('x: ~', {'x': ''});
+----
+{'x': NULL}
+
+#
+# ============================================================================
+# Edge cases
+# ============================================================================
+#
+
+# Test: Missing field returns NULL for that field
+query I
+SELECT from_yaml('a: 1', {'a': 0, 'b': 0});
+----
+{'a': 1, 'b': NULL}
+
+# Test: Extra field in YAML is ignored
+query I
+SELECT from_yaml('a: 1
+b: 2
+c: 3', {'a': 0});
+----
+{'a': 1}
+

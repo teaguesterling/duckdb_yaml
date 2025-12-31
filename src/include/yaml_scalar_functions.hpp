@@ -21,6 +21,9 @@ private:
     
     // Register style management functions
     static void RegisterStyleFunctions(ExtensionLoader &loader);
+
+    // Register from_yaml function for converting YAML to structured types
+    static void RegisterFromYAMLFunction(ExtensionLoader &loader);
 };
 
 } // namespace duckdb

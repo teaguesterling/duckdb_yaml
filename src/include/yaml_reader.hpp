@@ -290,13 +290,50 @@ public:
 
     /**
      * @brief Bind the columns parameter for explicit type specification
-     * 
+     *
      * @param context Client context
      * @param input Function bind input
      * @param options YAML read options to update with column specifications
      */
-    static void BindColumnTypes(ClientContext &context, TableFunctionBindInput &input, 
+    static void BindColumnTypes(ClientContext &context, TableFunctionBindInput &input,
                                YAMLReadOptions &options);
+
+    /**
+     * @brief Bind function for parse_yaml that parses YAML strings into rows
+     *
+     * @param context Client context for the query
+     * @param input Bind input parameters
+     * @param return_types Types of columns to return
+     * @param names Names of columns to return
+     * @return Function data for execution
+     */
+    static unique_ptr<FunctionData> ParseYAMLBind(ClientContext &context,
+                                                   TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types,
+                                                   vector<string> &names);
+
+    /**
+     * @brief Init function for parse_yaml local state
+     *
+     * @param context Execution context
+     * @param input Init input data
+     * @param global_state Global state (unused)
+     * @return Local state for execution
+     */
+    static unique_ptr<LocalTableFunctionState> ParseYAMLInit(ExecutionContext &context,
+                                                              TableFunctionInitInput &input,
+                                                              GlobalTableFunctionState *global_state);
+
+    /**
+     * @brief Execution function for parse_yaml
+     *
+     * @param context Client context
+     * @param input Execution input data
+     * @param output Output chunk to write results to
+     */
+    static void ParseYAMLFunction(ClientContext &context,
+                                   TableFunctionInput &input,
+                                   DataChunk &output);
 };
 
 } // namespace duckdb

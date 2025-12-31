@@ -53,6 +53,13 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml_objects.named_parameters["sample_size"] = LogicalType::BIGINT;
 	read_yaml_objects.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 	loader.RegisterFunction(read_yaml_objects);
+
+	// Register parse_yaml table function for parsing YAML strings
+	TableFunction parse_yaml("parse_yaml", {LogicalType::VARCHAR}, ParseYAMLFunction, ParseYAMLBind);
+	parse_yaml.init_local = ParseYAMLInit;
+	parse_yaml.named_parameters["multi_document"] = LogicalType::BOOLEAN;
+	parse_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
+	loader.RegisterFunction(parse_yaml);
 }
 
 } // namespace duckdb
