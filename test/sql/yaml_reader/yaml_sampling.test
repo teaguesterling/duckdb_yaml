@@ -1,0 +1,199 @@
+# name: test/sql/yaml_reader/yaml_sampling.test
+# description: Test sampling parameters for schema detection
+# group: [yaml_reader]
+
+require yaml
+
+#
+# ============================================================================
+# Default behavior tests
+# ============================================================================
+#
+
+# Test: Default sampling - all files sampled, type conflicts resolved to YAML
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml')
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+#
+# ============================================================================
+# Unlimited sampling (-1) tests
+# ============================================================================
+#
+
+# Test: sample_size=-1 (unlimited) works
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=-1)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+# Test: maximum_sample_files=-1 (unlimited) works
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=-1)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+# Test: Both parameters unlimited
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=-1, maximum_sample_files=-1)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+#
+# ============================================================================
+# Positive value tests (limiting sampling)
+# ============================================================================
+#
+
+# Test: sample_size=1 limits schema detection to first row only
+# With only 1 sample, it sees struct metadata, then fails on scalar metadata
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=1);
+----
+Failed to cast value
+
+# Test: maximum_sample_files=1 limits schema detection to first file only
+# With only 1 file sampled, schema misses variations from other files
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=1);
+----
+Failed to cast value
+
+# Test: Large positive values work (larger than available data)
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=1000000)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+# Test: Large maximum_sample_files works (larger than available files)
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=1000)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+# Test: sample_size=3 is enough to detect all variations (3 files, 1 row each)
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=3)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+# Test: maximum_sample_files=3 samples all files
+query III
+SELECT name, typeof(metadata), typeof(tags)
+FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=3)
+ORDER BY name
+LIMIT 1;
+----
+file1	yaml	yaml
+
+#
+# ============================================================================
+# Error cases - invalid parameter values
+# ============================================================================
+#
+
+# Test: Error on sample_size=0
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=0);
+----
+sample_size
+
+# Test: Error on maximum_sample_files=0
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=0);
+----
+maximum_sample_files
+
+# Test: Error on sample_size=-2 (negative other than -1)
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=-2);
+----
+sample_size
+
+# Test: Error on maximum_sample_files=-2 (negative other than -1)
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', maximum_sample_files=-2);
+----
+maximum_sample_files
+
+# Test: Error on sample_size=-100
+statement error
+SELECT * FROM read_yaml('test/yaml/type_conflicts/*.yaml', sample_size=-100);
+----
+sample_size
+
+#
+# ============================================================================
+# read_yaml_objects tests
+# ============================================================================
+#
+
+# Test: read_yaml_objects supports sample_size parameter
+query I
+SELECT typeof(yaml)
+FROM read_yaml_objects('test/yaml/type_conflicts/*.yaml', sample_size=-1)
+LIMIT 1;
+----
+STRUCT("name" VARCHAR, metadata yaml, tags yaml)
+
+# Test: read_yaml_objects supports maximum_sample_files parameter
+query I
+SELECT typeof(yaml)
+FROM read_yaml_objects('test/yaml/type_conflicts/*.yaml', maximum_sample_files=-1)
+LIMIT 1;
+----
+STRUCT("name" VARCHAR, metadata yaml, tags yaml)
+
+# Test: read_yaml_objects error on invalid sample_size
+statement error
+SELECT * FROM read_yaml_objects('test/yaml/type_conflicts/*.yaml', sample_size=0);
+----
+sample_size
+
+# Test: read_yaml_objects error on invalid maximum_sample_files
+statement error
+SELECT * FROM read_yaml_objects('test/yaml/type_conflicts/*.yaml', maximum_sample_files=0);
+----
+maximum_sample_files
+
+#
+# ============================================================================
+# Edge cases with single file (no conflicts)
+# ============================================================================
+#
+
+# Test: Single file with sample_size=1 works fine (no conflicts to detect)
+query II
+SELECT name, metadata.author
+FROM read_yaml('test/yaml/type_conflicts/struct_value.yaml', sample_size=1);
+----
+file1	John
+
+# Test: Single file with maximum_sample_files=1 works fine
+query II
+SELECT name, metadata.author
+FROM read_yaml('test/yaml/type_conflicts/struct_value.yaml', maximum_sample_files=1);
+----
+file1	John

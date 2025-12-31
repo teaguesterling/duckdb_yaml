@@ -144,6 +144,26 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
 		options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
 	}
+	if (seen_parameters.find("sample_size") != seen_parameters.end()) {
+		auto arg = input.named_parameters["sample_size"].GetValue<int64_t>();
+		if (arg == -1) {
+			options.sample_size = NumericLimits<idx_t>::Maximum();
+		} else if (arg > 0) {
+			options.sample_size = static_cast<idx_t>(arg);
+		} else {
+			throw BinderException("read_yaml \"sample_size\" parameter must be positive, or -1 to sample all input");
+		}
+	}
+	if (seen_parameters.find("maximum_sample_files") != seen_parameters.end()) {
+		auto arg = input.named_parameters["maximum_sample_files"].GetValue<int64_t>();
+		if (arg == -1) {
+			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
+		} else if (arg > 0) {
+			options.maximum_sample_files = static_cast<idx_t>(arg);
+		} else {
+			throw BinderException("read_yaml \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
+		}
+	}
 
 	// Create bind data
 	auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
@@ -156,6 +176,10 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 
 	// Vector to store all the row data items (documents or elements)
 	vector<YAML::Node> row_nodes;
+	// Vector for schema detection sampling (limited by sample_size and maximum_sample_files)
+	vector<YAML::Node> sample_nodes;
+	idx_t sampled_rows = 0;
+	idx_t sampled_files = 0;
 
 	// Read and process all files
 	for (const auto &file_path : files) {
@@ -163,8 +187,20 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			auto docs = ReadYAMLFile(context, file_path, options);
 			auto file_nodes = ExtractRowNodes(docs, options.expand_root_sequence);
 
-			// Add nodes from this file
+			// Add nodes from this file to the full result set
 			row_nodes.insert(row_nodes.end(), file_nodes.begin(), file_nodes.end());
+
+			// Add nodes to sample set if we haven't reached the sampling limits
+			if (sampled_files < options.maximum_sample_files && sampled_rows < options.sample_size) {
+				for (const auto &node : file_nodes) {
+					if (sampled_rows >= options.sample_size) {
+						break;
+					}
+					sample_nodes.push_back(node);
+					sampled_rows++;
+				}
+				sampled_files++;
+			}
 		} catch (const std::exception &e) {
 			if (!options.ignore_errors) {
 				throw IOException("Error processing YAML file '" + file_path + "': " + string(e.what()));
@@ -261,7 +297,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		return std::move(result);
 	}
 
-	// Extract schema from all row nodes, considering user-provided column types
+	// Extract schema from sampled row nodes, considering user-provided column types
 	// Use a map to track column types
 	unordered_map<string, LogicalType> user_specified_types;
 	unordered_map<string, LogicalType> detected_types;
@@ -271,11 +307,12 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		user_specified_types[options.column_names[idx]] = options.column_types[idx];
 	}
 
-	// Process each row node to detect schema from YAML document order
+	// Process sampled row nodes to detect schema from YAML document order
+	// Uses sample_nodes (limited by sample_size and maximum_sample_files) for schema detection
 	vector<string> column_order;
 	unordered_set<string> seen_columns;
-	
-	for (auto &node : result->yaml_docs) {
+
+	for (auto &node : sample_nodes) {
 		// Process each top-level key in document order
 		for (auto it = node.begin(); it != node.end(); ++it) {
 			std::string key = it->first.Scalar();
@@ -334,12 +371,12 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	}
 
 	// Special handling for non-map documents
-	if (names.empty() && !result->yaml_docs.empty()) {
+	if (names.empty() && !sample_nodes.empty()) {
 		// This could happen with non-map documents without expand_root_sequence
 		// Add a fallback value column
 		names.emplace_back("value");
 		if (options.auto_detect_types) {
-			return_types.emplace_back(DetectYAMLType(result->yaml_docs[0]));
+			return_types.emplace_back(DetectYAMLType(sample_nodes[0]));
 		} else {
 			return_types.emplace_back(LogicalType::VARCHAR);
 		}
@@ -414,6 +451,26 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 	if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
 		options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
 	}
+	if (seen_parameters.find("sample_size") != seen_parameters.end()) {
+		auto arg = input.named_parameters["sample_size"].GetValue<int64_t>();
+		if (arg == -1) {
+			options.sample_size = NumericLimits<idx_t>::Maximum();
+		} else if (arg > 0) {
+			options.sample_size = static_cast<idx_t>(arg);
+		} else {
+			throw BinderException("read_yaml_objects \"sample_size\" parameter must be positive, or -1 to sample all input");
+		}
+	}
+	if (seen_parameters.find("maximum_sample_files") != seen_parameters.end()) {
+		auto arg = input.named_parameters["maximum_sample_files"].GetValue<int64_t>();
+		if (arg == -1) {
+			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
+		} else if (arg > 0) {
+			options.maximum_sample_files = static_cast<idx_t>(arg);
+		} else {
+			throw BinderException("read_yaml_objects \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
+		}
+	}
 
 	// Create bind data
 	auto result = make_uniq<YAMLReadBindData>(file_path, options);
@@ -426,12 +483,28 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 
 	// Vector to store all YAML documents
 	vector<YAML::Node> all_docs;
+	// Vector for schema detection sampling (limited by sample_size and maximum_sample_files)
+	vector<YAML::Node> sample_docs;
+	idx_t sampled_rows = 0;
+	idx_t sampled_files = 0;
 
 	// Read and process all files
 	for (const auto &file_path : files) {
 		try {
 			auto docs = ReadYAMLFile(context, file_path, options);
 			all_docs.insert(all_docs.end(), docs.begin(), docs.end());
+
+			// Add docs to sample set if we haven't reached the sampling limits
+			if (sampled_files < options.maximum_sample_files && sampled_rows < options.sample_size) {
+				for (const auto &doc : docs) {
+					if (sampled_rows >= options.sample_size) {
+						break;
+					}
+					sample_docs.push_back(doc);
+					sampled_rows++;
+				}
+				sampled_files++;
+			}
 		} catch (const std::exception &e) {
 			if (!options.ignore_errors) {
 				throw IOException("Error processing YAML file '" + file_path + "': " + string(e.what()));
@@ -460,12 +533,12 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		names = options.column_names;
 		return_types = options.column_types;
 	} else {
-		// Auto-detect columns from first document
+		// Auto-detect columns from sampled documents
 		if (options.auto_detect_types) {
 			// For each document, we create a column with the document structure
 			names.emplace_back("yaml");
-			// Use jagged schema detection for metadata compatibility
-			auto doc_type = DetectJaggedYAMLType(result->yaml_docs);
+			// Use jagged schema detection on sampled docs for metadata compatibility
+			auto doc_type = DetectJaggedYAMLType(sample_docs);
 			return_types.emplace_back(doc_type);
 		} else {
 			// If not auto-detecting, just use VARCHAR for the whole document

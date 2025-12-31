@@ -50,7 +50,11 @@ public:
         size_t maximum_object_size = 16777216;  // 16MB default maximum file size
         bool multi_document = true;             // Whether to handle multi-document YAML files
         bool expand_root_sequence = true;       // Whether to expand top-level sequences into rows
-        
+
+        // Sampling parameters for schema detection (matching JSON extension behavior)
+        idx_t sample_size = STANDARD_VECTOR_SIZE * 10;  // Number of rows to sample for schema detection (default: 20480)
+        idx_t maximum_sample_files = 32;                // Maximum number of files to sample for schema detection
+
         // User-specified column types
         vector<string> column_names;            // User-provided column names
         vector<LogicalType> column_types;       // User-provided column types

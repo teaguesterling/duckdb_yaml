@@ -36,6 +36,8 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml.named_parameters["multi_document"] = LogicalType::BOOLEAN;
 	read_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
 	read_yaml.named_parameters["columns"] = LogicalType::ANY;
+	read_yaml.named_parameters["sample_size"] = LogicalType::BIGINT;
+	read_yaml.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 
 	// Register the function
 	loader.RegisterFunction(read_yaml);
@@ -48,6 +50,8 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
 	read_yaml_objects.named_parameters["multi_document"] = LogicalType::BOOLEAN;
 	read_yaml_objects.named_parameters["columns"] = LogicalType::ANY;
+	read_yaml_objects.named_parameters["sample_size"] = LogicalType::BIGINT;
+	read_yaml_objects.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 	loader.RegisterFunction(read_yaml_objects);
 }
 
