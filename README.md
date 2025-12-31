@@ -137,6 +137,11 @@ SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 -- Set maximum file size in bytes (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
 
+-- Control schema detection sampling (default: 20480 rows from up to 32 files)
+SELECT * FROM read_yaml('data/*.yaml', sample_size=1000);
+SELECT * FROM read_yaml('data/*.yaml', maximum_sample_files=10);
+SELECT * FROM read_yaml('data/*.yaml', sample_size=-1, maximum_sample_files=-1);  -- unlimited
+
 -- Specify explicit column types
 SELECT * FROM read_yaml('file.yaml', columns={
     'id': 'INTEGER',
@@ -144,6 +149,17 @@ SELECT * FROM read_yaml('file.yaml', columns={
     'created': 'TIMESTAMP'
 });
 ```
+
+#### Sampling Parameters
+
+When reading multiple YAML files, the extension samples a subset of files and rows to detect the schema. This allows efficient schema detection for large datasets while capturing type variations across files.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `sample_size` | 20480 | Number of rows to sample for schema detection. Use `-1` for unlimited. |
+| `maximum_sample_files` | 32 | Maximum number of files to sample for schema detection. Use `-1` for unlimited. |
+
+**Note**: If sampling doesn't capture all type variations (e.g., some files have struct fields, others have scalars), you may see cast errors. Increase `sample_size` or `maximum_sample_files`, or use `-1` for unlimited sampling to ensure all variations are detected.
 
 ### Reading Frontmatter
 
