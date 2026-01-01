@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_frontmatter_reader.test
 # description: Test read_yaml_frontmatter function for extracting YAML frontmatter from files
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

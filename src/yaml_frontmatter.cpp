@@ -65,10 +65,8 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 			string potential_delim = content.substr(line_start, 3);
 			if (potential_delim == "---" || potential_delim == "...") {
 				// Check that it's followed by newline or end of file or whitespace
-				if (line_start + 3 >= content.size() ||
-				    content[line_start + 3] == '\n' ||
-				    content[line_start + 3] == '\r' ||
-				    content[line_start + 3] == ' ' ||
+				if (line_start + 3 >= content.size() || content[line_start + 3] == '\n' ||
+				    content[line_start + 3] == '\r' || content[line_start + 3] == ' ' ||
 				    content[line_start + 3] == '\t') {
 					end_pos = newline_pos;
 					break;
@@ -87,7 +85,7 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 
 	// Find start of body (after closing delimiter line)
 	size_t body_start = end_pos + 1; // skip the \n before ---
-	body_start += 3; // skip ---
+	body_start += 3;                 // skip ---
 	// Skip rest of delimiter line
 	while (body_start < content.size() && content[body_start] != '\n' && content[body_start] != '\r') {
 		body_start++;
@@ -120,7 +118,7 @@ static string ReadFileContent(ClientContext &context, const string &file_path) {
 
 // Bind function for read_yaml_frontmatter
 static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<YAMLFrontmatterBindData>();
 
 	// Get file paths from first argument
@@ -237,9 +235,8 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 }
 
 // Init local state function
-static unique_ptr<LocalTableFunctionState> YAMLFrontmatterInit(ExecutionContext &context,
-                                                                 TableFunctionInitInput &input,
-                                                                 GlobalTableFunctionState *global_state) {
+static unique_ptr<LocalTableFunctionState> YAMLFrontmatterInit(ExecutionContext &context, TableFunctionInitInput &input,
+                                                               GlobalTableFunctionState *global_state) {
 	return make_uniq<YAMLFrontmatterLocalState>();
 }
 
@@ -287,16 +284,15 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 					if (node.IsMap()) {
 						// Process each column (skip filename if present)
 						idx_t start_col = bind_data.options.include_filename ? 1 : 0;
-						idx_t end_col = bind_data.options.include_content ?
-						                bind_data.names.size() - 1 : bind_data.names.size();
+						idx_t end_col =
+						    bind_data.options.include_content ? bind_data.names.size() - 1 : bind_data.names.size();
 
 						for (idx_t i = start_col; i < end_col; i++) {
 							const string &col_name = bind_data.names[i];
 							YAML::Node value = node[col_name];
 
 							if (value) {
-								output.SetValue(col_idx, count,
-								                YAMLReader::YAMLNodeToValue(value, bind_data.types[i]));
+								output.SetValue(col_idx, count, YAMLReader::YAMLNodeToValue(value, bind_data.types[i]));
 							} else {
 								output.SetValue(col_idx, count, Value(bind_data.types[i]));
 							}
@@ -305,8 +301,8 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 					} else {
 						// Non-map frontmatter - set all fields to NULL
 						idx_t start_col = bind_data.options.include_filename ? 1 : 0;
-						idx_t end_col = bind_data.options.include_content ?
-						                bind_data.names.size() - 1 : bind_data.names.size();
+						idx_t end_col =
+						    bind_data.options.include_content ? bind_data.names.size() - 1 : bind_data.names.size();
 						for (idx_t i = start_col; i < end_col; i++) {
 							output.SetValue(col_idx++, count, Value(bind_data.types[i]));
 						}
@@ -314,8 +310,8 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 				} catch (...) {
 					// Parse error - set all fields to NULL
 					idx_t start_col = bind_data.options.include_filename ? 1 : 0;
-					idx_t end_col = bind_data.options.include_content ?
-					                bind_data.names.size() - 1 : bind_data.names.size();
+					idx_t end_col =
+					    bind_data.options.include_content ? bind_data.names.size() - 1 : bind_data.names.size();
 					for (idx_t i = start_col; i < end_col; i++) {
 						output.SetValue(col_idx++, count, Value(bind_data.types[i]));
 					}
@@ -341,8 +337,8 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 }
 
 void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {
-	TableFunction read_yaml_frontmatter("read_yaml_frontmatter", {LogicalType::ANY},
-	                                     YAMLFrontmatterFunction, YAMLFrontmatterBind);
+	TableFunction read_yaml_frontmatter("read_yaml_frontmatter", {LogicalType::ANY}, YAMLFrontmatterFunction,
+	                                    YAMLFrontmatterBind);
 
 	// Set init function for local state
 	read_yaml_frontmatter.init_local = YAMLFrontmatterInit;

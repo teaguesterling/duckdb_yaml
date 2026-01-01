@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_sequence.test
+# name: test/sql/yaml_reader/yaml_sequence.test
 # description: Tests for handling top-level sequences in YAML
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

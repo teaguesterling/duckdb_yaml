@@ -7,7 +7,7 @@ namespace duckdb {
 //! YAML extraction functions similar to JSON functions
 class YAMLExtractionFunctions {
 public:
-    static void Register(ExtensionLoader &loader);
+	static void Register(ExtensionLoader &loader);
 };
 
 } // namespace duckdb

@@ -1,6 +1,6 @@
 # name: test/sql/yaml_types/yaml_types_multi.test
 # description: Test YAML types with multi-document and complex YAML
-# group: [yaml]
+# group: [yaml_types]
 
 require yaml
 

@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_frontmatter.test
 # description: Test YAML frontmatter handling with jagged schemas (varying fields across files)
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

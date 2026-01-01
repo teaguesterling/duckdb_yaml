@@ -1,6 +1,6 @@
-# name: test/sql/yaml_parameter_errors.test
+# name: test/sql/yaml_reader/yaml_parameter_errors.test
 # description: Tests for error handling in YAML reader parameters
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

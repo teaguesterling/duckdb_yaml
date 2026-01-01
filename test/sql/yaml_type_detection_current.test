@@ -1,6 +1,6 @@
 # name: test/sql/yaml_type_detection_current.test
 # description: Test current type detection behavior in YAML reader
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

@@ -161,7 +161,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		} else if (arg > 0) {
 			options.maximum_sample_files = static_cast<idx_t>(arg);
 		} else {
-			throw BinderException("read_yaml \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
+			throw BinderException(
+			    "read_yaml \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
 		}
 	}
 
@@ -458,7 +459,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		} else if (arg > 0) {
 			options.sample_size = static_cast<idx_t>(arg);
 		} else {
-			throw BinderException("read_yaml_objects \"sample_size\" parameter must be positive, or -1 to sample all input");
+			throw BinderException(
+			    "read_yaml_objects \"sample_size\" parameter must be positive, or -1 to sample all input");
 		}
 	}
 	if (seen_parameters.find("maximum_sample_files") != seen_parameters.end()) {
@@ -468,7 +470,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		} else if (arg > 0) {
 			options.maximum_sample_files = static_cast<idx_t>(arg);
 		} else {
-			throw BinderException("read_yaml_objects \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
+			throw BinderException(
+			    "read_yaml_objects \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
 		}
 	}
 
@@ -686,7 +689,7 @@ struct ParseYAMLLocalState : public LocalTableFunctionState {
 };
 
 unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("parse_yaml requires a YAML string parameter");
 	}
@@ -756,9 +759,8 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 	return std::move(result);
 }
 
-unique_ptr<LocalTableFunctionState> YAMLReader::ParseYAMLInit(ExecutionContext &context,
-                                                               TableFunctionInitInput &input,
-                                                               GlobalTableFunctionState *global_state) {
+unique_ptr<LocalTableFunctionState> YAMLReader::ParseYAMLInit(ExecutionContext &context, TableFunctionInitInput &input,
+                                                              GlobalTableFunctionState *global_state) {
 	return make_uniq<ParseYAMLLocalState>();
 }
 

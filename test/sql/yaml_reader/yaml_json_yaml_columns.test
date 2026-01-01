@@ -1,6 +1,6 @@
-# name: test/yaml_reader/yaml_json_yaml_columns.test
+# name: test/sql/yaml_reader/yaml_json_yaml_columns.test
 # description: Test reading YAML files with explicit JSON and YAML column types
-# group: [yaml]
+# group: [yaml_reader]
 
 require json
 

@@ -1,6 +1,6 @@
 # name: test/sql/yaml_type_detection.test
 # description: Test enhanced type detection in YAML reader
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

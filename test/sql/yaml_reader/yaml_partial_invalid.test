@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_partial_invalid.test
+# name: test/sql/yaml_reader/yaml_partial_invalid.test
 # description: Tests for handling partially invalid YAML files
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

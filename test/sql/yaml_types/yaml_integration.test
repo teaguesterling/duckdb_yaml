@@ -1,6 +1,6 @@
 # name: test/sql/yaml_types/yaml_integration.test
 # description: Test YAML type integration with DuckDB operations
-# group: [yaml]
+# group: [yaml_types]
 
 require yaml
 

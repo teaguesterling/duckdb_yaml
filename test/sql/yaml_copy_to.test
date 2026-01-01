@@ -1,6 +1,6 @@
 # name: test/sql/yaml_copy_to.test
 # description: Test YAML COPY TO functionality
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

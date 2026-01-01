@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_multi_document.test
+# name: test/sql/yaml_reader/yaml_multi_document.test
 # description: Tests for multi-document YAML functionality
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

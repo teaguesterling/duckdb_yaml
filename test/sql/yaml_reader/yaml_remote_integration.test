@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_remote_integration.test
 # description: Integration tests for YAML with remote filesystems
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

@@ -7,11 +7,11 @@ namespace duckdb {
 
 class YAMLTypes {
 public:
-    //! The YAML type used by DuckDB (implemented as VARCHAR)
-    static LogicalType YAMLType();
-    
-    //! Register the YAML type and conversion functions
-    static void Register(ExtensionLoader &loader);
+	//! The YAML type used by DuckDB (implemented as VARCHAR)
+	static LogicalType YAMLType();
+
+	//! Register the YAML type and conversion functions
+	static void Register(ExtensionLoader &loader);
 };
 
 } // namespace duckdb

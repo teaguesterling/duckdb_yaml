@@ -1,6 +1,6 @@
-# name: test/sql/yaml.test
+# name: test/yaml.test
 # description: test yaml extension
-# group: [yaml]
+# group: [test]
 
 # Before we load the extension, this will fail
 statement error

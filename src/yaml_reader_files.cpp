@@ -68,7 +68,6 @@ vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_va
 vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pattern) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	vector<string> result;
-	
 
 	// Don't bother if we can't identify a glob pattern
 	// For S3 URLs, we'll let GlobFiles handle the detection
@@ -106,7 +105,7 @@ vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pa
 
 // Helper to read a single file and parse it
 vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string &file_path,
-                                             const YAMLReadOptions &options) {
+                                            const YAMLReadOptions &options) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	// Check if file exists

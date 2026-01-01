@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_file_extension.test
 # description: Test automatic YAML file extension detection
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

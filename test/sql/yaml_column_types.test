@@ -1,6 +1,6 @@
 # name: test/sql/yaml_column_types.test
 # description: Test YAML column type specification
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_remote_edge_cases.test
 # description: Edge cases for remote YAML reading
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

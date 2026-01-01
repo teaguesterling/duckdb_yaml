@@ -1,6 +1,6 @@
 # name: test/sql/yaml_types/yaml_types.test
 # description: Test YAML types and conversion functions
-# group: [yaml]
+# group: [yaml_types]
 
 require yaml
 

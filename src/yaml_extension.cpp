@@ -17,36 +17,36 @@
 namespace duckdb {
 
 static void LoadInternal(ExtensionLoader &loader) {
-    // Register YAML reader
-    YAMLReader::RegisterFunction(loader);
+	// Register YAML reader
+	YAMLReader::RegisterFunction(loader);
 
-    // Register YAML functions
-    YAMLFunctions::Register(loader);
+	// Register YAML functions
+	YAMLFunctions::Register(loader);
 
-    // Register YAML extraction functions
-    YAMLExtractionFunctions::Register(loader);
+	// Register YAML extraction functions
+	YAMLExtractionFunctions::Register(loader);
 
-    // Register YAML unnest functions (Phase 1 Core Functions)
-    YAMLUnnestFunctions::Register(loader);
+	// Register YAML unnest functions (Phase 1 Core Functions)
+	YAMLUnnestFunctions::Register(loader);
 
-    // Register YAML types
-    YAMLTypes::Register(loader);
+	// Register YAML types
+	YAMLTypes::Register(loader);
 
-    // Register YAML copy functions
-    RegisterYAMLCopyFunctions(loader);
+	// Register YAML copy functions
+	RegisterYAMLCopyFunctions(loader);
 
-    // Register YAML frontmatter reader
-    RegisterYAMLFrontmatterFunction(loader);
+	// Register YAML frontmatter reader
+	RegisterYAMLFrontmatterFunction(loader);
 
-    // Register YAML files as automatically recognized by DuckDB
-    auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-    
-    // Add replacement scan for YAML files
-    config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
+	// Register YAML files as automatically recognized by DuckDB
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+
+	// Add replacement scan for YAML files
+	config.replacement_scans.emplace_back(YAMLReader::ReadYAMLReplacement);
 }
 
 void YamlExtension::Load(ExtensionLoader &loader) {
-    LoadInternal(loader);
+	LoadInternal(loader);
 }
 
 std::string YamlExtension::Name() {
@@ -66,13 +66,12 @@ std::string YamlExtension::Version() const {
 extern "C" {
 
 DUCKDB_CPP_EXTENSION_ENTRY(yaml, loader) {
-    duckdb::LoadInternal(loader);
+	duckdb::LoadInternal(loader);
 }
 
 DUCKDB_EXTENSION_API const char *yaml_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
-
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN

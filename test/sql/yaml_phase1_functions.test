@@ -1,6 +1,6 @@
 # name: test/sql/yaml_phase1_functions.test
 # description: Test Phase 1 Core Functions (JSON parity functions)
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

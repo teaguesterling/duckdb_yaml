@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_objects.test
+# name: test/sql/yaml_reader/yaml_objects.test
 # description: Tests for read_yaml_objects function
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

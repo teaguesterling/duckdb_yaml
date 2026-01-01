@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_parameters.test
+# name: test/sql/yaml_reader/yaml_parameters.test
 # description: Tests for YAML reader function parameters
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

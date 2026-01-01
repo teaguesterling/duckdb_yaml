@@ -1,6 +1,6 @@
 # name: test/sql/yaml_types/yaml_anchor_alias.test
 # description: Test YAML file reading and complex structures using external files
-# group: [yaml]
+# group: [yaml_types]
 
 require yaml
 

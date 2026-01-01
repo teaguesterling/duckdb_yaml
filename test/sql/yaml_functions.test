@@ -1,6 +1,6 @@
 # name: test/sql/yaml_functions.test
 # description: Test YAML scalar functions
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

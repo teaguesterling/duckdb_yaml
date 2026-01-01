@@ -1,6 +1,6 @@
 # name: test/sql/yaml_types/yaml_extraction.test
 # description: Test YAML extraction functions
-# group: [yaml]
+# group: [yaml_types]
 
 require yaml
 

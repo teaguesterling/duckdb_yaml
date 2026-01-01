@@ -1,6 +1,6 @@
 # name: test/sql/yaml_reader/yaml_glob_structs.test
 # description: Test struct handling across multiple files with glob patterns, specifically for fields with dots and slashes
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

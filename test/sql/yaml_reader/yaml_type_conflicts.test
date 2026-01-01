@@ -1,6 +1,7 @@
 # name: test/sql/yaml_reader/yaml_type_conflicts.test
 # description: Test handling of type conflicts during jagged schema detection
 # group: [yaml_reader]
+
 #
 # Related issues:
 # - #17: STRUCT to VARCHAR fallback causes data loss (FIXED)

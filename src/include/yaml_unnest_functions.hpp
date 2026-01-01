@@ -6,7 +6,7 @@ namespace duckdb {
 
 class YAMLUnnestFunctions {
 public:
-    static void Register(ExtensionLoader &loader);
+	static void Register(ExtensionLoader &loader);
 };
 
 } // namespace duckdb

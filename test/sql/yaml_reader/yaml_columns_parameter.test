@@ -1,6 +1,6 @@
-# name: test/yaml_reader/yaml_columns_parameter.test
+# name: test/sql/yaml_reader/yaml_columns_parameter.test
 # description: Tests for YAML reader columns parameter (explicit column type specification)
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 

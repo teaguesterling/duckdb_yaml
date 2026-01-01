@@ -1,6 +1,6 @@
-# name: test/yaml/yaml_file_handling.test
+# name: test/sql/yaml_reader/yaml_file_handling.test
 # description: Tests for file handling capabilities of YAML reader
-# group: [yaml]
+# group: [yaml_reader]
 
 require yaml
 
