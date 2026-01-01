@@ -11,3 +11,4 @@ test/python/__pycache__/
 **/.claude/settings.local.json
 duckdb_unittest_tempdir/
 duckdb-community-extensions/
+site/

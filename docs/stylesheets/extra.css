@@ -1,0 +1,86 @@
+/* Extra styles for DuckDB YAML Extension documentation */
+
+/* Code block styling */
+.md-typeset code {
+    background-color: var(--md-code-bg-color);
+}
+
+/* SQL syntax highlighting improvements */
+.highlight .k,
+.highlight .kd,
+.highlight .kn,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt {
+    font-weight: 600;
+}
+
+/* Table styling */
+.md-typeset table:not([class]) {
+    font-size: 0.85rem;
+}
+
+.md-typeset table:not([class]) th {
+    background-color: var(--md-primary-fg-color);
+    color: var(--md-primary-bg-color);
+}
+
+/* Cards grid styling for homepage */
+.grid.cards > ul > li {
+    border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.grid.cards > ul > li:hover {
+    border-color: var(--md-accent-fg-color);
+}
+
+/* Admonition customization */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+    border-color: var(--md-primary-fg-color);
+}
+
+/* Function reference styling */
+.md-typeset h3 code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 1em;
+}
+
+/* Parameter tables */
+.md-typeset table th:first-child,
+.md-typeset table td:first-child {
+    white-space: nowrap;
+}
+
+/* YAML code blocks */
+.highlight-yaml .highlight,
+.language-yaml {
+    background-color: var(--md-code-bg-color);
+}
+
+/* SQL code blocks - emphasized */
+.language-sql {
+    border-left: 3px solid var(--md-primary-fg-color);
+}
+
+/* Navigation improvements */
+.md-nav__link--active {
+    font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 76.25em) {
+    .md-typeset table:not([class]) {
+        font-size: 0.8rem;
+    }
+}
+
+/* Print improvements */
+@media print {
+    .md-typeset code {
+        background-color: #f5f5f5;
+        border: 1px solid #ddd;
+    }
+}

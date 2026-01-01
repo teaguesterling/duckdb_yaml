@@ -1,0 +1,128 @@
+site_name: DuckDB YAML Extension
+site_description: Read, write, and query YAML files directly in DuckDB
+site_url: https://teaguesterling.github.io/duckdb_yaml/
+repo_url: https://github.com/teaguesterling/duckdb_yaml
+repo_name: teaguesterling/duckdb_yaml
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: amber
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: amber
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+
+plugins:
+  - search
+  - autorefs
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/teaguesterling/duckdb_yaml
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - User Guide:
+    - guide/index.md
+    - Reading YAML Files: guide/reading-yaml.md
+    - Frontmatter Extraction: guide/frontmatter.md
+    - YAML Type: guide/yaml-type.md
+    - Writing YAML Files: guide/writing-yaml.md
+    - Type Detection: guide/type-detection.md
+    - Error Handling: guide/error-handling.md
+  - Functions:
+    - functions/index.md
+    - Extraction Functions: functions/extraction.md
+    - Conversion Functions: functions/conversion.md
+    - Parsing Functions: functions/parsing.md
+    - Construction Functions: functions/construction.md
+    - Utility Functions: functions/utility.md
+  - API Reference:
+    - reference/index.md
+    - Table Functions: reference/table-functions.md
+    - Scalar Functions: reference/scalar-functions.md
+    - Parameters: reference/parameters.md
+  - Examples:
+    - examples/index.md
+    - Configuration Files: examples/config-files.md
+    - Blog & Documentation: examples/blog-docs.md
+    - Data Migration: examples/data-migration.md
+  - Contributing: contributing.md
