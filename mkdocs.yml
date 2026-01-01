@@ -1,6 +1,6 @@
 site_name: DuckDB YAML Extension
 site_description: Read, write, and query YAML files directly in DuckDB
-site_url: https://teaguesterling.github.io/duckdb_yaml/
+site_url: https://duckdb-yaml.readthedocs.io/
 repo_url: https://github.com/teaguesterling/duckdb_yaml
 repo_name: teaguesterling/duckdb_yaml
 edit_uri: edit/main/docs/
