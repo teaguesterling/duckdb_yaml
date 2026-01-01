@@ -1,0 +1,8 @@
+# Test case for issue #21: Top-level sequence with optional fields
+- name: first
+  required: value1
+- name: second
+  required: value2
+  optional: extra
+- name: third
+  required: value3

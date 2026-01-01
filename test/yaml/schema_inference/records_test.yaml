@@ -1,0 +1,12 @@
+# Test case for issue #22: records parameter
+default_owner: teaguesterling
+version: "1.0"
+projects:
+  - name: project1
+    description: First project
+    status: active
+  - name: project2
+    description: Second project
+    status: inactive
+  - name: project3
+    description: Third project

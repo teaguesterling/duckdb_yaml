@@ -138,6 +138,18 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 				common_type = element_type;
 				first_element = false;
 			} else if (common_type.id() == element_type.id()) {
+				// If both are structs, merge their fields to handle optional fields
+				if (common_type.id() == LogicalTypeId::STRUCT) {
+					common_type = MergeStructTypes(common_type, element_type);
+				}
+				// If both are lists, recursively merge the child types
+				else if (common_type.id() == LogicalTypeId::LIST) {
+					auto common_child = ListType::GetChildType(common_type);
+					auto element_child = ListType::GetChildType(element_type);
+					if (common_child.id() == LogicalTypeId::STRUCT && element_child.id() == LogicalTypeId::STRUCT) {
+						common_type = LogicalType::LIST(MergeStructTypes(common_child, element_child));
+					}
+				}
 				continue; // Keep checking
 			} else if (common_type.IsNumeric() && element_type.IsNumeric()) {
 				// Combine numeric types - promote to the wider type

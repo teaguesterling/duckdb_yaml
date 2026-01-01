@@ -1,0 +1,14 @@
+# More complex test case with multiple optional fields appearing at different positions
+- id: 1
+  name: Alice
+- id: 2
+  name: Bob
+  email: bob@example.com
+- id: 3
+  name: Carol
+  phone: 555-1234
+- id: 4
+  name: Dave
+  email: dave@example.com
+  phone: 555-5678
+  notes: Some notes here

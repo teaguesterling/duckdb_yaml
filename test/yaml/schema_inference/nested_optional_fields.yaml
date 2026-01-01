@@ -1,0 +1,12 @@
+# Test case with optional fields in nested arrays
+config:
+  users:
+    - name: admin
+      role: admin
+    - name: user1
+      role: user
+      department: engineering
+    - name: user2
+      role: user
+      department: sales
+      manager: admin

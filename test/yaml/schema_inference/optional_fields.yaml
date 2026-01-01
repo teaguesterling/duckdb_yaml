@@ -1,0 +1,9 @@
+# Test case for issue #21: Schema inference drops fields not in first element
+items:
+  - name: first
+    required: value1
+  - name: second
+    required: value2
+    optional: extra
+  - name: third
+    required: value3

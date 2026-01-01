@@ -1,0 +1,12 @@
+# Test case for issue #22: nested records path
+metadata:
+  created: 2024-01-15
+  author: test
+data:
+  items:
+    - id: 1
+      value: first
+    - id: 2
+      value: second
+    - id: 3
+      value: third

@@ -1,0 +1,80 @@
+# name: test/sql/yaml_reader/yaml_schema_inference.test
+# description: Test schema inference with optional fields (issue #21)
+# group: [yaml_reader]
+
+require yaml
+
+# ============================================================================
+# Tests for schema inference with optional fields (issue #21)
+# Nested arrays should use union of all element fields, not just the first
+# ============================================================================
+
+# Test 1: Basic optional field in nested array
+# The 'optional' field appears only in the second item and should be included in schema
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/optional_fields.yaml');
+----
+STRUCT("name" VARCHAR, required VARCHAR, optional VARCHAR)[]
+
+# Verify the actual data includes the optional field
+query I
+SELECT items FROM read_yaml('test/yaml/schema_inference/optional_fields.yaml');
+----
+[{'name': first, 'required': value1, 'optional': NULL}, {'name': second, 'required': value2, 'optional': extra}, {'name': third, 'required': value3, 'optional': NULL}]
+
+# Test 2: Nested optional fields
+query I
+SELECT typeof(config.users) FROM read_yaml('test/yaml/schema_inference/nested_optional_fields.yaml');
+----
+STRUCT("name" VARCHAR, "role" VARCHAR, department VARCHAR, manager VARCHAR)[]
+
+# Verify nested data includes optional fields
+query I
+SELECT config.users[2].department FROM read_yaml('test/yaml/schema_inference/nested_optional_fields.yaml');
+----
+engineering
+
+query I
+SELECT config.users[3].manager FROM read_yaml('test/yaml/schema_inference/nested_optional_fields.yaml');
+----
+admin
+
+query I
+SELECT config.users[1].department FROM read_yaml('test/yaml/schema_inference/nested_optional_fields.yaml');
+----
+NULL
+
+# ============================================================================
+# WORKING: Top-level sequences correctly infer schema from all elements
+# These tests document behavior that already works
+# ============================================================================
+
+# Test 3: Top-level sequence with optional fields (WORKS)
+query I
+SELECT typeof(optional) FROM read_yaml('test/yaml/schema_inference/optional_fields_sequence.yaml') LIMIT 1;
+----
+VARCHAR
+
+# The optional column should exist and have values
+query III
+SELECT name, required, optional FROM read_yaml('test/yaml/schema_inference/optional_fields_sequence.yaml');
+----
+first	value1	NULL
+second	value2	extra
+third	value3	NULL
+
+# Test 4: Multiple optional fields at top-level (WORKS)
+query IIIII
+SELECT id, name, email, phone, notes FROM read_yaml('test/yaml/schema_inference/multiple_optional_fields.yaml');
+----
+1	Alice	NULL	NULL	NULL
+2	Bob	bob@example.com	NULL	NULL
+3	Carol	NULL	555-1234	NULL
+4	Dave	dave@example.com	555-5678	Some notes here
+
+# Test 5: Verify column types are correct
+query IIIII
+SELECT typeof(id), typeof(name), typeof(email), typeof(phone), typeof(notes)
+FROM read_yaml('test/yaml/schema_inference/multiple_optional_fields.yaml') LIMIT 1;
+----
+TINYINT	VARCHAR	VARCHAR	VARCHAR	VARCHAR
