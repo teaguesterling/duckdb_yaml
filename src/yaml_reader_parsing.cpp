@@ -3,6 +3,46 @@
 
 namespace duckdb {
 
+// Helper to check if a map node has a specific key
+static bool HasKey(const YAML::Node &map_node, const string &key) {
+	if (!map_node.IsMap()) {
+		return false;
+	}
+	for (auto it = map_node.begin(); it != map_node.end(); ++it) {
+		if (it->first.Scalar() == key) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Navigate to a nested path within a YAML node using dot notation
+YAML::Node YAMLReader::NavigateToPath(const YAML::Node &node, const string &path) {
+	if (path.empty()) {
+		return node;
+	}
+
+	YAML::Node current = node;
+	size_t start = 0;
+	size_t end = 0;
+
+	while ((end = path.find('.', start)) != string::npos) {
+		string key = path.substr(start, end - start);
+		if (!current.IsMap() || !HasKey(current, key)) {
+			return YAML::Node(); // Return undefined node
+		}
+		current = current[key];
+		start = end + 1;
+	}
+
+	// Handle the last segment
+	string last_key = path.substr(start);
+	if (!current.IsMap() || !HasKey(current, last_key)) {
+		return YAML::Node(); // Return undefined node
+	}
+	return current[last_key];
+}
+
 // Helper function for parsing multi-document YAML with error recovery
 vector<YAML::Node> YAMLReader::ParseMultiDocumentYAML(const string &yaml_content, bool ignore_errors) {
 	std::stringstream yaml_stream(yaml_content);

@@ -58,6 +58,9 @@ public:
 		// User-specified column types
 		vector<string> column_names;      // User-provided column names
 		vector<LogicalType> column_types; // User-provided column types
+
+		// Records path for extracting records from nested structure (issue #22)
+		string records_path; // Dot-notation path to array of records (e.g., "data.items" or "projects")
 	};
 
 	/**
@@ -286,6 +289,15 @@ public:
 	 * @param options YAML read options to update with column specifications
 	 */
 	static void BindColumnTypes(ClientContext &context, TableFunctionBindInput &input, YAMLReadOptions &options);
+
+	/**
+	 * @brief Navigate to a nested path within a YAML node using dot notation
+	 *
+	 * @param node The root YAML node to navigate from
+	 * @param path Dot-notation path (e.g., "data.items" or "config.users")
+	 * @return YAML::Node The node at the specified path, or an undefined node if not found
+	 */
+	static YAML::Node NavigateToPath(const YAML::Node &node, const string &path);
 
 	/**
 	 * @brief Bind function for parse_yaml that parses YAML strings into rows

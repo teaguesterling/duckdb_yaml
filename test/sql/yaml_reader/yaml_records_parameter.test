@@ -1,0 +1,87 @@
+# name: test/sql/yaml_reader/yaml_records_parameter.test
+# description: Test the records parameter for extracting records from nested paths (issue #22)
+# group: [yaml_reader]
+
+require yaml
+
+# ============================================================================
+# Tests for records parameter (issue #22)
+# Extract records from a nested array using dot notation path
+# ============================================================================
+
+# Test 1: Basic records parameter - extract projects array
+query III
+SELECT name, description, status FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects');
+----
+project1	First project	active
+project2	Second project	inactive
+project3	Third project	NULL
+
+# Test 2: Verify column types from records
+query III
+SELECT typeof(name), typeof(description), typeof(status)
+FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects') LIMIT 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+# Test 3: Nested records path with dot notation
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.items');
+----
+1	first
+2	second
+3	third
+
+# Test 4: Verify column types from nested records
+query II
+SELECT typeof(id), typeof(value)
+FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.items') LIMIT 1;
+----
+TINYINT	VARCHAR
+
+# Test 5: Records with optional fields (schema inference from all elements)
+query II
+SELECT name, status FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects');
+----
+project1	active
+project2	inactive
+project3	NULL
+
+# ============================================================================
+# Error handling tests
+# ============================================================================
+
+# Test 6: Error when records path doesn't exist
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'nonexistent');
+----
+Records path 'nonexistent' not found
+
+# Test 7: Error when records path points to non-sequence
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'default_owner');
+----
+Records path 'default_owner' does not point to a sequence
+
+# Test 8: Error when nested path doesn't exist
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.nonexistent');
+----
+Records path 'data.nonexistent' not found
+
+# Test 9: Empty records parameter should error
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '');
+----
+"records" parameter cannot be an empty string
+
+# ============================================================================
+# Ignore errors behavior
+# ============================================================================
+
+# Test 10: With ignore_errors, missing path returns empty result
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'nonexistent', ignore_errors := true);
+----
+0
+

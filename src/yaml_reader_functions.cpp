@@ -165,6 +165,14 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			    "read_yaml \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
 		}
 	}
+	if (seen_parameters.find("records") != seen_parameters.end()) {
+		options.records_path = input.named_parameters["records"].GetValue<string>();
+		if (options.records_path.empty()) {
+			throw BinderException("read_yaml \"records\" parameter cannot be an empty string");
+		}
+		// When using records path, we don't expand root sequences (the records path points to the sequence)
+		options.expand_root_sequence = false;
+	}
 
 	// Create bind data
 	auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
@@ -186,7 +194,39 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	for (const auto &file_path : files) {
 		try {
 			auto docs = ReadYAMLFile(context, file_path, options);
-			auto file_nodes = ExtractRowNodes(docs, options.expand_root_sequence);
+			vector<YAML::Node> file_nodes;
+
+			// If records path is specified, extract records from that path
+			if (!options.records_path.empty()) {
+				for (const auto &doc : docs) {
+					YAML::Node records_node = NavigateToPath(doc, options.records_path);
+					// Check if path was found - check for Undefined type or null node
+					if (records_node.Type() == YAML::NodeType::Undefined ||
+					    records_node.Type() == YAML::NodeType::Null || !records_node.IsDefined()) {
+						if (!options.ignore_errors) {
+							throw BinderException("Records path '" + options.records_path +
+							                      "' not found in YAML document");
+						}
+						continue; // Skip this document
+					}
+					if (!records_node.IsSequence()) {
+						if (!options.ignore_errors) {
+							throw BinderException("Records path '" + options.records_path +
+							                      "' does not point to a sequence/array");
+						}
+						continue; // Skip this document
+					}
+					// Extract each element from the sequence as a row
+					for (size_t idx = 0; idx < records_node.size(); idx++) {
+						if (records_node[idx].IsMap()) {
+							file_nodes.push_back(records_node[idx]);
+						}
+					}
+				}
+			} else {
+				// Use the standard extraction logic
+				file_nodes = ExtractRowNodes(docs, options.expand_root_sequence);
+			}
 
 			// Add nodes from this file to the full result set
 			row_nodes.insert(row_nodes.end(), file_nodes.begin(), file_nodes.end());

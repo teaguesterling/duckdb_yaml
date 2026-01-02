@@ -38,6 +38,7 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml.named_parameters["columns"] = LogicalType::ANY;
 	read_yaml.named_parameters["sample_size"] = LogicalType::BIGINT;
 	read_yaml.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
+	read_yaml.named_parameters["records"] = LogicalType::VARCHAR;
 
 	// Register the function
 	loader.RegisterFunction(read_yaml);
