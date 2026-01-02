@@ -1,0 +1,245 @@
+# name: test/sql/yaml_reader/yaml_records_security.test
+# description: Security and memory safety tests for records parameter
+# group: [yaml_reader]
+
+require yaml
+
+# ============================================================================
+# Path Traversal and Injection Prevention
+# ============================================================================
+
+# Test: Path traversal attempt should fail safely (not access filesystem)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '../../../etc/passwd');
+----
+Records path '../../../etc/passwd' not found
+
+# Test: Another path traversal pattern
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '..%2F..%2Fetc/passwd');
+----
+Records path '..%2F..%2Fetc/passwd' not found
+
+# Test: SQL injection attempt in path is treated as literal string
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects; DROP TABLE test;--');
+----
+Records path 'projects; DROP TABLE test;--' not found
+
+# Test: Shell injection attempt in path is treated as literal string
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects$(whoami)');
+----
+Records path 'projects$(whoami)' not found
+
+# Test: Backtick injection attempt
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects`id`');
+----
+Records path 'projects`id`' not found
+
+# ============================================================================
+# Memory Safety - Long Inputs
+# ============================================================================
+
+# Test: Very long path string (10000 chars) - should fail gracefully without crash
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := repeat('a', 10000));
+----
+not found
+
+# Test: Path with many segments (100+ dots) - should fail gracefully
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := repeat('a.', 100) || 'items');
+----
+not found
+
+# ============================================================================
+# Deep Nesting - Stack Safety
+# ============================================================================
+
+# Test: Successfully navigate 10 levels deep
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_long_path.yaml',
+    records := 'level1.level2.level3.level4.level5.level6.level7.level8.level9.level10.items');
+----
+1	deep
+
+# Test: Verify correct value at deep nesting
+query I
+SELECT value FROM read_yaml('test/yaml/schema_inference/records_long_path.yaml',
+    records := 'level1.level2.level3.level4.level5.level6.level7.level8.level9.level10.items');
+----
+deep
+
+# ============================================================================
+# Unicode and Encoding Safety
+# ============================================================================
+
+# Test: French unicode characters in path
+query II
+SELECT id, valeur FROM read_yaml('test/yaml/schema_inference/records_unicode_keys.yaml',
+    records := 'données.éléments');
+----
+1	français
+
+# Test: Chinese unicode characters in path
+query II
+SELECT id, 值 FROM read_yaml('test/yaml/schema_inference/records_unicode_keys.yaml',
+    records := '数据.项目');
+----
+2	中文
+
+# Test: Mixed ASCII and unicode in same query
+query I
+SELECT COUNT(*) FROM (
+    SELECT * FROM read_yaml('test/yaml/schema_inference/records_unicode_keys.yaml', records := 'données.éléments')
+    UNION ALL
+    SELECT * FROM read_yaml('test/yaml/schema_inference/records_unicode_keys.yaml', records := '数据.项目')
+);
+----
+2
+
+# ============================================================================
+# Special Characters in Keys
+# ============================================================================
+
+# Test: Key with spaces can be accessed
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_special_keys.yaml',
+    records := 'key with spaces.items');
+----
+1	space_key
+
+# Test: Key with slashes can be accessed
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_special_keys.yaml',
+    records := 'key/with/slashes.data');
+----
+3	slash_key
+
+# Test: Key containing dots cannot be accessed with dot notation (known limitation)
+# The path "key.with.dots.nested" is interpreted as key->with->dots->nested, not "key.with.dots"->nested
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_special_keys.yaml',
+    records := 'key.with.dots.nested');
+----
+Records path 'key.with.dots.nested' not found
+
+# ============================================================================
+# YAML Anchors and Aliases (Cycle Prevention)
+# ============================================================================
+
+# Test: YAML with anchors and aliases works correctly
+query III
+SELECT id, config, name FROM read_yaml('test/yaml/schema_inference/records_anchor_alias.yaml',
+    records := 'records.items');
+----
+1	{'adapter': postgres, 'host': localhost}	NULL
+2	NULL	test
+
+# Test: Anchor reference is properly expanded
+query I
+SELECT config.adapter FROM read_yaml('test/yaml/schema_inference/records_anchor_alias.yaml',
+    records := 'records.items') WHERE id = 1;
+----
+postgres
+
+# ============================================================================
+# Large Data Handling
+# ============================================================================
+
+# Test: Array with 20 elements processes correctly
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_large_array.yaml',
+    records := 'data.items');
+----
+20
+
+# Test: Verify first and last elements of large array
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_large_array.yaml',
+    records := 'data.items') WHERE id IN (1, 20) ORDER BY id;
+----
+1	item1
+20	item20
+
+# Test: Aggregation on large array works
+query III
+SELECT MIN(id), MAX(id), COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_large_array.yaml',
+    records := 'data.items');
+----
+1	20	20
+
+# ============================================================================
+# Null Byte and Control Character Safety
+# ============================================================================
+
+# Test: Null byte in path is handled safely (treated as part of string, not found)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := 'projects' || chr(0) || 'extra');
+----
+not found
+
+# Test: Newline in path is handled safely
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := 'projects' || chr(10) || 'extra');
+----
+not found
+
+# Test: Tab character in path is handled safely
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := 'projects' || chr(9) || 'extra');
+----
+not found
+
+# ============================================================================
+# Boundary Conditions
+# ============================================================================
+
+# Test: Single character path that doesn't exist
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'x');
+----
+Records path 'x' not found
+
+# Test: Path with only dots
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '...');
+----
+Records path '...' not found
+
+# Test: Path with only spaces
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '   ');
+----
+Records path '   ' not found
+
+# ============================================================================
+# Error Recovery with ignore_errors
+# ============================================================================
+
+# Test: Malicious path with ignore_errors returns empty, doesn't crash
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := '../../../etc/passwd', ignore_errors := true);
+----
+0
+
+# Test: Very long path with ignore_errors returns empty, doesn't crash
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := repeat('x', 5000), ignore_errors := true);
+----
+0
+
+# Test: Unicode path that doesn't exist with ignore_errors
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := '不存在的路径', ignore_errors := true);
+----
+0
+

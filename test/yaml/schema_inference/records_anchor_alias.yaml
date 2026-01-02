@@ -1,0 +1,15 @@
+# Test case: YAML anchors and aliases (potential for cycles)
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+
+development:
+  database: dev_db
+  <<: *defaults
+
+records:
+  items:
+    - id: 1
+      config: *defaults
+    - id: 2
+      name: test

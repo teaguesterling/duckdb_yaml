@@ -1,0 +1,9 @@
+# Test case: unicode characters in keys
+données:
+  éléments:
+    - id: 1
+      valeur: français
+数据:
+  项目:
+    - id: 2
+      值: 中文

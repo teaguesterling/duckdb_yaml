@@ -1,0 +1,17 @@
+# Test case: keys with special characters
+"key with spaces":
+  items:
+    - id: 1
+      value: space_key
+"key.with.dots":
+  nested:
+    - id: 2
+      value: dot_key
+"key/with/slashes":
+  data:
+    - id: 3
+      value: slash_key
+normal_key:
+  items:
+    - id: 4
+      value: normal

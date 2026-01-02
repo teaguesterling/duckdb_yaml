@@ -1,0 +1,43 @@
+# Test case: larger array for memory handling
+data:
+  items:
+    - id: 1
+      value: item1
+    - id: 2
+      value: item2
+    - id: 3
+      value: item3
+    - id: 4
+      value: item4
+    - id: 5
+      value: item5
+    - id: 6
+      value: item6
+    - id: 7
+      value: item7
+    - id: 8
+      value: item8
+    - id: 9
+      value: item9
+    - id: 10
+      value: item10
+    - id: 11
+      value: item11
+    - id: 12
+      value: item12
+    - id: 13
+      value: item13
+    - id: 14
+      value: item14
+    - id: 15
+      value: item15
+    - id: 16
+      value: item16
+    - id: 17
+      value: item17
+    - id: 18
+      value: item18
+    - id: 19
+      value: item19
+    - id: 20
+      value: item20
