@@ -19,6 +19,12 @@ Complete reference for all configurable parameters.
 | `sample_size` | INTEGER | `20480` | Rows to sample for schema detection |
 | `maximum_sample_files` | INTEGER | `32` | Files to sample for schema detection |
 
+### Data Extraction
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `records` | VARCHAR | - | Path to nested array of records (dot notation) |
+
 ### Parsing Behavior
 
 | Parameter | Type | Default | Description |
@@ -78,6 +84,64 @@ SELECT * FROM read_yaml('data.yaml', columns = {
 
 - Specified columns use explicit types
 - Unspecified columns use auto_detect behavior
+
+---
+
+## records
+
+Extract records from a nested array path using dot notation.
+
+**Value:** String with dot-separated path segments.
+
+**Example:**
+
+```yaml
+# config.yaml
+metadata:
+  version: "1.0"
+projects:
+  - name: alpha
+    status: active
+  - name: beta
+    status: inactive
+```
+
+```sql
+-- Extract the nested projects array
+SELECT * FROM read_yaml('config.yaml', records = 'projects');
+```
+
+**Nested paths:**
+
+```yaml
+# data.yaml
+config:
+  database:
+    tables:
+      - name: users
+        rows: 1000
+      - name: orders
+        rows: 5000
+```
+
+```sql
+-- Navigate multiple levels deep
+SELECT * FROM read_yaml('data.yaml', records = 'config.database.tables');
+```
+
+**Error handling:**
+
+| Condition | Behavior |
+|-----------|----------|
+| Path not found | Error (or skip with `ignore_errors = true`) |
+| Path points to non-array | Error (or skip with `ignore_errors = true`) |
+| Array contains non-objects | Non-object elements are filtered out |
+
+**Interaction with other parameters:**
+
+- `expand_root_sequence` is automatically disabled when `records` is specified
+- `columns` can be combined to specify types for the extracted records
+- `ignore_errors` allows graceful handling of missing paths
 
 ---
 

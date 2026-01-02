@@ -87,6 +87,92 @@ ORDER BY env;
 
 ---
 
+## Extracting Nested Data with records
+
+When configuration files contain nested arrays, use the `records` parameter to extract them directly as table rows.
+
+### Project Configuration
+
+Given `project.yaml`:
+
+```yaml
+name: MyProject
+version: "2.0"
+default_owner: admin
+dependencies:
+  - name: lodash
+    version: "4.17.21"
+    required: true
+  - name: express
+    version: "4.18.0"
+    required: true
+  - name: jest
+    version: "29.0.0"
+    required: false
+```
+
+Extract dependencies directly:
+
+```sql
+-- Extract the dependencies array as rows
+SELECT name, version, required
+FROM read_yaml('project.yaml', records = 'dependencies');
+```
+
+| name | version | required |
+|------|---------|----------|
+| lodash | 4.17.21 | true |
+| express | 4.18.0 | true |
+| jest | 29.0.0 | false |
+
+### Database Schema Config
+
+Given `schema.yaml`:
+
+```yaml
+database:
+  name: myapp
+  schema:
+    tables:
+      - name: users
+        columns:
+          - name: id
+            type: integer
+          - name: email
+            type: varchar
+      - name: orders
+        columns:
+          - name: id
+            type: integer
+          - name: user_id
+            type: integer
+```
+
+Extract tables from nested path:
+
+```sql
+-- Two-level nested path
+SELECT name, columns
+FROM read_yaml('schema.yaml', records = 'database.schema.tables');
+```
+
+### Combining records with Filtering
+
+```sql
+-- Extract and filter dependencies
+SELECT name, version
+FROM read_yaml('project.yaml', records = 'dependencies')
+WHERE required = true;
+
+-- Aggregate nested data
+SELECT
+    COUNT(*) AS total_deps,
+    COUNT(*) FILTER (WHERE required) AS required_deps
+FROM read_yaml('project.yaml', records = 'dependencies');
+```
+
+---
+
 ## Infrastructure as Code
 
 ### Kubernetes Configuration

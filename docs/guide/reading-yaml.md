@@ -61,6 +61,7 @@ The function accepts several input formats:
 |-----------|------|---------|-------------|
 | `auto_detect` | BOOLEAN | `true` | Enable automatic type detection |
 | `columns` | STRUCT | - | Explicit column type specification |
+| `records` | VARCHAR | - | Path to nested array of records (dot notation) |
 | `multi_document` | BOOLEAN | `true` | Handle multiple YAML documents |
 | `expand_root_sequence` | BOOLEAN | `true` | Expand top-level sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on parsing errors |
@@ -94,6 +95,45 @@ SELECT * FROM read_yaml('data.yaml', columns = {
 ```
 
 See [Column Type Specification](#column-type-specification) for details.
+
+### records
+
+Extract records from a nested array within the YAML structure using dot notation:
+
+```yaml
+# config.yaml
+metadata:
+  version: "1.0"
+  author: admin
+data:
+  users:
+    - id: 1
+      name: Alice
+      role: admin
+    - id: 2
+      name: Bob
+      role: user
+```
+
+```sql
+-- Extract the nested users array as rows
+SELECT * FROM read_yaml('config.yaml', records = 'data.users');
+```
+
+| id | name | role |
+|----|------|------|
+| 1 | Alice | admin |
+| 2 | Bob | user |
+
+The `records` parameter supports:
+
+- **Single-level paths**: `records = 'items'`
+- **Nested paths**: `records = 'data.users'` or `records = 'config.database.tables'`
+- **Unicode keys**: `records = 'données.éléments'`
+
+!!! tip "When to use records"
+    Use `records` when your YAML file contains metadata at the top level
+    and the actual data records are nested within a specific field.
 
 ### multi_document
 

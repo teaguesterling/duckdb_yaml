@@ -19,6 +19,7 @@ read_yaml(path VARCHAR, [options...]) → TABLE
 | `path` | VARCHAR or VARCHAR[] | Required | File path, glob pattern, or list of files |
 | `auto_detect` | BOOLEAN | `true` | Enable automatic type detection |
 | `columns` | STRUCT | - | Explicit column type specification |
+| `records` | VARCHAR | - | Path to nested array of records (dot notation) |
 | `multi_document` | BOOLEAN | `true` | Handle multiple YAML documents |
 | `expand_root_sequence` | BOOLEAN | `true` | Expand top-level sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on parsing errors |
@@ -48,6 +49,12 @@ SELECT * FROM read_yaml('data.yaml',
     ignore_errors = true,
     columns = {'id': 'INTEGER', 'name': 'VARCHAR'}
 );
+
+-- Extract nested records
+SELECT * FROM read_yaml('config.yaml', records = 'data.users');
+
+-- Deeply nested path
+SELECT * FROM read_yaml('app.yaml', records = 'config.database.tables');
 ```
 
 ---
