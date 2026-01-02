@@ -1,0 +1,10 @@
+# Test case: deeply nested records path (3+ levels)
+config:
+  database:
+    tables:
+      - name: users
+        columns: 3
+      - name: orders
+        columns: 5
+      - name: products
+        columns: 8

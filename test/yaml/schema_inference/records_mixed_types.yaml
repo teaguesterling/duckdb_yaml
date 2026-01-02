@@ -1,0 +1,12 @@
+# Test case: array with mixed element types (maps and scalars)
+# Only map elements should be extracted as records
+data:
+  items:
+    - id: 1
+      value: first
+    - "scalar_string"
+    - id: 2
+      value: second
+    - 42
+    - id: 3
+      value: third

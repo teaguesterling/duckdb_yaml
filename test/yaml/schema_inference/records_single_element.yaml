@@ -1,0 +1,6 @@
+# Test case: single element in records array
+data:
+  records:
+    - id: 1
+      name: only_one
+      active: true

@@ -5,11 +5,10 @@
 require yaml
 
 # ============================================================================
-# Tests for records parameter (issue #22)
-# Extract records from a nested array using dot notation path
+# Basic Functionality Tests
 # ============================================================================
 
-# Test 1: Basic records parameter - extract projects array
+# Test: Basic records parameter - extract top-level array
 query III
 SELECT name, description, status FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects');
 ----
@@ -17,14 +16,24 @@ project1	First project	active
 project2	Second project	inactive
 project3	Third project	NULL
 
-# Test 2: Verify column types from records
+# Test: Verify column types are correctly inferred
 query III
 SELECT typeof(name), typeof(description), typeof(status)
 FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects') LIMIT 1;
 ----
 VARCHAR	VARCHAR	VARCHAR
 
-# Test 3: Nested records path with dot notation
+# Test: Row count verification
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects');
+----
+3
+
+# ============================================================================
+# Nested Path Tests (Dot Notation)
+# ============================================================================
+
+# Test: Two-level nested path (data.items)
 query II
 SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.items');
 ----
@@ -32,14 +41,69 @@ SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_nested.yaml'
 2	second
 3	third
 
-# Test 4: Verify column types from nested records
+# Test: Numeric type inference in nested records
 query II
 SELECT typeof(id), typeof(value)
 FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.items') LIMIT 1;
 ----
 TINYINT	VARCHAR
 
-# Test 5: Records with optional fields (schema inference from all elements)
+# Test: Three-level nested path (config.database.tables)
+query II
+SELECT name, columns FROM read_yaml('test/yaml/schema_inference/records_deep_nested.yaml', records := 'config.database.tables');
+----
+users	3
+orders	5
+products	8
+
+# Test: Verify types in deeply nested records
+query II
+SELECT typeof(name), typeof(columns)
+FROM read_yaml('test/yaml/schema_inference/records_deep_nested.yaml', records := 'config.database.tables') LIMIT 1;
+----
+VARCHAR	TINYINT
+
+# ============================================================================
+# Single Element Array
+# ============================================================================
+
+# Test: Array with only one element should work correctly
+query III
+SELECT id, name, active FROM read_yaml('test/yaml/schema_inference/records_single_element.yaml', records := 'data.records');
+----
+1	only_one	true
+
+# Test: Boolean type inference works in single-element case
+query III
+SELECT typeof(id), typeof(name), typeof(active)
+FROM read_yaml('test/yaml/schema_inference/records_single_element.yaml', records := 'data.records');
+----
+TINYINT	VARCHAR	BOOLEAN
+
+# ============================================================================
+# Mixed Content Handling
+# ============================================================================
+
+# Test: Array with mixed types (maps and scalars) - only maps are extracted
+# Expected: scalar elements ("scalar_string", 42) are filtered out, only map elements remain
+query II
+SELECT id, value FROM read_yaml('test/yaml/schema_inference/records_mixed_types.yaml', records := 'data.items');
+----
+1	first
+2	second
+3	third
+
+# Test: Verify row count - only 3 map elements, not 5 total elements
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_mixed_types.yaml', records := 'data.items');
+----
+3
+
+# ============================================================================
+# Schema Inference with Optional Fields
+# ============================================================================
+
+# Test: Optional fields are included in schema (status missing from third element)
 query II
 SELECT name, status FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects');
 ----
@@ -48,40 +112,132 @@ project2	inactive
 project3	NULL
 
 # ============================================================================
-# Error handling tests
+# Error Handling - Missing Paths
 # ============================================================================
 
-# Test 6: Error when records path doesn't exist
+# Test: Error when top-level path doesn't exist
 statement error
 SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'nonexistent');
 ----
 Records path 'nonexistent' not found
 
-# Test 7: Error when records path points to non-sequence
-statement error
-SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'default_owner');
-----
-Records path 'default_owner' does not point to a sequence
-
-# Test 8: Error when nested path doesn't exist
+# Test: Error when nested path doesn't exist (first segment exists)
 statement error
 SELECT * FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data.nonexistent');
 ----
 Records path 'data.nonexistent' not found
 
-# Test 9: Empty records parameter should error
+# Test: Error when first segment of nested path doesn't exist
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'nonexistent.items');
+----
+Records path 'nonexistent.items' not found
+
+# ============================================================================
+# Error Handling - Non-Sequence Targets
+# ============================================================================
+
+# Test: Error when path points to scalar value
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'default_owner');
+----
+Records path 'default_owner' does not point to a sequence
+
+# Test: Error when path points to map (not array)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'metadata');
+----
+Records path 'metadata' does not point to a sequence
+
+# Test: Error when path points to nested map
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_nested.yaml', records := 'data');
+----
+Records path 'data' does not point to a sequence
+
+# ============================================================================
+# Error Handling - Invalid Path Syntax
+# ============================================================================
+
+# Test: Empty records parameter should error
 statement error
 SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '');
 ----
 "records" parameter cannot be an empty string
 
+# Test: Leading dot in path is treated as looking for empty-string key (not found)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := '.projects');
+----
+Records path '.projects' not found
+
+# Test: Trailing dot in path is treated as looking for empty-string key (not found)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'projects.');
+----
+Records path 'projects.' not found
+
+# Test: Double dot in path (empty segment)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'data..items');
+----
+Records path 'data..items' not found
+
 # ============================================================================
-# Ignore errors behavior
+# Edge Cases - Empty and Scalar-Only Arrays
 # ============================================================================
 
-# Test 10: With ignore_errors, missing path returns empty result
+# Test: Empty array returns no rows (with error since no schema can be inferred)
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_empty_array.yaml', records := 'items');
+----
+No valid YAML documents found
+
+# Test: Array containing only scalar values (no maps) returns no rows
+statement error
+SELECT * FROM read_yaml('test/yaml/schema_inference/records_scalar_array.yaml', records := 'config.tags');
+----
+No valid YAML documents found
+
+# ============================================================================
+# Ignore Errors Behavior
+# ============================================================================
+
+# Test: With ignore_errors, missing path returns empty result
 query I
 SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'nonexistent', ignore_errors := true);
 ----
 0
+
+# Test: With ignore_errors, non-sequence path returns empty result
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_test.yaml', records := 'default_owner', ignore_errors := true);
+----
+0
+
+# Test: With ignore_errors, empty array returns empty result
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_empty_array.yaml', records := 'items', ignore_errors := true);
+----
+0
+
+# Test: With ignore_errors, scalar-only array returns empty result
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/schema_inference/records_scalar_array.yaml', records := 'config.tags', ignore_errors := true);
+----
+0
+
+# ============================================================================
+# Combination with Other Parameters
+# ============================================================================
+
+# Test: records with explicit column types via columns parameter
+query II
+SELECT name, status FROM read_yaml('test/yaml/schema_inference/records_test.yaml',
+    records := 'projects',
+    columns := {'name': 'VARCHAR', 'status': 'VARCHAR'});
+----
+project1	active
+project2	inactive
+project3	NULL
 

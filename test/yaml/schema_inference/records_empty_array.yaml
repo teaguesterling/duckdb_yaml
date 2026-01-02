@@ -1,0 +1,4 @@
+# Test case: empty records array
+metadata:
+  version: 1
+items: []

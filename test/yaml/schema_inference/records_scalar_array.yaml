@@ -1,0 +1,6 @@
+# Test case: array containing only scalar values (no maps)
+config:
+  tags:
+    - alpha
+    - beta
+    - gamma
