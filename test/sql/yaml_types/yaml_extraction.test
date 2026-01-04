@@ -140,3 +140,66 @@ query I
 SELECT yaml_extract(data, '$[1]') FROM yaml_typed WHERE yaml_type(data) = 'array';
 ----
 banana
+
+# ===== Arrow Operator (->> for extract_string) =====
+# Note: The -> operator cannot be used for YAML because DuckDB's planner
+# hardcodes it to json_extract. Use yaml_extract() function instead.
+# The ->> operator works because it's a regular function alias.
+
+# Test ->> operator (equivalent to yaml_extract_string, returns VARCHAR)
+
+query I
+SELECT yaml_simple::YAML->>'$.name' FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_simple::YAML->>'$.age' FROM test_yaml;
+----
+30
+
+query I
+SELECT yaml_simple::YAML->>'$.address.city' FROM test_yaml;
+----
+NYC
+
+query I
+SELECT yaml_simple::YAML->>'$.missing' FROM test_yaml;
+----
+NULL
+
+# Test ->> with VARCHAR input (no YAML cast needed)
+
+query I
+SELECT yaml_simple->>'$.name' FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_simple->>'$.address.city' FROM test_yaml;
+----
+NYC
+
+# Test ->> chained with yaml_extract for complex paths
+
+query I
+SELECT yaml_extract(yaml_simple::YAML, '$.address')->>'$.city' FROM test_yaml;
+----
+NYC
+
+# Test ->> with YAML typed columns
+
+query I
+SELECT data->>'$.name' FROM yaml_typed WHERE yaml_exists(data, '$.name');
+----
+Alice
+
+query I
+SELECT data->>'$.scores[0]' FROM yaml_typed WHERE yaml_exists(data, '$.scores');
+----
+90
+
+query I
+SELECT data->>'$[0]' FROM yaml_typed WHERE yaml_type(data) = 'array';
+----
+apple

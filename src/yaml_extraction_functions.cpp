@@ -300,6 +300,15 @@ static void YAMLExistsFunction(DataChunk &args, ExpressionState &state, Vector &
 // Registration
 //===--------------------------------------------------------------------===//
 
+// Helper to register a function with multiple names (for aliases like -> and ->>)
+template <class FUNCTION_INFO>
+static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
+	for (const auto &name : names) {
+		fun.name = name;
+		functions.push_back(fun);
+	}
+}
+
 void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	// Get the YAML type
 	auto yaml_type = YAMLTypes::YAMLType();
@@ -309,22 +318,43 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_type_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::VARCHAR, YAMLTypeUnaryFunction));
 	yaml_type_set.AddFunction(
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeBinaryFunction));
+	// Also support VARCHAR input
+	yaml_type_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeUnaryFunction));
+	yaml_type_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeBinaryFunction));
 	loader.RegisterFunction(yaml_type_set);
 
 	// yaml_extract function
-	auto yaml_extract_fun =
-	    ScalarFunction("yaml_extract", {yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction);
-	loader.RegisterFunction(yaml_extract_fun);
+	// Returns YAML type, accepts both YAML and VARCHAR input
+	// Note: The -> operator cannot be aliased because DuckDB's planner hardcodes it to json_extract
+	ScalarFunctionSet yaml_extract_set("yaml_extract");
+	yaml_extract_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
+	yaml_extract_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
+	loader.RegisterFunction(yaml_extract_set);
 
-	// yaml_extract_string function
-	auto yaml_extract_string_fun = ScalarFunction("yaml_extract_string", {yaml_type, LogicalType::VARCHAR},
-	                                              LogicalType::VARCHAR, YAMLExtractStringFunction);
-	loader.RegisterFunction(yaml_extract_string_fun);
+	// yaml_extract_string function with ->> alias
+	// Returns VARCHAR, accepts both YAML and VARCHAR input
+	ScalarFunctionSet yaml_extract_string_set("yaml_extract_string");
+	yaml_extract_string_set.AddFunction(
+	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
+	yaml_extract_string_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
+
+	// Register yaml_extract_string and ->> alias
+	vector<ScalarFunctionSet> extract_string_functions;
+	AddAliases({"yaml_extract_string", "->>"}, yaml_extract_string_set, extract_string_functions);
+	for (auto &func : extract_string_functions) {
+		loader.RegisterFunction(func);
+	}
 
 	// yaml_exists function
-	auto yaml_exists_fun =
-	    ScalarFunction("yaml_exists", {yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction);
-	loader.RegisterFunction(yaml_exists_fun);
+	ScalarFunctionSet yaml_exists_set("yaml_exists");
+	yaml_exists_set.AddFunction(
+	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction));
+	yaml_exists_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction));
+	loader.RegisterFunction(yaml_exists_set);
 }
 
 } // namespace duckdb
