@@ -297,6 +297,178 @@ static void YAMLExistsFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 //===--------------------------------------------------------------------===//
+// YAML Structure Function
+//===--------------------------------------------------------------------===//
+
+// Helper to detect the DuckDB type name for a scalar value
+static string DetectScalarTypeName(const string &scalar_value) {
+	if (scalar_value.empty() || scalar_value == "null" || scalar_value == "~") {
+		return "NULL";
+	}
+
+	// Check for boolean
+	string lower_value = scalar_value;
+	std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
+	if (lower_value == "true" || lower_value == "false" || lower_value == "yes" || lower_value == "no" ||
+	    lower_value == "on" || lower_value == "off" || lower_value == "y" || lower_value == "n" ||
+	    lower_value == "t" || lower_value == "f") {
+		return "BOOLEAN";
+	}
+
+	// Check for special float values
+	if (lower_value == "inf" || lower_value == "infinity" || lower_value == "-inf" || lower_value == "-infinity" ||
+	    lower_value == "nan") {
+		return "DOUBLE";
+	}
+
+	// Try integer
+	try {
+		size_t pos;
+		int64_t int_val = std::stoll(scalar_value, &pos);
+		if (pos == scalar_value.size()) {
+			if (int_val >= 0) {
+				return "UBIGINT";
+			}
+			return "BIGINT";
+		}
+	} catch (...) {
+	}
+
+	// Try double
+	try {
+		size_t pos;
+		std::stod(scalar_value, &pos);
+		if (pos == scalar_value.size()) {
+			return "DOUBLE";
+		}
+	} catch (...) {
+	}
+
+	return "VARCHAR";
+}
+
+// Forward declaration for mutual recursion
+static string BuildYAMLStructure(const YAML::Node &node);
+
+// Helper to escape a key for JSON output
+static string EscapeJSONKey(const string &key) {
+	string escaped_key;
+	for (char c : key) {
+		if (c == '"') {
+			escaped_key += "\\\"";
+		} else if (c == '\\') {
+			escaped_key += "\\\\";
+		} else {
+			escaped_key += c;
+		}
+	}
+	return escaped_key;
+}
+
+// Helper to merge two object structures (for arrays of objects with different keys)
+static string MergeObjectStructures(const YAML::Node &nodes_array) {
+	// Collect all keys and their types from all objects in the array
+	unordered_map<string, string> merged_keys;
+
+	for (size_t i = 0; i < nodes_array.size(); i++) {
+		const auto &elem = nodes_array[i];
+		if (elem.IsMap()) {
+			for (auto it = elem.begin(); it != elem.end(); ++it) {
+				string key = it->first.Scalar();
+				string value_structure = BuildYAMLStructure(it->second);
+				// If key already exists, keep the existing type (or could merge types)
+				if (merged_keys.find(key) == merged_keys.end()) {
+					merged_keys[key] = value_structure;
+				}
+			}
+		}
+	}
+
+	// Build the merged object structure
+	string result = "{";
+	bool first = true;
+	for (const auto &kv : merged_keys) {
+		if (!first) {
+			result += ",";
+		}
+		first = false;
+		result += "\"" + EscapeJSONKey(kv.first) + "\":" + kv.second;
+	}
+	result += "}";
+	return result;
+}
+
+// Recursively build structure JSON for a YAML node
+static string BuildYAMLStructure(const YAML::Node &node) {
+	if (!node || node.IsNull()) {
+		return "\"NULL\"";
+	}
+
+	switch (node.Type()) {
+	case YAML::NodeType::Scalar: {
+		string type_name = DetectScalarTypeName(node.Scalar());
+		return "\"" + type_name + "\"";
+	}
+	case YAML::NodeType::Sequence: {
+		if (node.size() == 0) {
+			return "[\"NULL\"]";
+		}
+
+		// Check if all elements are maps - if so, merge their structures
+		bool all_maps = true;
+		for (size_t i = 0; i < node.size(); i++) {
+			if (!node[i].IsMap()) {
+				all_maps = false;
+				break;
+			}
+		}
+
+		if (all_maps) {
+			// Merge all object structures
+			return "[" + MergeObjectStructures(node) + "]";
+		}
+
+		// For non-object arrays, use the first element's structure
+		string first_structure = BuildYAMLStructure(node[0]);
+		return "[" + first_structure + "]";
+	}
+	case YAML::NodeType::Map: {
+		string result = "{";
+		bool first = true;
+		for (auto it = node.begin(); it != node.end(); ++it) {
+			if (!first) {
+				result += ",";
+			}
+			first = false;
+
+			string key = it->first.Scalar();
+			result += "\"" + EscapeJSONKey(key) + "\":" + BuildYAMLStructure(it->second);
+		}
+		result += "}";
+		return result;
+	}
+	default:
+		return "\"NULL\"";
+	}
+}
+
+static void YAMLStructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t yaml_str) -> string_t {
+		if (yaml_str.GetSize() == 0) {
+			return StringVector::AddString(result, "\"NULL\"");
+		}
+
+		try {
+			YAML::Node root = YAML::Load(yaml_str.GetString());
+			string structure = BuildYAMLStructure(root);
+			return StringVector::AddString(result, structure);
+		} catch (const std::exception &e) {
+			throw InvalidInputException("Error in yaml_structure: %s", e.what());
+		}
+	});
+}
+
+//===--------------------------------------------------------------------===//
 // Registration
 //===--------------------------------------------------------------------===//
 
@@ -355,6 +527,12 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_exists_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction));
 	loader.RegisterFunction(yaml_exists_set);
+
+	// yaml_structure function - returns JSON representation of YAML structure
+	ScalarFunctionSet yaml_structure_set("yaml_structure");
+	yaml_structure_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::JSON(), YAMLStructureFunction));
+	yaml_structure_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), YAMLStructureFunction));
+	loader.RegisterFunction(yaml_structure_set);
 }
 
 } // namespace duckdb

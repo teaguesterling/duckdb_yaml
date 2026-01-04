@@ -203,3 +203,88 @@ query I
 SELECT data->>'$[0]' FROM yaml_typed WHERE yaml_type(data) = 'array';
 ----
 apple
+
+# ===== YAML Structure Function =====
+# Returns JSON representation of the YAML schema/structure
+
+# Simple object
+query I
+SELECT yaml_structure('name: Alice
+age: 30');
+----
+{"name":"VARCHAR","age":"UBIGINT"}
+
+# Nested object
+query I
+SELECT yaml_structure('user:
+  name: Bob
+  active: true');
+----
+{"user":{"name":"VARCHAR","active":"BOOLEAN"}}
+
+# Simple array
+query I
+SELECT yaml_structure('[1, 2, 3]');
+----
+["UBIGINT"]
+
+# Array of objects - keys should be merged (order may vary due to unordered_map)
+# Check that both 'a' and 'b' keys are present in the structure
+query I
+SELECT yaml_structure('[{a: 1}, {b: 2}]')::VARCHAR LIKE '%"a"%'
+   AND yaml_structure('[{a: 1}, {b: 2}]')::VARCHAR LIKE '%"b"%';
+----
+true
+
+# Nested array
+query I
+SELECT yaml_structure('scores: [90, 85, 92]');
+----
+{"scores":["UBIGINT"]}
+
+# Mixed types - strings
+query I
+SELECT yaml_structure('items:
+  - hello
+  - world');
+----
+{"items":["VARCHAR"]}
+
+# Boolean values
+query I
+SELECT yaml_structure('enabled: true
+disabled: false');
+----
+{"enabled":"BOOLEAN","disabled":"BOOLEAN"}
+
+# Null value
+query I
+SELECT yaml_structure('value: null');
+----
+{"value":"NULL"}
+
+# Empty array
+query I
+SELECT yaml_structure('items: []');
+----
+{"items":["NULL"]}
+
+# Double/float values
+query I
+SELECT yaml_structure('pi: 3.14159
+rate: 0.5');
+----
+{"pi":"DOUBLE","rate":"DOUBLE"}
+
+# Negative integers
+query I
+SELECT yaml_structure('temp: -10
+offset: -100');
+----
+{"temp":"BIGINT","offset":"BIGINT"}
+
+# Works with YAML type input
+query I
+SELECT yaml_structure(yaml_simple::YAML) FROM test_yaml;
+----
+{"name":"VARCHAR","age":"UBIGINT","address":{"city":"VARCHAR","zip":"UBIGINT"}}
