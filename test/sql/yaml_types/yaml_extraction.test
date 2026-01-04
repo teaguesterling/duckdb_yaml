@@ -379,3 +379,73 @@ query I
 SELECT yaml_contains(yaml_simple::YAML, 'name: Jane') FROM test_yaml;
 ----
 false
+
+# ===== YAML Merge Patch Function (RFC 7386) =====
+# Merge two YAML documents
+
+# Basic merge - patch values override target
+query I
+SELECT yaml_merge_patch('a: 1
+b: 2', 'b: 3
+c: 4');
+----
+{a: 1, b: 3, c: 4}
+
+# Null removes key
+query I
+SELECT yaml_merge_patch('a: 1
+b: 2', 'b: null');
+----
+{a: 1}
+
+# Nested merge - recursively merges objects
+query I
+SELECT yaml_merge_patch('a:
+  x: 1
+  y: 2', 'a:
+  y: 3');
+----
+{a: {x: 1, y: 3}}
+
+# Array replacement - arrays are replaced, not merged
+query I
+SELECT yaml_merge_patch('a: [1, 2]', 'a: [3, 4, 5]');
+----
+{a: [3, 4, 5]}
+
+# Scalar replacement
+query I
+SELECT yaml_merge_patch('hello', 'world');
+----
+world
+
+# Non-object target with object patch
+query I
+SELECT yaml_merge_patch('hello', 'a: 1');
+----
+{a: 1}
+
+# Empty patch leaves target unchanged
+query I
+SELECT yaml_merge_patch('a: 1
+b: 2', '{}');
+----
+{a: 1, b: 2}
+
+# Multiple nested levels
+query I
+SELECT yaml_merge_patch('a:
+  b:
+    c: 1
+    d: 2', 'a:
+  b:
+    d: 3
+    e: 4');
+----
+{a: {b: {c: 1, d: 3, e: 4}}}
+
+# Works with YAML type input
+query I
+SELECT yaml_merge_patch(yaml_simple::YAML, 'name: Jane') FROM test_yaml;
+----
+{name: Jane, age: 30, address: {city: NYC, zip: 10001}}

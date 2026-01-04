@@ -558,6 +558,71 @@ static void YAMLContainsFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 //===--------------------------------------------------------------------===//
+// YAML Merge Patch Function (RFC 7386)
+//===--------------------------------------------------------------------===//
+
+// Recursively merge patch into target following RFC 7386 semantics
+// - If patch is not an object, replace target with patch
+// - If patch value is null, remove key from target
+// - Otherwise recursively merge objects
+static YAML::Node YAMLMergePatch(const YAML::Node &target, const YAML::Node &patch) {
+	// If patch is not a map, return patch (replacement)
+	if (!patch.IsMap()) {
+		return YAML::Clone(patch);
+	}
+
+	// Start with target if it's a map, otherwise start fresh
+	YAML::Node result;
+	if (target.IsMap()) {
+		result = YAML::Clone(target);
+	} else {
+		result = YAML::Node(YAML::NodeType::Map);
+	}
+
+	// Apply patch
+	for (auto it = patch.begin(); it != patch.end(); ++it) {
+		string key = it->first.Scalar();
+		const YAML::Node &patch_value = it->second;
+
+		if (patch_value.IsNull()) {
+			// Null value removes the key
+			result.remove(key);
+		} else if (patch_value.IsMap() && result[key] && result[key].IsMap()) {
+			// Recursively merge maps
+			result[key] = YAMLMergePatch(result[key], patch_value);
+		} else {
+			// Replace value
+			result[key] = YAML::Clone(patch_value);
+		}
+	}
+
+	return result;
+}
+
+static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](string_t target_str, string_t patch_str) -> string_t {
+		    try {
+			    YAML::Node target = YAML::Load(target_str.GetString());
+			    YAML::Node patch = YAML::Load(patch_str.GetString());
+			    YAML::Node merged = YAMLMergePatch(target, patch);
+
+			    // Emit result as YAML
+			    YAML::Emitter out;
+			    out.SetIndent(2);
+			    out.SetMapFormat(YAML::Flow);
+			    out.SetSeqFormat(YAML::Flow);
+			    out << merged;
+
+			    return StringVector::AddString(result, out.c_str());
+		    } catch (const std::exception &e) {
+			    throw InvalidInputException("Error in yaml_merge_patch: %s", e.what());
+		    }
+	    });
+}
+
+//===--------------------------------------------------------------------===//
 // Registration
 //===--------------------------------------------------------------------===//
 
@@ -634,6 +699,17 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_contains_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
 	loader.RegisterFunction(yaml_contains_set);
+
+	// yaml_merge_patch function - RFC 7386 merge patch
+	ScalarFunctionSet yaml_merge_patch_set("yaml_merge_patch");
+	yaml_merge_patch_set.AddFunction(ScalarFunction({yaml_type, yaml_type}, yaml_type, YAMLMergePatchFunction));
+	yaml_merge_patch_set.AddFunction(
+	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLMergePatchFunction));
+	yaml_merge_patch_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, yaml_type}, yaml_type, YAMLMergePatchFunction));
+	yaml_merge_patch_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLMergePatchFunction));
+	loader.RegisterFunction(yaml_merge_patch_set);
 }
 
 } // namespace duckdb
