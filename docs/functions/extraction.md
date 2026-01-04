@@ -96,6 +96,37 @@ SELECT yaml_extract_string('{user: {name: John}}'::YAML, '$.user');
 
 ---
 
+## ->> Operator
+
+The `->>` operator is an alias for `yaml_extract_string`, providing a more concise syntax for extracting values as strings.
+
+### Syntax
+
+```sql
+yaml_value ->> path → VARCHAR
+```
+
+### Examples
+
+```sql
+-- Extract using arrow operator
+SELECT '{name: John, age: 30}'::YAML ->> '$.name';
+-- Returns: 'John'
+
+-- Works with VARCHAR input (no cast needed)
+SELECT 'name: Alice' ->> '$.name';
+-- Returns: 'Alice'
+
+-- Chain with yaml_extract for complex paths
+SELECT yaml_extract(data, '$.user') ->> '$.email'
+FROM my_table;
+```
+
+!!! note "The `->` Operator"
+    The `->` operator (which would return YAML type) is not available because DuckDB's parser hardcodes it to `json_extract`. Use `yaml_extract()` function instead.
+
+---
+
 ## yaml_exists
 
 Checks if a path exists in a YAML document.
@@ -380,6 +411,125 @@ SELECT
     yaml_extract_string(value, '$.product') AS product,
     yaml_extract(value, '$.quantity')::INTEGER AS qty
 FROM yaml_array_elements(yaml_extract(order_data, '$.items'));
+```
+
+---
+
+## yaml_structure
+
+Returns a JSON representation of the YAML document's structure/schema, showing the detected types for each field.
+
+### Syntax
+
+```sql
+yaml_structure(yaml_value) → JSON
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `yaml_value` | YAML or VARCHAR | The YAML value to analyze |
+
+### Returns
+
+JSON - A JSON object representing the structure with type names as values.
+
+### Examples
+
+```sql
+-- Simple object structure
+SELECT yaml_structure('name: Alice
+age: 30');
+-- Returns: {"name":"VARCHAR","age":"UBIGINT"}
+
+-- Nested object
+SELECT yaml_structure('user:
+  name: Bob
+  active: true');
+-- Returns: {"user":{"name":"VARCHAR","active":"BOOLEAN"}}
+
+-- Array structure
+SELECT yaml_structure('[1, 2, 3]');
+-- Returns: ["UBIGINT"]
+
+-- Complex nested structure
+SELECT yaml_structure('users:
+  - name: Alice
+    scores: [90, 85]
+  - name: Bob
+    scores: [88, 92]');
+-- Returns: {"users":[{"name":"VARCHAR","scores":["UBIGINT"]}]}
+
+-- Arrays of objects with different keys are merged
+SELECT yaml_structure('[{a: 1}, {b: 2}]');
+-- Returns: [{"a":"UBIGINT","b":"UBIGINT"}]
+```
+
+---
+
+## yaml_contains
+
+Checks if one YAML document contains another. Useful for filtering or matching YAML data.
+
+### Syntax
+
+```sql
+yaml_contains(haystack, needle) → BOOLEAN
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `haystack` | YAML or VARCHAR | The YAML document to search in |
+| `needle` | YAML or VARCHAR | The YAML pattern to search for |
+
+### Returns
+
+BOOLEAN - true if haystack contains needle, false otherwise.
+
+### Containment Rules
+
+- **Objects**: All key-value pairs in needle must exist in haystack
+- **Arrays**: All elements in needle must be contained in haystack
+- **Scalars**: Values must be equal
+- **Nested**: Containment is checked recursively
+
+### Examples
+
+```sql
+-- Object contains partial object
+SELECT yaml_contains('a: 1
+b: 2', 'a: 1');
+-- Returns: true
+
+-- Wrong value doesn't match
+SELECT yaml_contains('a: 1', 'a: 2');
+-- Returns: false
+
+-- Missing key doesn't match
+SELECT yaml_contains('a: 1', 'b: 1');
+-- Returns: false
+
+-- Array contains element
+SELECT yaml_contains('[1, 2, 3]', '2');
+-- Returns: true
+
+-- Array contains subset
+SELECT yaml_contains('[1, 2, 3, 4]', '[2, 3]');
+-- Returns: true
+
+-- Nested containment
+SELECT yaml_contains('user:
+  name: Alice
+  age: 30', 'user:
+  name: Alice');
+-- Returns: true
+
+-- Use for filtering
+SELECT * FROM my_table
+WHERE yaml_contains(config, 'enabled: true');
 ```
 
 ---
