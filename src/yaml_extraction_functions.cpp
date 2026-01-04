@@ -623,6 +623,51 @@ static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 //===--------------------------------------------------------------------===//
+// YAML Value Function
+//===--------------------------------------------------------------------===//
+
+// Extract scalar value only, returns NULL for non-scalars (arrays, objects)
+static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
+		    if (yaml_str.GetSize() == 0) {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+
+		    try {
+			    YAML::Node root = YAML::Load(yaml_str.GetString());
+			    auto path_components = ParseYAMLPath(path_str.GetString());
+			    auto node = ExtractFromYAML(root, path_components);
+
+			    // Return NULL for missing path
+			    if (!node || !node.IsDefined()) {
+				    mask.SetInvalid(idx);
+				    return string_t();
+			    }
+
+			    // Return NULL for non-scalar values (arrays, objects)
+			    if (!node.IsScalar()) {
+				    mask.SetInvalid(idx);
+				    return string_t();
+			    }
+
+			    // Return NULL for YAML null values
+			    if (node.IsNull()) {
+				    mask.SetInvalid(idx);
+				    return string_t();
+			    }
+
+			    string str_val = node.Scalar();
+			    return StringVector::AddString(result, str_val);
+		    } catch (const std::exception &e) {
+			    throw InvalidInputException("Error in yaml_value: %s", e.what());
+		    }
+	    });
+}
+
+//===--------------------------------------------------------------------===//
 // Registration
 //===--------------------------------------------------------------------===//
 
@@ -710,6 +755,14 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_merge_patch_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLMergePatchFunction));
 	loader.RegisterFunction(yaml_merge_patch_set);
+
+	// yaml_value function - extract scalar value only, NULL for non-scalars
+	ScalarFunctionSet yaml_value_set("yaml_value");
+	yaml_value_set.AddFunction(
+	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLValueFunction));
+	yaml_value_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLValueFunction));
+	loader.RegisterFunction(yaml_value_set);
 }
 
 } // namespace duckdb

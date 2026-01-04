@@ -449,3 +449,62 @@ query I
 SELECT yaml_merge_patch(yaml_simple::YAML, 'name: Jane') FROM test_yaml;
 ----
 {name: Jane, age: 30, address: {city: NYC, zip: 10001}}
+
+# ===== YAML Value Function =====
+# Extract scalar values only, returns NULL for non-scalars
+
+# Extract number
+query I
+SELECT yaml_value('a: 42', '$.a');
+----
+42
+
+# Extract string
+query I
+SELECT yaml_value('a: hello', '$.a');
+----
+hello
+
+# Extract boolean
+query I
+SELECT yaml_value('a: true', '$.a');
+----
+true
+
+# Extract from nested path
+query I
+SELECT yaml_value('a:
+  b: 123', '$.a.b');
+----
+123
+
+# Array returns NULL
+query I
+SELECT yaml_value('a: [1, 2, 3]', '$.a');
+----
+NULL
+
+# Object returns NULL
+query I
+SELECT yaml_value('a:
+  b: 1', '$.a');
+----
+NULL
+
+# Missing path returns NULL
+query I
+SELECT yaml_value('a: 1', '$.b');
+----
+NULL
+
+# Null value returns NULL
+query I
+SELECT yaml_value('a: null', '$.a');
+----
+NULL
+
+# Works with YAML type input
+query I
+SELECT yaml_value(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+John
