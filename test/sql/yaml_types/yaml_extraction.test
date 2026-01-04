@@ -288,3 +288,94 @@ query I
 SELECT yaml_structure(yaml_simple::YAML) FROM test_yaml;
 ----
 {"name":"VARCHAR","age":"UBIGINT","address":{"city":"VARCHAR","zip":"UBIGINT"}}
+
+# ===== YAML Contains Function =====
+# Check if first YAML document contains second
+
+# Object contains partial object
+query I
+SELECT yaml_contains('a: 1
+b: 2', 'a: 1');
+----
+true
+
+# Object doesn't contain (wrong value)
+query I
+SELECT yaml_contains('a: 1
+b: 2', 'a: 2');
+----
+false
+
+# Object doesn't contain (missing key)
+query I
+SELECT yaml_contains('a: 1', 'b: 1');
+----
+false
+
+# Array contains element
+query I
+SELECT yaml_contains('[1, 2, 3]', '2');
+----
+true
+
+# Array doesn't contain element
+query I
+SELECT yaml_contains('[1, 2, 3]', '4');
+----
+false
+
+# Nested object containment
+query I
+SELECT yaml_contains('user:
+  name: Alice
+  age: 30', 'user:
+  name: Alice');
+----
+true
+
+# Scalar equality
+query I
+SELECT yaml_contains('hello', 'hello');
+----
+true
+
+# Scalar inequality
+query I
+SELECT yaml_contains('hello', 'world');
+----
+false
+
+# Null containment
+query I
+SELECT yaml_contains('value: null', 'value: null');
+----
+true
+
+# Array contains array (subset)
+query I
+SELECT yaml_contains('[1, 2, 3, 4]', '[2, 3]');
+----
+true
+
+# Array doesn't contain array (not subset)
+query I
+SELECT yaml_contains('[1, 2, 3]', '[2, 5]');
+----
+false
+
+# Empty object is contained in any object
+query I
+SELECT yaml_contains('a: 1', '{}');
+----
+true
+
+# Works with YAML type input
+query I
+SELECT yaml_contains(yaml_simple::YAML, 'name: John') FROM test_yaml;
+----
+true
+
+query I
+SELECT yaml_contains(yaml_simple::YAML, 'name: Jane') FROM test_yaml;
+----
+false

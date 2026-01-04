@@ -469,6 +469,95 @@ static void YAMLStructureFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 //===--------------------------------------------------------------------===//
+// YAML Contains Function
+//===--------------------------------------------------------------------===//
+
+// Recursively check if 'haystack' contains 'needle'
+// For objects: all key-value pairs in needle must exist in haystack
+// For arrays: at least one element in haystack must contain needle
+// For scalars: values must be equal
+static bool YAMLNodeContains(const YAML::Node &haystack, const YAML::Node &needle) {
+	// Handle null cases
+	if (!needle || needle.IsNull()) {
+		return !haystack || haystack.IsNull();
+	}
+	if (!haystack || haystack.IsNull()) {
+		return false;
+	}
+
+	// If needle is a scalar, check for equality or array membership
+	if (needle.IsScalar()) {
+		if (haystack.IsScalar()) {
+			return haystack.Scalar() == needle.Scalar();
+		}
+		if (haystack.IsSequence()) {
+			// Check if any element in the array equals the needle
+			for (size_t i = 0; i < haystack.size(); i++) {
+				if (YAMLNodeContains(haystack[i], needle)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		return false;
+	}
+
+	// If needle is a sequence, haystack must be a sequence containing all elements
+	if (needle.IsSequence()) {
+		if (!haystack.IsSequence()) {
+			return false;
+		}
+		// Each element in needle must be contained in haystack
+		for (size_t i = 0; i < needle.size(); i++) {
+			bool found = false;
+			for (size_t j = 0; j < haystack.size(); j++) {
+				if (YAMLNodeContains(haystack[j], needle[i])) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// If needle is a map, haystack must be a map containing all key-value pairs
+	if (needle.IsMap()) {
+		if (!haystack.IsMap()) {
+			return false;
+		}
+		// Each key-value pair in needle must exist in haystack
+		for (auto it = needle.begin(); it != needle.end(); ++it) {
+			string key = it->first.Scalar();
+			if (!haystack[key]) {
+				return false;
+			}
+			if (!YAMLNodeContains(haystack[key], it->second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+static void YAMLContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	BinaryExecutor::Execute<string_t, string_t, bool>(
+	    args.data[0], args.data[1], result, args.size(), [&](string_t haystack_str, string_t needle_str) -> bool {
+		    try {
+			    YAML::Node haystack = YAML::Load(haystack_str.GetString());
+			    YAML::Node needle = YAML::Load(needle_str.GetString());
+			    return YAMLNodeContains(haystack, needle);
+		    } catch (...) {
+			    return false;
+		    }
+	    });
+}
+
+//===--------------------------------------------------------------------===//
 // Registration
 //===--------------------------------------------------------------------===//
 
@@ -533,6 +622,18 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_structure_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::JSON(), YAMLStructureFunction));
 	yaml_structure_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), YAMLStructureFunction));
 	loader.RegisterFunction(yaml_structure_set);
+
+	// yaml_contains function - check if first YAML contains second YAML
+	ScalarFunctionSet yaml_contains_set("yaml_contains");
+	yaml_contains_set.AddFunction(
+	    ScalarFunction({yaml_type, yaml_type}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	yaml_contains_set.AddFunction(
+	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	yaml_contains_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, yaml_type}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	yaml_contains_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	loader.RegisterFunction(yaml_contains_set);
 }
 
 } // namespace duckdb
