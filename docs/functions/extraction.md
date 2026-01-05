@@ -534,6 +534,138 @@ WHERE yaml_contains(config, 'enabled: true');
 
 ---
 
+## yaml_merge_patch
+
+Merges two YAML documents using RFC 7386 JSON Merge Patch semantics.
+
+### Syntax
+
+```sql
+yaml_merge_patch(target, patch) → YAML
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `target` | YAML or VARCHAR | The target YAML document |
+| `patch` | YAML or VARCHAR | The patch to apply |
+
+### Returns
+
+YAML - The merged result.
+
+### Merge Rules
+
+- **Objects**: Patch values override target values; keys are merged recursively
+- **Null in patch**: Removes the key from target
+- **Arrays**: Replaced entirely (not merged element-by-element)
+- **Scalars**: Replaced by patch value
+
+### Examples
+
+```sql
+-- Basic merge
+SELECT yaml_merge_patch('a: 1
+b: 2', 'b: 3
+c: 4');
+-- Returns: {a: 1, b: 3, c: 4}
+
+-- Null removes key
+SELECT yaml_merge_patch('a: 1
+b: 2', 'b: null');
+-- Returns: {a: 1}
+
+-- Nested merge
+SELECT yaml_merge_patch('user:
+  name: Alice
+  age: 30', 'user:
+  age: 31');
+-- Returns: {user: {name: Alice, age: 31}}
+
+-- Arrays are replaced, not merged
+SELECT yaml_merge_patch('items: [1, 2]', 'items: [3, 4, 5]');
+-- Returns: {items: [3, 4, 5]}
+```
+
+---
+
+## yaml_value
+
+Extracts a scalar value from a YAML document. Returns NULL for non-scalar values (arrays, objects).
+
+### Syntax
+
+```sql
+yaml_value(yaml_value, path) → VARCHAR
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `yaml_value` | YAML or VARCHAR | The YAML document to query |
+| `path` | VARCHAR | JSONPath-like path expression |
+
+### Returns
+
+VARCHAR - The scalar value as a string, or NULL if the path doesn't exist or points to a non-scalar.
+
+### Examples
+
+```sql
+-- Extract scalar value
+SELECT yaml_value('a: 42', '$.a');
+-- Returns: '42'
+
+-- Extract string
+SELECT yaml_value('name: Alice', '$.name');
+-- Returns: 'Alice'
+
+-- Arrays return NULL
+SELECT yaml_value('items: [1, 2, 3]', '$.items');
+-- Returns: NULL
+
+-- Objects return NULL
+SELECT yaml_value('user:
+  name: Bob', '$.user');
+-- Returns: NULL
+
+-- Missing path returns NULL
+SELECT yaml_value('a: 1', '$.b');
+-- Returns: NULL
+```
+
+---
+
+## Function Aliases
+
+For consistency with DuckDB's JSON functions, several aliases are provided:
+
+| Alias | Equivalent Function |
+|-------|---------------------|
+| `yaml_extract_path` | `yaml_extract` |
+| `yaml_extract_path_text` | `yaml_extract_string` |
+| `to_yaml` | `value_to_yaml` |
+
+### Examples
+
+```sql
+-- yaml_extract_path (same as yaml_extract)
+SELECT yaml_extract_path('{name: John}'::YAML, '$.name');
+-- Returns: John
+
+-- yaml_extract_path_text (same as yaml_extract_string)
+SELECT yaml_extract_path_text('{name: John}'::YAML, '$.name');
+-- Returns: 'John'
+
+-- to_yaml (same as value_to_yaml)
+SELECT to_yaml({'name': 'Alice', 'age': 30});
+-- Returns: {name: Alice, age: 30}
+```
+
+---
+
 ## Path Expression Reference
 
 | Pattern | Description | Example |
