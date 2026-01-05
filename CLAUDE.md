@@ -22,6 +22,9 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - [x] Test coverage for all implemented features
 - [x] YAML logical type and conversion functions (to/from JSON)
 - [x] Fix segfault in value_to_yaml function with debug mode implementation
+- [x] JSON parity extraction functions (v1.5.0)
+- [x] Arrow operator (`->>`) for string extraction
+- [x] Function aliases for JSON compatibility
 - [ ] Explicit column type specification via 'columns' parameter
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Support for YAML anchors and aliases
@@ -64,6 +67,17 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
    - Found yaml-cpp's parser to be extremely resilient, handling malformed inputs
    - Adjusted test expectations for error handling given parser behavior
    - Updated error message expectations to match exact DuckDB error format
+
+7. **v1.5.0 JSON Parity Functions**:
+   - Added extraction functions to match DuckDB's JSON extension capabilities
+   - **`->>` operator**: Arrow operator alias for `yaml_extract_string`
+   - **`yaml_structure`**: Returns JSON schema of YAML document structure
+   - **`yaml_contains`**: Recursive containment checking between YAML documents
+   - **`yaml_merge_patch`**: RFC 7386 merge patch implementation
+   - **`yaml_value`**: Extract scalar values only (NULL for arrays/objects)
+   - **Function aliases**: `yaml_extract_path`, `yaml_extract_path_text`, `to_yaml`
+   - Note: `->` operator cannot be implemented (DuckDB planner hardcodes it to `json_extract`)
+   - Note: `yaml_transform` not implemented (requires binding-time type resolution); use `json_transform(yaml::JSON, structure)` instead
 
 ## Design Decisions
 
@@ -116,10 +130,9 @@ To address the segfault issue in the value_to_yaml function, we've implemented a
 
 1. **Stream Processing**: For large files
 2. **Advanced Type Detection**: Add support for dates, timestamps, and other complex types
-3. **YAML Path Expressions**: Similar to JSON path expressions
-4. **YAML Modification Functions**: Allow modifying YAML structures
-5. **YAML Output Functions**: Allow writing DuckDB data as YAML
-6. **Parameter Validation Improvements**: Stricter type checking, duplicate detection
+3. **YAML Modification Functions**: Allow modifying YAML structures in place
+4. **Parameter Validation Improvements**: Stricter type checking, duplicate detection
+5. **yaml_transform**: Would require binding-time type resolution (complex)
 
 ## Technical Notes
 
@@ -159,3 +172,4 @@ To address the segfault issue in the value_to_yaml function, we've implemented a
 - Update 11: Refactored code to use a yaml_utils namespace with improved utility functions. Implemented flow format for display and block format for storage. Identified and began debugging segfault in value_to_yaml function.
 - Update 12: Discovered and resolved issues with DuckDB SQLLogicTest framework handling multi-line YAML strings. Modified test approach to use flow style YAML and updated expectations for error handling given yaml-cpp's resilient parser.
 - Update 13: Implemented debug mode with YAMLDebug class to fix segfault in value_to_yaml function. Added dedicated test files and diagnostic functions. Fixed the stack overflow issue with deep recursion limits and comprehensive error handling.
+- Update 14: Released v1.5.0 with JSON parity functions. Added `->>` operator, `yaml_structure`, `yaml_contains`, `yaml_merge_patch`, `yaml_value`, and function aliases (`yaml_extract_path`, `yaml_extract_path_text`, `to_yaml`). Closed issues #23-26, #28-29, #31. Closed #27 and #30 as wontfix. Updated community-extensions PR.
