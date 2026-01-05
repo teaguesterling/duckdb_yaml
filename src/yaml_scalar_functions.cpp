@@ -244,9 +244,13 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
 	loader.RegisterFunction(yaml_to_json_fun);
 
-	// Register value_to_yaml function (single parameter, returns YAML type)
+	// Register value_to_yaml function and to_yaml alias (single parameter, returns YAML type)
 	auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
 	loader.RegisterFunction(value_to_yaml_fun);
+
+	// to_yaml alias for consistency with to_json
+	auto to_yaml_fun = ScalarFunction("to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
+	loader.RegisterFunction(to_yaml_fun);
 
 	// Register format_yaml function with named parameters (returns VARCHAR for display/formatting)
 	auto format_yaml_fun =

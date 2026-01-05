@@ -74,6 +74,17 @@ SELECT yaml_extract(yaml_array::YAML, '$[2]') FROM test_yaml;
 ----
 [3, 4]
 
+# Test yaml_extract_path alias (same as yaml_extract)
+query I
+SELECT yaml_extract_path(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_extract_path(yaml_simple::YAML, '$.address.city') FROM test_yaml;
+----
+NYC
+
 # Test yaml_extract_string function
 query I
 SELECT yaml_extract_string(yaml_simple::YAML, '$.name') FROM test_yaml;
@@ -89,6 +100,17 @@ query I
 SELECT yaml_extract_string(yaml_simple::YAML, '$.missing') FROM test_yaml;
 ----
 NULL
+
+# Test yaml_extract_path_text alias (same as yaml_extract_string)
+query I
+SELECT yaml_extract_path_text(yaml_simple::YAML, '$.name') FROM test_yaml;
+----
+John
+
+query I
+SELECT yaml_extract_path_text(yaml_simple::YAML, '$.address') FROM test_yaml;
+----
+{city: NYC, zip: 10001}
 
 # Test yaml_exists function
 query I

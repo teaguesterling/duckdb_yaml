@@ -695,14 +695,20 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeBinaryFunction));
 	loader.RegisterFunction(yaml_type_set);
 
-	// yaml_extract function
+	// yaml_extract function with yaml_extract_path alias
 	// Returns YAML type, accepts both YAML and VARCHAR input
 	// Note: The -> operator cannot be aliased because DuckDB's planner hardcodes it to json_extract
 	ScalarFunctionSet yaml_extract_set("yaml_extract");
 	yaml_extract_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
 	yaml_extract_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
-	loader.RegisterFunction(yaml_extract_set);
+
+	// Register yaml_extract and yaml_extract_path alias
+	vector<ScalarFunctionSet> extract_functions;
+	AddAliases({"yaml_extract", "yaml_extract_path"}, yaml_extract_set, extract_functions);
+	for (auto &func : extract_functions) {
+		loader.RegisterFunction(func);
+	}
 
 	// yaml_extract_string function with ->> alias
 	// Returns VARCHAR, accepts both YAML and VARCHAR input
@@ -712,9 +718,10 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_extract_string_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
 
-	// Register yaml_extract_string and ->> alias
+	// Register yaml_extract_string, yaml_extract_path_text, and ->> alias
 	vector<ScalarFunctionSet> extract_string_functions;
-	AddAliases({"yaml_extract_string", "->>"}, yaml_extract_string_set, extract_string_functions);
+	AddAliases({"yaml_extract_string", "yaml_extract_path_text", "->>"}, yaml_extract_string_set,
+	           extract_string_functions);
 	for (auto &func : extract_string_functions) {
 		loader.RegisterFunction(func);
 	}
