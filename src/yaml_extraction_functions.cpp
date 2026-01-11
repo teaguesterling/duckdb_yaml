@@ -310,8 +310,8 @@ static string DetectScalarTypeName(const string &scalar_value) {
 	string lower_value = scalar_value;
 	std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
 	if (lower_value == "true" || lower_value == "false" || lower_value == "yes" || lower_value == "no" ||
-	    lower_value == "on" || lower_value == "off" || lower_value == "y" || lower_value == "n" ||
-	    lower_value == "t" || lower_value == "f") {
+	    lower_value == "on" || lower_value == "off" || lower_value == "y" || lower_value == "n" || lower_value == "t" ||
+	    lower_value == "f") {
 		return "BOOLEAN";
 	}
 
@@ -601,8 +601,7 @@ static YAML::Node YAMLMergePatch(const YAML::Node &target, const YAML::Node &pat
 
 static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t target_str, string_t patch_str) -> string_t {
+	    args.data[0], args.data[1], result, args.size(), [&](string_t target_str, string_t patch_str) -> string_t {
 		    try {
 			    YAML::Node target = YAML::Load(target_str.GetString());
 			    YAML::Node patch = YAML::Load(patch_str.GetString());
@@ -742,8 +741,7 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 
 	// yaml_contains function - check if first YAML contains second YAML
 	ScalarFunctionSet yaml_contains_set("yaml_contains");
-	yaml_contains_set.AddFunction(
-	    ScalarFunction({yaml_type, yaml_type}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	yaml_contains_set.AddFunction(ScalarFunction({yaml_type, yaml_type}, LogicalType::BOOLEAN, YAMLContainsFunction));
 	yaml_contains_set.AddFunction(
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
 	yaml_contains_set.AddFunction(
