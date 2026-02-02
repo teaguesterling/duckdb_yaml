@@ -2,11 +2,38 @@
 #include "yaml_types.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include <unordered_set>
 
 namespace duckdb {
+
+// Helper function to parse multi_document parameter (bool or string) into MultiDocumentMode
+static MultiDocumentMode ParseMultiDocumentMode(const Value &value) {
+	if (value.type().id() == LogicalTypeId::BOOLEAN) {
+		return value.GetValue<bool>() ? MultiDocumentMode::ROWS : MultiDocumentMode::FIRST;
+	}
+
+	if (value.type().id() == LogicalTypeId::VARCHAR) {
+		string mode_str = StringUtil::Lower(value.ToString());
+		if (mode_str == "rows" || mode_str == "true") {
+			return MultiDocumentMode::ROWS;
+		} else if (mode_str == "first" || mode_str == "false") {
+			return MultiDocumentMode::FIRST;
+		} else if (mode_str == "frontmatter") {
+			return MultiDocumentMode::FRONTMATTER;
+		} else if (mode_str == "list") {
+			return MultiDocumentMode::LIST;
+		} else {
+			throw BinderException("Invalid multi_document mode '%s'. Valid values are: true, false, 'rows', 'first', "
+			                      "'frontmatter', 'list'",
+			                      mode_str);
+		}
+	}
+
+	throw BinderException("multi_document parameter must be a boolean or string");
+}
 
 // Helper function to merge two struct types, preserving fields from both
 // This is crucial for handling nested properties that might exist in some documents but not others
@@ -62,10 +89,19 @@ struct YAMLReadRowsBindData : public TableFunctionData {
 
 	string file_path;
 	YAMLReader::YAMLReadOptions options;
-	vector<YAML::Node> yaml_docs; // Each document in the YAML file
+	vector<YAML::Node> yaml_docs; // Each document in the YAML file (or data rows for FRONTMATTER)
 	vector<string> names;         // Column names
 	vector<LogicalType> types;    // Column types
 	idx_t current_doc = 0;        // Current document being processed
+
+	// FRONTMATTER mode: metadata from the first document
+	YAML::Node frontmatter;                   // First document (metadata) for FRONTMATTER mode
+	vector<string> frontmatter_names;         // Frontmatter column names
+	vector<LogicalType> frontmatter_types;    // Frontmatter column types
+	vector<Value> frontmatter_values;         // Frontmatter values (repeated for each row)
+
+	// LIST mode: all documents in a single row
+	bool list_mode_done = false; // Track if we've already returned the single row
 };
 
 // Bind data structure for read_yaml_objects
@@ -139,10 +175,19 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		}
 	}
 	if (seen_parameters.find("multi_document") != seen_parameters.end()) {
-		options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
+		options.multi_document_mode = ParseMultiDocumentMode(input.named_parameters["multi_document"]);
 	}
 	if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
 		options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
+	}
+	if (seen_parameters.find("frontmatter_as_columns") != seen_parameters.end()) {
+		options.frontmatter_as_columns = input.named_parameters["frontmatter_as_columns"].GetValue<bool>();
+	}
+	if (seen_parameters.find("list_column_name") != seen_parameters.end()) {
+		options.list_column_name = input.named_parameters["list_column_name"].GetValue<string>();
+		if (options.list_column_name.empty()) {
+			throw BinderException("list_column_name cannot be empty");
+		}
 	}
 	if (seen_parameters.find("sample_size") != seen_parameters.end()) {
 		auto arg = input.named_parameters["sample_size"].GetValue<int64_t>();
@@ -185,15 +230,24 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 
 	// Vector to store all the row data items (documents or elements)
 	vector<YAML::Node> row_nodes;
+	// Vector to store all documents (for LIST mode and FRONTMATTER mode)
+	vector<YAML::Node> all_docs;
 	// Vector for schema detection sampling (limited by sample_size and maximum_sample_files)
 	vector<YAML::Node> sample_nodes;
 	idx_t sampled_rows = 0;
 	idx_t sampled_files = 0;
 
 	// Read and process all files
-	for (const auto &file_path : files) {
+	for (const auto &current_file : files) {
 		try {
-			auto docs = ReadYAMLFile(context, file_path, options);
+			auto docs = ReadYAMLFile(context, current_file, options);
+
+			// For LIST and FRONTMATTER modes, we need all documents
+			if (options.multi_document_mode == MultiDocumentMode::LIST ||
+			    options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
+				all_docs.insert(all_docs.end(), docs.begin(), docs.end());
+			}
+
 			vector<YAML::Node> file_nodes;
 
 			// If records path is specified, extract records from that path
@@ -223,35 +277,98 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 						}
 					}
 				}
-			} else {
-				// Use the standard extraction logic
+			} else if (options.multi_document_mode == MultiDocumentMode::ROWS ||
+			           options.multi_document_mode == MultiDocumentMode::FIRST) {
+				// Use the standard extraction logic for ROWS and FIRST modes
 				file_nodes = ExtractRowNodes(docs, options.expand_root_sequence);
 			}
+			// Note: FRONTMATTER and LIST modes handle documents differently (below)
 
-			// Add nodes from this file to the full result set
-			row_nodes.insert(row_nodes.end(), file_nodes.begin(), file_nodes.end());
+			// Add nodes from this file to the full result set (for ROWS/FIRST modes)
+			if (options.multi_document_mode == MultiDocumentMode::ROWS ||
+			    options.multi_document_mode == MultiDocumentMode::FIRST) {
+				row_nodes.insert(row_nodes.end(), file_nodes.begin(), file_nodes.end());
 
-			// Add nodes to sample set if we haven't reached the sampling limits
-			if (sampled_files < options.maximum_sample_files && sampled_rows < options.sample_size) {
-				for (const auto &node : file_nodes) {
-					if (sampled_rows >= options.sample_size) {
-						break;
+				// Add nodes to sample set if we haven't reached the sampling limits
+				if (sampled_files < options.maximum_sample_files && sampled_rows < options.sample_size) {
+					for (const auto &node : file_nodes) {
+						if (sampled_rows >= options.sample_size) {
+							break;
+						}
+						sample_nodes.push_back(node);
+						sampled_rows++;
 					}
-					sample_nodes.push_back(node);
-					sampled_rows++;
+					sampled_files++;
 				}
-				sampled_files++;
 			}
 		} catch (const std::exception &e) {
 			if (!options.ignore_errors) {
-				throw IOException("Error processing YAML file '" + file_path + "': " + string(e.what()));
+				throw IOException("Error processing YAML file '" + current_file + "': " + string(e.what()));
 			}
 			// With ignore_errors=true, we allow continuing with other files
 		}
 	}
 
-	// Replace the docs with our processed row_nodes
+	// Mode-specific processing
+	if (options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
+		// FRONTMATTER mode: first document is metadata, rest are data rows
+		if (all_docs.size() < 2) {
+			if (!options.ignore_errors) {
+				throw BinderException("FRONTMATTER mode requires at least 2 documents (frontmatter + data)");
+			}
+			// With ignore_errors, treat as empty result
+		} else {
+			// Store frontmatter (first document)
+			result->frontmatter = all_docs[0];
+
+			// Extract data rows from remaining documents
+			vector<YAML::Node> data_docs(all_docs.begin() + 1, all_docs.end());
+			row_nodes = ExtractRowNodes(data_docs, options.expand_root_sequence);
+
+			// Sample from data rows
+			for (const auto &node : row_nodes) {
+				if (sampled_rows >= options.sample_size) {
+					break;
+				}
+				sample_nodes.push_back(node);
+				sampled_rows++;
+			}
+		}
+	} else if (options.multi_document_mode == MultiDocumentMode::LIST) {
+		// LIST mode: all documents as a single row with STRUCT[] column
+		// We don't use row_nodes here; we process all_docs directly
+		// sample_nodes should contain all docs for schema detection
+		for (const auto &doc : all_docs) {
+			if (sampled_rows >= options.sample_size) {
+				break;
+			}
+			sample_nodes.push_back(doc);
+			sampled_rows++;
+		}
+	}
+
+	// Replace the docs with our processed row_nodes (not used for LIST mode)
 	result->yaml_docs = row_nodes;
+
+	// Handle LIST mode separately - all documents in a single row
+	if (options.multi_document_mode == MultiDocumentMode::LIST) {
+		// Detect merged schema from all documents
+		LogicalType list_element_type = DetectJaggedYAMLType(sample_nodes);
+
+		// Create a LIST type of the detected struct type
+		names.push_back(options.list_column_name);
+		return_types.push_back(LogicalType::LIST(list_element_type));
+
+		// Store all docs for execution (we'll return them as a single row)
+		result->yaml_docs.clear();
+		for (const auto &doc : all_docs) {
+			result->yaml_docs.push_back(doc);
+		}
+
+		result->names = names;
+		result->types = return_types;
+		return std::move(result);
+	}
 
 	// Handle empty result set early
 	// TODO: This is very messy and could probably be drastically simplified
@@ -405,7 +522,39 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		}
 	}
 
-	// Build the final schema in document order
+	// Handle FRONTMATTER mode - add frontmatter columns before data columns
+	if (options.multi_document_mode == MultiDocumentMode::FRONTMATTER && result->frontmatter.IsDefined()) {
+		if (options.frontmatter_as_columns) {
+			// Add frontmatter fields as separate columns with "meta_" prefix
+			if (result->frontmatter.IsMap()) {
+				for (auto it = result->frontmatter.begin(); it != result->frontmatter.end(); ++it) {
+					string key = "meta_" + it->first.Scalar();
+					LogicalType type;
+					if (options.auto_detect_types) {
+						type = DetectYAMLType(it->second);
+					} else {
+						type = LogicalType::VARCHAR;
+					}
+					result->frontmatter_names.push_back(key);
+					result->frontmatter_types.push_back(type);
+					result->frontmatter_values.push_back(YAMLNodeToValue(it->second, type));
+
+					// Add to output schema (frontmatter columns come first)
+					names.push_back(key);
+					return_types.push_back(type);
+				}
+			}
+		} else {
+			// Add frontmatter as a single YAML column
+			names.push_back("frontmatter");
+			return_types.push_back(YAMLTypes::YAMLType());
+			result->frontmatter_names.push_back("frontmatter");
+			result->frontmatter_types.push_back(YAMLTypes::YAMLType());
+			result->frontmatter_values.push_back(YAMLNodeToValue(result->frontmatter, YAMLTypes::YAMLType()));
+		}
+	}
+
+	// Build the final schema in document order (data columns)
 	for (const auto &col : column_order) {
 		names.push_back(col);
 		return_types.push_back(detected_types[col]);
@@ -487,7 +636,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		}
 	}
 	if (seen_parameters.find("multi_document") != seen_parameters.end()) {
-		options.multi_document = input.named_parameters["multi_document"].GetValue<bool>();
+		options.multi_document_mode = ParseMultiDocumentMode(input.named_parameters["multi_document"]);
 	}
 	if (seen_parameters.find("expand_root_sequence") != seen_parameters.end()) {
 		options.expand_root_sequence = input.named_parameters["expand_root_sequence"].GetValue<bool>();
@@ -600,6 +749,37 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (YAMLReadRowsBindData &)*data_p.bind_data;
 
+	// Handle LIST mode - return all documents as a single row with STRUCT[] column
+	if (bind_data.options.multi_document_mode == MultiDocumentMode::LIST) {
+		if (bind_data.list_mode_done) {
+			output.SetCardinality(0);
+			return;
+		}
+
+		output.Reset();
+
+		// Convert all documents to a list of values
+		vector<Value> doc_values;
+		LogicalType element_type;
+		if (bind_data.types[0].id() == LogicalTypeId::LIST) {
+			element_type = ListType::GetChildType(bind_data.types[0]);
+		} else {
+			element_type = bind_data.types[0];
+		}
+
+		for (const auto &doc : bind_data.yaml_docs) {
+			doc_values.push_back(YAMLNodeToValue(doc, element_type));
+		}
+
+		// Create the list value
+		Value list_value = Value::LIST(element_type, doc_values);
+		output.SetValue(0, 0, list_value);
+
+		bind_data.list_mode_done = true;
+		output.SetCardinality(1);
+		return;
+	}
+
 	// If we've processed all rows, we're done
 	if (bind_data.current_doc >= bind_data.yaml_docs.size()) {
 		output.SetCardinality(0);
@@ -637,18 +817,37 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 			count++;
 		}
 	} else {
-		// Normal case - process map documents
+		// Normal case - process map documents (and FRONTMATTER mode)
+		idx_t frontmatter_col_count = bind_data.frontmatter_values.size();
+
 		for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
 			// Get the current YAML node
 			YAML::Node node = bind_data.yaml_docs[bind_data.current_doc + doc_idx];
 
-			// Process each column
-			for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
-				string &name = bind_data.names[col_idx];
+			idx_t col_idx = 0;
+
+			// For FRONTMATTER mode, first add frontmatter columns (same value for each row)
+			if (bind_data.options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
+				for (idx_t fm_idx = 0; fm_idx < frontmatter_col_count; fm_idx++) {
+					output.SetValue(col_idx, count, bind_data.frontmatter_values[fm_idx]);
+					col_idx++;
+				}
+			}
+
+			// Process data columns
+			for (; col_idx < bind_data.names.size(); col_idx++) {
+				// For FRONTMATTER mode, data column names don't have prefix
+				string col_name;
+				if (bind_data.options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
+					col_name = bind_data.names[col_idx]; // Already the right name
+				} else {
+					col_name = bind_data.names[col_idx];
+				}
+
 				LogicalType &type = bind_data.types[col_idx];
 
-				// Get the value for this column
-				YAML::Node value = node[name];
+				// Get the value for this column from the data node
+				YAML::Node value = node[col_name];
 
 				// Convert to DuckDB value
 				Value duckdb_value;
@@ -719,8 +918,10 @@ struct ParseYAMLBindData : public TableFunctionData {
 	vector<YAML::Node> yaml_docs;     // Parsed YAML documents
 	vector<string> names;             // Column names
 	vector<LogicalType> types;        // Column types
-	bool multi_document = true;       // Whether to handle multi-document YAML
+	MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS; // How to handle multi-document YAML
 	bool expand_root_sequence = true; // Whether to expand top-level sequences
+	bool frontmatter_as_columns = true; // For FRONTMATTER mode
+	string list_column_name = "documents"; // For LIST mode
 };
 
 // Local state for parse_yaml (mutable execution state)
@@ -747,16 +948,23 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 	// Parse optional parameters
 	for (auto &param : input.named_parameters) {
 		if (param.first == "multi_document") {
-			result->multi_document = param.second.GetValue<bool>();
+			result->multi_document_mode = ParseMultiDocumentMode(param.second);
 		} else if (param.first == "expand_root_sequence") {
 			result->expand_root_sequence = param.second.GetValue<bool>();
+		} else if (param.first == "frontmatter_as_columns") {
+			result->frontmatter_as_columns = param.second.GetValue<bool>();
+		} else if (param.first == "list_column_name") {
+			result->list_column_name = param.second.GetValue<string>();
+			if (result->list_column_name.empty()) {
+				throw BinderException("list_column_name cannot be empty");
+			}
 		}
 	}
 
 	// Parse the YAML string
 	try {
 		vector<YAML::Node> docs;
-		if (result->multi_document) {
+		if (result->multi_document_mode != MultiDocumentMode::FIRST) {
 			std::stringstream ss(yaml_str);
 			docs = YAML::LoadAll(ss);
 		} else {

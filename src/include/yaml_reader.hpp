@@ -30,6 +30,16 @@ class TableRef;
 struct ReplacementScanData;
 
 /**
+ * @brief Mode for handling multi-document YAML files
+ */
+enum class MultiDocumentMode {
+	ROWS,       // Each document becomes a row (default, same as true)
+	FIRST,      // Only first document (same as false)
+	FRONTMATTER, // First doc is metadata, rest are data rows
+	LIST        // All documents as single row with STRUCT[] column
+};
+
+/**
  * @brief YAML Reader class for handling YAML files in DuckDB
  *
  * This class provides functions to read YAML files into DuckDB tables. It supports:
@@ -48,7 +58,7 @@ public:
 		bool auto_detect_types = true;         // Whether to auto-detect types from YAML content
 		bool ignore_errors = false;            // Whether to ignore parsing errors
 		size_t maximum_object_size = 16777216; // 16MB default maximum file size
-		bool multi_document = true;            // Whether to handle multi-document YAML files
+		MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS; // How to handle multi-document YAML
 		bool expand_root_sequence = true;      // Whether to expand top-level sequences into rows
 
 		// Sampling parameters for schema detection (matching JSON extension behavior)
@@ -61,6 +71,12 @@ public:
 
 		// Records path for extracting records from nested structure (issue #22)
 		string records_path; // Dot-notation path to array of records (e.g., "data.items" or "projects")
+
+		// FRONTMATTER mode options
+		bool frontmatter_as_columns = true; // When true, frontmatter fields become columns; when false, single yaml column
+
+		// LIST mode options
+		string list_column_name = "documents"; // Column name for the STRUCT[] in LIST mode
 	};
 
 	/**

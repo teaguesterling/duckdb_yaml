@@ -1,0 +1,114 @@
+# name: test/sql/yaml_reader/yaml_multi_document_modes.test
+# description: Tests for extended multi-document modes (rows, first, frontmatter, list)
+# group: [yaml_reader]
+
+require yaml
+
+# =============================================================================
+# Test backward compatibility with boolean values
+# =============================================================================
+
+# Test multi_document=true (same as 'rows' mode)
+query II
+SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=true) ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob
+
+# Test multi_document=false (same as 'first' mode)
+query II
+SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=false);
+----
+1	John
+
+# =============================================================================
+# Test string mode values
+# =============================================================================
+
+# Test multi_document='rows' - each document becomes a row
+query II
+SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='rows') ORDER BY id;
+----
+1	John
+2	Jane
+3	Bob
+
+# Test multi_document='first' - only first document
+query II
+SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='first');
+----
+1	John
+
+# =============================================================================
+# Test FRONTMATTER mode
+# =============================================================================
+
+# Test frontmatter mode with frontmatter_as_columns=true (default)
+query IIIIII
+SELECT meta_title, meta_version, meta_author, id, name, role
+FROM read_yaml('test/yaml/multi_frontmatter.yaml', multi_document='frontmatter')
+ORDER BY id;
+----
+User Database	1.0	John Doe	1	Alice	admin
+User Database	1.0	John Doe	2	Bob	user
+User Database	1.0	John Doe	3	Charlie	user
+
+# Test frontmatter mode with frontmatter_as_columns=false
+query II
+SELECT frontmatter, id
+FROM read_yaml('test/yaml/multi_frontmatter.yaml', multi_document='frontmatter', frontmatter_as_columns=false)
+ORDER BY id;
+----
+{title: User Database, version: 1.0, author: John Doe}	1
+{title: User Database, version: 1.0, author: John Doe}	2
+{title: User Database, version: 1.0, author: John Doe}	3
+
+# =============================================================================
+# Test LIST mode
+# =============================================================================
+
+# Test list mode - all documents as a single row with STRUCT[] column
+query I
+SELECT len(documents) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+3
+
+# Test list mode with custom column name
+query I
+SELECT len(all_docs) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list', list_column_name='all_docs');
+----
+3
+
+# Test accessing elements from list mode
+query I
+SELECT documents[1].name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+John
+
+query I
+SELECT documents[2].name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+Jane
+
+query I
+SELECT documents[3].name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+Bob
+
+# =============================================================================
+# Test error cases
+# =============================================================================
+
+# Test invalid mode string
+statement error
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='invalid');
+----
+Invalid multi_document mode
+
+# Test frontmatter mode with only one document (needs at least 2)
+statement error
+SELECT * FROM read_yaml('test/yaml/simple.yaml', multi_document='frontmatter');
+----
+FRONTMATTER mode requires at least 2 documents
+

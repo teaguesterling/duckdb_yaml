@@ -127,7 +127,7 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 
 	vector<YAML::Node> docs;
 
-	if (options.multi_document) {
+	if (options.multi_document_mode != MultiDocumentMode::FIRST) {
 		try {
 			// First try to parse the entire file at once
 			std::stringstream yaml_stream(content);
