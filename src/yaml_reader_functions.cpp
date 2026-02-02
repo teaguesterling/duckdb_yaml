@@ -95,10 +95,10 @@ struct YAMLReadRowsBindData : public TableFunctionData {
 	idx_t current_doc = 0;        // Current document being processed
 
 	// FRONTMATTER mode: metadata from the first document
-	YAML::Node frontmatter;                   // First document (metadata) for FRONTMATTER mode
-	vector<string> frontmatter_names;         // Frontmatter column names
-	vector<LogicalType> frontmatter_types;    // Frontmatter column types
-	vector<Value> frontmatter_values;         // Frontmatter values (repeated for each row)
+	YAML::Node frontmatter;                // First document (metadata) for FRONTMATTER mode
+	vector<string> frontmatter_names;      // Frontmatter column names
+	vector<LogicalType> frontmatter_types; // Frontmatter column types
+	vector<Value> frontmatter_values;      // Frontmatter values (repeated for each row)
 
 	// LIST mode: all documents in a single row
 	bool list_mode_done = false; // Track if we've already returned the single row
@@ -915,13 +915,13 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 struct ParseYAMLBindData : public TableFunctionData {
 	ParseYAMLBindData() = default;
 
-	vector<YAML::Node> yaml_docs;     // Parsed YAML documents
-	vector<string> names;             // Column names
-	vector<LogicalType> types;        // Column types
+	vector<YAML::Node> yaml_docs;                                    // Parsed YAML documents
+	vector<string> names;                                            // Column names
+	vector<LogicalType> types;                                       // Column types
 	MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS; // How to handle multi-document YAML
-	bool expand_root_sequence = true; // Whether to expand top-level sequences
-	bool frontmatter_as_columns = true; // For FRONTMATTER mode
-	string list_column_name = "documents"; // For LIST mode
+	bool expand_root_sequence = true;                                // Whether to expand top-level sequences
+	bool frontmatter_as_columns = true;                              // For FRONTMATTER mode
+	string list_column_name = "documents";                           // For LIST mode
 };
 
 // Local state for parse_yaml (mutable execution state)
