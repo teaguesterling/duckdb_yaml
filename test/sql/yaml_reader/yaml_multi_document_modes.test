@@ -5,7 +5,7 @@
 require yaml
 
 # =============================================================================
-# Test backward compatibility with boolean values
+# SECTION 1: Backward Compatibility Tests
 # =============================================================================
 
 # Test multi_document=true (same as 'rows' mode)
@@ -22,8 +22,20 @@ SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=fals
 ----
 1	John
 
+# Count rows with multi_document=true
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=true);
+----
+3
+
+# Count rows with multi_document=false
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document=false);
+----
+1
+
 # =============================================================================
-# Test string mode values
+# SECTION 2: String Mode Values (rows, first)
 # =============================================================================
 
 # Test multi_document='rows' - each document becomes a row
@@ -40,8 +52,30 @@ SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='fir
 ----
 1	John
 
+# Test case insensitivity for mode strings
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='ROWS');
+----
+3
+
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='First');
+----
+1
+
+# Test 'true' and 'false' as strings
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='true');
+----
+3
+
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='false');
+----
+1
+
 # =============================================================================
-# Test FRONTMATTER mode
+# SECTION 3: FRONTMATTER Mode - Basic Tests
 # =============================================================================
 
 # Test frontmatter mode with frontmatter_as_columns=true (default)
@@ -64,8 +98,58 @@ ORDER BY id;
 {title: User Database, version: 1.0, author: John Doe}	2
 {title: User Database, version: 1.0, author: John Doe}	3
 
+# Count rows in frontmatter mode (should be doc_count - 1)
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_frontmatter.yaml', multi_document='frontmatter');
+----
+3
+
 # =============================================================================
-# Test LIST mode
+# SECTION 4: FRONTMATTER Mode - Edge Cases
+# =============================================================================
+
+# Test frontmatter with exactly two documents (minimum)
+query II
+SELECT meta_metadata, content
+FROM read_yaml('test/yaml/frontmatter_two_docs.yaml', multi_document='frontmatter');
+----
+header_info	body_data
+
+# Test frontmatter with nested structures
+query I
+SELECT meta_config.database
+FROM read_yaml('test/yaml/frontmatter_nested.yaml', multi_document='frontmatter')
+LIMIT 1;
+----
+production
+
+# Test frontmatter with nested settings
+query I
+SELECT meta_config.settings.timeout
+FROM read_yaml('test/yaml/frontmatter_nested.yaml', multi_document='frontmatter')
+LIMIT 1;
+----
+30
+
+# Test frontmatter with array in metadata
+query I
+SELECT meta_tags[1]
+FROM read_yaml('test/yaml/frontmatter_nested.yaml', multi_document='frontmatter')
+LIMIT 1;
+----
+official
+
+# Test frontmatter minimal version
+query II
+SELECT meta_version, data
+FROM read_yaml('test/yaml/frontmatter_minimal.yaml', multi_document='frontmatter')
+ORDER BY data;
+----
+1	value1
+1	value2
+
+# =============================================================================
+# SECTION 5: LIST Mode - Basic Tests
 # =============================================================================
 
 # Test list mode - all documents as a single row with STRUCT[] column
@@ -80,7 +164,7 @@ SELECT len(all_docs) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document
 ----
 3
 
-# Test accessing elements from list mode
+# Test accessing elements from list mode (1-indexed)
 query I
 SELECT documents[1].name FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
 ----
@@ -96,8 +180,83 @@ SELECT documents[3].name FROM read_yaml('test/yaml/multi_basic.yaml', multi_docu
 ----
 Bob
 
+# Test list mode returns single row
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+1
+
 # =============================================================================
-# Test error cases
+# SECTION 6: LIST Mode - Complex Structures
+# =============================================================================
+
+# Test list mode with heterogeneous documents
+query I
+SELECT len(documents) FROM read_yaml('test/yaml/multi_mixed.yaml', multi_document='list');
+----
+3
+
+# Access different fields from heterogeneous list
+query I
+SELECT documents[1].age FROM read_yaml('test/yaml/multi_mixed.yaml', multi_document='list');
+----
+30
+
+query I
+SELECT documents[2].role FROM read_yaml('test/yaml/multi_mixed.yaml', multi_document='list');
+----
+Developer
+
+query I
+SELECT documents[3].department FROM read_yaml('test/yaml/multi_mixed.yaml', multi_document='list');
+----
+IT
+
+# Test list mode with nested structures
+query I
+SELECT documents[1].user.id FROM read_yaml('test/yaml/multi_complex.yaml', multi_document='list');
+----
+1
+
+query I
+SELECT documents[2].user.profile.name FROM read_yaml('test/yaml/multi_complex.yaml', multi_document='list');
+----
+Jane
+
+# =============================================================================
+# SECTION 7: LIST Mode - Unnesting and Processing
+# =============================================================================
+
+# Unnest list mode to get rows
+query II
+SELECT unnest(documents).id, unnest(documents).name
+FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list')
+ORDER BY 1;
+----
+1	John
+2	Jane
+3	Bob
+
+# =============================================================================
+# SECTION 8: Mode Combinations with Other Parameters
+# =============================================================================
+
+# Test list mode with ignore_errors
+query I
+SELECT len(documents) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list', ignore_errors=true);
+----
+3
+
+# Test frontmatter mode with auto_detect=false
+query I
+SELECT typeof(meta_version)
+FROM read_yaml('test/yaml/multi_frontmatter.yaml', multi_document='frontmatter', auto_detect=false)
+LIMIT 1;
+----
+VARCHAR
+
+# =============================================================================
+# SECTION 9: Error Handling
 # =============================================================================
 
 # Test invalid mode string
@@ -111,4 +270,47 @@ statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', multi_document='frontmatter');
 ----
 FRONTMATTER mode requires at least 2 documents
+
+# Test empty list_column_name
+statement error
+SELECT * FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list', list_column_name='');
+----
+list_column_name cannot be empty
+
+# =============================================================================
+# SECTION 10: Compare Modes - Same Data, Different Representations
+# =============================================================================
+
+# ROWS mode: 3 rows with 2 columns each
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='rows');
+----
+3
+
+# FIRST mode: 1 row
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='first');
+----
+1
+
+# LIST mode: 1 row with 1 list column containing 3 elements
+query I
+SELECT len(documents) FROM read_yaml('test/yaml/multi_basic.yaml', multi_document='list');
+----
+3
+
+# =============================================================================
+# SECTION 11: Default Behavior (no multi_document parameter)
+# =============================================================================
+
+# Default should be same as multi_document=true (ROWS mode)
+query I
+SELECT COUNT(*) FROM read_yaml('test/yaml/multi_basic.yaml');
+----
+3
+
+query II
+SELECT id, name FROM read_yaml('test/yaml/multi_basic.yaml') ORDER BY id LIMIT 1;
+----
+1	John
 

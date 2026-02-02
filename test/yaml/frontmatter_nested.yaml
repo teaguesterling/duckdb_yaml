@@ -1,0 +1,20 @@
+---
+# Frontmatter with nested structure
+config:
+  database: production
+  settings:
+    cache: true
+    timeout: 30
+tags:
+  - official
+  - v2
+---
+id: 1
+user:
+  name: Alice
+  email: alice@example.com
+---
+id: 2
+user:
+  name: Bob
+  email: bob@example.com
