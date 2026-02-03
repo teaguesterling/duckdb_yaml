@@ -499,6 +499,95 @@ name: Jane
 
 Both formats produce the same result when read with `read_yaml()`.
 
+### Extended Multi-Document Modes
+
+The `multi_document` parameter supports four modes for flexible handling of multi-document YAML files:
+
+| Mode | Description |
+|------|-------------|
+| `true` or `'rows'` | Each document becomes a row (default) |
+| `false` or `'first'` | Only the first document |
+| `'frontmatter'` | First document is metadata, rest are data rows |
+| `'list'` | All documents as single row with STRUCT[] column |
+
+#### ROWS Mode (Default)
+```sql
+-- Each YAML document becomes a separate row
+SELECT * FROM read_yaml('multi.yaml', multi_document='rows');
+-- Or equivalently:
+SELECT * FROM read_yaml('multi.yaml', multi_document=true);
+```
+
+#### FIRST Mode
+```sql
+-- Only read the first document
+SELECT * FROM read_yaml('multi.yaml', multi_document='first');
+-- Or equivalently:
+SELECT * FROM read_yaml('multi.yaml', multi_document=false);
+```
+
+#### FRONTMATTER Mode
+Treats the first document as metadata that applies to all subsequent documents. Metadata fields are added as columns with a `meta_` prefix:
+
+```yaml
+# data.yaml
+---
+title: User Database
+version: 1.0
+author: John Doe
+---
+id: 1
+name: Alice
+role: admin
+---
+id: 2
+name: Bob
+role: user
+```
+
+```sql
+-- Metadata fields become meta_* columns
+SELECT meta_title, meta_version, id, name, role
+FROM read_yaml('data.yaml', multi_document='frontmatter');
+-- Returns:
+-- meta_title      | meta_version | id | name  | role
+-- User Database   | 1.0          | 1  | Alice | admin
+-- User Database   | 1.0          | 2  | Bob   | user
+
+-- Get metadata as a single STRUCT column instead
+SELECT frontmatter, id, name
+FROM read_yaml('data.yaml', multi_document='frontmatter', frontmatter_as_columns=false);
+-- Returns frontmatter as: {title: User Database, version: 1.0, author: John Doe}
+```
+
+#### LIST Mode
+Returns all documents as a single row with a STRUCT[] (list of structs) column:
+
+```sql
+-- All documents in one array column
+SELECT len(documents), documents[1].name, documents[2].name
+FROM read_yaml('multi.yaml', multi_document='list');
+-- Returns: 3 | John | Jane
+
+-- Customize the column name
+SELECT len(all_docs) FROM read_yaml('multi.yaml', multi_document='list', list_column_name='all_docs');
+
+-- Unnest to convert back to rows
+SELECT unnest(documents).id, unnest(documents).name
+FROM read_yaml('multi.yaml', multi_document='list');
+```
+
+#### Mode Comparison
+
+For a file with 3 YAML documents:
+
+| Mode | Rows Returned | Columns |
+|------|---------------|---------|
+| `'rows'` | 3 | Document fields |
+| `'first'` | 1 | First document fields |
+| `'frontmatter'` | 2 | meta_* + document fields |
+| `'list'` | 1 | `documents` (STRUCT[]) |
+
 ## Type Detection
 
 The YAML extension includes comprehensive automatic type detection:

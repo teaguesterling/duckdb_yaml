@@ -25,6 +25,7 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
 - [x] JSON parity extraction functions (v1.5.0)
 - [x] Arrow operator (`->>`) for string extraction
 - [x] Function aliases for JSON compatibility
+- [x] Extended multi-document modes (v1.6.0)
 - [ ] Explicit column type specification via 'columns' parameter
 - [ ] Comprehensive type detection (dates, timestamps, etc.)
 - [ ] Support for YAML anchors and aliases
@@ -78,6 +79,18 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
    - **Function aliases**: `yaml_extract_path`, `yaml_extract_path_text`, `to_yaml`
    - Note: `->` operator cannot be implemented (DuckDB planner hardcodes it to `json_extract`)
    - Note: `yaml_transform` not implemented (requires binding-time type resolution); use `json_transform(yaml::JSON, structure)` instead
+
+8. **v1.6.0 Extended Multi-Document Modes**:
+   - Expanded `multi_document` parameter from boolean to support four modes:
+   - **`true` / `'rows'`**: Each YAML document becomes a row (default, backward compatible)
+   - **`false` / `'first'`**: Only the first document (backward compatible)
+   - **`'frontmatter'`**: First document is metadata, rest are data rows
+     - Metadata fields added as columns with `meta_` prefix
+     - Option `frontmatter_as_columns=false` returns metadata as single STRUCT column
+   - **`'list'`**: All documents as single row with STRUCT[] column
+     - Option `list_column_name` to customize column name (default: `documents`)
+   - Full backward compatibility with boolean values
+   - Case-insensitive string mode values
 
 ## Design Decisions
 
@@ -174,3 +187,4 @@ To address the segfault issue in the value_to_yaml function, we've implemented a
 - Update 13: Implemented debug mode with YAMLDebug class to fix segfault in value_to_yaml function. Added dedicated test files and diagnostic functions. Fixed the stack overflow issue with deep recursion limits and comprehensive error handling.
 - Update 14: Released v1.5.0 with JSON parity functions. Added `->>` operator, `yaml_structure`, `yaml_contains`, `yaml_merge_patch`, `yaml_value`, and function aliases (`yaml_extract_path`, `yaml_extract_path_text`, `to_yaml`). Closed issues #23-26, #28-29, #31. Closed #27 and #30 as wontfix. Updated community-extensions PR.
 - Update 15: Closed issue #13 (jagged struct properties in glob patterns) - was already fixed in commits e6b743a and d57138e. v1.5.0 deployed to community extensions and verified working. No open issues remaining.
+- Update 16: Released v1.6.0 with extended multi-document modes. Added `frontmatter` mode (first doc as metadata, rest as data rows with `meta_` prefix columns) and `list` mode (all documents as single row with STRUCT[] column). Full backward compatibility maintained with boolean values. Added comprehensive tests (85 assertions across 11 sections).
