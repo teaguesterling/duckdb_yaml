@@ -69,8 +69,7 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 					auto merged_child = ListType::GetChildType(merged_children[i].second);
 					auto child2_child = ListType::GetChildType(child2.second);
 					if (merged_child.id() == LogicalTypeId::STRUCT && child2_child.id() == LogicalTypeId::STRUCT) {
-						merged_children[i].second =
-						    LogicalType::LIST(MergeStructTypes(merged_child, child2_child));
+						merged_children[i].second = LogicalType::LIST(MergeStructTypes(merged_child, child2_child));
 					} else if (merged_child.id() != child2_child.id()) {
 						// Different child types - fall back to YAML list
 						merged_children[i].second = LogicalType::LIST(YAMLTypes::YAMLType());
