@@ -63,6 +63,18 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 				if (merged_children[i].second.id() == LogicalTypeId::STRUCT &&
 				    child2.second.id() == LogicalTypeId::STRUCT) {
 					merged_children[i].second = MergeStructTypes(merged_children[i].second, child2.second);
+				} else if (merged_children[i].second.id() == LogicalTypeId::LIST &&
+				           child2.second.id() == LogicalTypeId::LIST) {
+					// Both are lists - merge the child types if they are structs
+					auto merged_child = ListType::GetChildType(merged_children[i].second);
+					auto child2_child = ListType::GetChildType(child2.second);
+					if (merged_child.id() == LogicalTypeId::STRUCT && child2_child.id() == LogicalTypeId::STRUCT) {
+						merged_children[i].second =
+						    LogicalType::LIST(MergeStructTypes(merged_child, child2_child));
+					} else if (merged_child.id() != child2_child.id()) {
+						// Different child types - fall back to YAML list
+						merged_children[i].second = LogicalType::LIST(YAMLTypes::YAMLType());
+					}
 				} else if (merged_children[i].second.id() != child2.second.id()) {
 					// Different types within struct fields - fall back to YAML to preserve data
 					merged_children[i].second = YAMLTypes::YAMLType();

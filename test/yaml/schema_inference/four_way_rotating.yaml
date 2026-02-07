@@ -1,0 +1,10 @@
+# Four-way rotating: each element has one unique field plus a common field
+items:
+  - common: 1
+    only_first: "a"
+  - common: 2
+    only_second: "b"
+  - common: 3
+    only_third: "c"
+  - common: 4
+    only_fourth: "d"

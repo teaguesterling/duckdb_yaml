@@ -1,0 +1,6 @@
+# Three-way disjoint: each object has completely different fields
+# Tests that schema union captures all fields across all elements
+items:
+  - alpha: value_a
+  - beta: value_b
+  - gamma: value_c

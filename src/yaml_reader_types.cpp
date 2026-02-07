@@ -363,6 +363,11 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 			}
 			return Value(target_type); // NULL if conversion fails
 		}
+		// If target type is STRUCT or LIST but we have a scalar, return NULL
+		// This handles type mismatches where schema detection saw a different type
+		if (target_type.id() == LogicalTypeId::STRUCT || target_type.id() == LogicalTypeId::LIST) {
+			return Value(target_type); // NULL for type mismatch
+		}
 		return Value(scalar_value); // Default to string
 	}
 	case YAML::NodeType::Sequence: {

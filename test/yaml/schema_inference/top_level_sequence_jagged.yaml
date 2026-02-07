@@ -1,0 +1,13 @@
+# Top-level sequence (multi-document style) with jagged schemas
+---
+id: 1
+name: first
+---
+id: 2
+name: second
+email: second@example.com
+---
+id: 3
+name: third
+email: third@example.com
+phone: 555-1234

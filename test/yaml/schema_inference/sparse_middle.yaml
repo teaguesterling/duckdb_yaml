@@ -1,0 +1,12 @@
+# Sparse middle: field only appears in middle elements
+items:
+  - id: 1
+    name: first
+  - id: 2
+    name: second
+    temporary: "only here"
+  - id: 3
+    name: third
+    temporary: "and here"
+  - id: 4
+    name: fourth

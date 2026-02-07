@@ -1,0 +1,12 @@
+# Progressive accumulation: each successive element adds a new field
+items:
+  - a: 1
+  - a: 2
+    b: 2
+  - a: 3
+    b: 3
+    c: 3
+  - a: 4
+    b: 4
+    c: 4
+    d: 4

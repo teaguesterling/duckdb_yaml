@@ -1,0 +1,6 @@
+# Type mismatch: docs is a scalar string, not a struct
+# This tests graceful handling when schema detects STRUCT but data is VARCHAR
+extension:
+  name: test_extension
+docs:
+  https://example.com/docs

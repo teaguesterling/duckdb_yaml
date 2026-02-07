@@ -1,0 +1,12 @@
+# Nested arrays where inner arrays have jagged schemas
+groups:
+  - name: group1
+    members:
+      - user: alice
+      - user: bob
+        role: admin
+  - name: group2
+    members:
+      - user: carol
+        role: member
+        department: sales

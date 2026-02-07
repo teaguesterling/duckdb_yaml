@@ -78,3 +78,147 @@ SELECT typeof(id), typeof(name), typeof(email), typeof(phone), typeof(notes)
 FROM read_yaml('test/yaml/schema_inference/multiple_optional_fields.yaml') LIMIT 1;
 ----
 TINYINT	VARCHAR	VARCHAR	VARCHAR	VARCHAR
+
+# ============================================================================
+# Comprehensive schema unioning tests (issue #32)
+# Tests various patterns of jagged schemas in arrays
+# ============================================================================
+
+# Test 6: Three-way disjoint - each object has completely different fields
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/three_way_disjoint.yaml');
+----
+STRUCT(alpha VARCHAR, beta VARCHAR, gamma VARCHAR)[]
+
+query I
+SELECT items FROM read_yaml('test/yaml/schema_inference/three_way_disjoint.yaml');
+----
+[{'alpha': value_a, 'beta': NULL, 'gamma': NULL}, {'alpha': NULL, 'beta': value_b, 'gamma': NULL}, {'alpha': NULL, 'beta': NULL, 'gamma': value_c}]
+
+# Test 7: Progressive accumulation - each successive element adds a new field
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/progressive_accumulation.yaml');
+----
+STRUCT(a TINYINT, b TINYINT, c TINYINT, d TINYINT)[]
+
+query I
+SELECT items[4] FROM read_yaml('test/yaml/schema_inference/progressive_accumulation.yaml');
+----
+{'a': 4, 'b': 4, 'c': 4, 'd': 4}
+
+query I
+SELECT items[1].d FROM read_yaml('test/yaml/schema_inference/progressive_accumulation.yaml');
+----
+NULL
+
+# Test 8: Sparse middle - field only appears in middle elements
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/sparse_middle.yaml');
+----
+STRUCT(id TINYINT, "name" VARCHAR, "temporary" VARCHAR)[]
+
+query III
+SELECT items[1].temporary, items[2].temporary, items[4].temporary FROM read_yaml('test/yaml/schema_inference/sparse_middle.yaml');
+----
+NULL	only here	NULL
+
+# Test 9: Four-way rotating - each element has one unique field plus common
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/four_way_rotating.yaml');
+----
+STRUCT(common TINYINT, only_first VARCHAR, only_second VARCHAR, only_third VARCHAR, only_fourth VARCHAR)[]
+
+# Test 10: Last element has unique field (opposite of original bug)
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/last_element_unique.yaml');
+----
+STRUCT(id TINYINT, "name" VARCHAR, final_only VARCHAR)[]
+
+query I
+SELECT items[4].final_only FROM read_yaml('test/yaml/schema_inference/last_element_unique.yaml');
+----
+unique to last
+
+# Test 11: Empty objects mixed with populated ones
+query I
+SELECT typeof(items) FROM read_yaml('test/yaml/schema_inference/empty_objects_mixed.yaml');
+----
+STRUCT("name" VARCHAR, "value" TINYINT, extra VARCHAR)[]
+
+query II
+SELECT items[1].name, items[2].name FROM read_yaml('test/yaml/schema_inference/empty_objects_mixed.yaml');
+----
+NULL	second
+
+# Test 12: Multiple arrays with different jagged patterns in same document
+query II
+SELECT typeof(users), typeof(products) FROM read_yaml('test/yaml/schema_inference/multiple_arrays_different_patterns.yaml');
+----
+STRUCT("name" VARCHAR, email VARCHAR)[]	STRUCT(sku VARCHAR, price DOUBLE, discount DOUBLE)[]
+
+# Test 13: Deeply nested jagged structures
+query I
+SELECT typeof(data) FROM read_yaml('test/yaml/schema_inference/deeply_nested_jagged.yaml');
+----
+STRUCT(level1 STRUCT(items STRUCT(id TINYINT, info STRUCT("name" VARCHAR, extra VARCHAR, deep STRUCT("value" VARCHAR)))[]))
+
+query I
+SELECT data.level1.items[2].info.extra FROM read_yaml('test/yaml/schema_inference/deeply_nested_jagged.yaml');
+----
+nested_extra
+
+query I
+SELECT data.level1.items[3].info.deep.value FROM read_yaml('test/yaml/schema_inference/deeply_nested_jagged.yaml');
+----
+deep_value
+
+# Test 14: Nested arrays where inner arrays have jagged schemas (issue #32 root cause)
+# The fix ensures that LIST fields inside STRUCTs are also merged
+query I
+SELECT typeof(groups) FROM read_yaml('test/yaml/schema_inference/nested_arrays_jagged.yaml');
+----
+STRUCT("name" VARCHAR, members STRUCT("user" VARCHAR, "role" VARCHAR, department VARCHAR)[])[]
+
+query I
+SELECT groups[2].members[1].department FROM read_yaml('test/yaml/schema_inference/nested_arrays_jagged.yaml');
+----
+sales
+
+query I
+SELECT groups[1].members[1].department FROM read_yaml('test/yaml/schema_inference/nested_arrays_jagged.yaml');
+----
+NULL
+
+# Test 15: Top-level sequence (multi-document) with jagged schemas
+query IIII
+SELECT id, name, email, phone FROM read_yaml('test/yaml/schema_inference/top_level_sequence_jagged.yaml', multi_document=true);
+----
+1	first	NULL	NULL
+2	second	second@example.com	NULL
+3	third	third@example.com	555-1234
+
+# ============================================================================
+# Type mismatch handling (issue #32 related)
+# When schema detection finds conflicting types (STRUCT vs VARCHAR),
+# it falls back to YAML type to preserve all data
+# ============================================================================
+
+# Test 16: Type mismatch detection - falls back to YAML type
+# First file has STRUCT docs, second has scalar docs - type should be YAML
+query I
+SELECT typeof(docs) FROM read_yaml([
+    'test/yaml/schema_inference/type_mismatch_struct.yaml',
+    'test/yaml/schema_inference/type_mismatch_scalar_struct.yaml'
+]) LIMIT 1;
+----
+yaml
+
+# Both values should be preserved as YAML strings
+query II
+SELECT extension.name, docs FROM read_yaml([
+    'test/yaml/schema_inference/type_mismatch_struct.yaml',
+    'test/yaml/schema_inference/type_mismatch_scalar_struct.yaml'
+]) ORDER BY extension.name;
+----
+other_extension	{hello_world: Example code here, extended_description: More details}
+test_extension	https://example.com/docs

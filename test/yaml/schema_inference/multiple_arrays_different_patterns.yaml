@@ -1,0 +1,12 @@
+# Multiple arrays with different jagged patterns in same document
+users:
+  - name: alice
+  - name: bob
+    email: bob@example.com
+products:
+  - sku: A001
+  - sku: B002
+    price: 19.99
+  - sku: C003
+    price: 29.99
+    discount: 0.1

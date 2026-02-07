@@ -1,0 +1,17 @@
+# Deeply nested jagged: inconsistencies at multiple nesting levels
+data:
+  level1:
+    items:
+      - id: 1
+        info:
+          name: first
+      - id: 2
+        info:
+          name: second
+          extra: nested_extra
+      - id: 3
+        info:
+          name: third
+          extra: also_extra
+          deep:
+            value: deep_value

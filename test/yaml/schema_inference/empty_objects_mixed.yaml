@@ -1,0 +1,8 @@
+# Empty objects mixed with populated ones
+items:
+  - {}
+  - name: second
+    value: 2
+  - name: third
+    value: 3
+    extra: bonus

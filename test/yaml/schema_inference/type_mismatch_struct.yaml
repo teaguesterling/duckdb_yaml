@@ -1,0 +1,6 @@
+# Type match: docs is a struct
+extension:
+  name: other_extension
+docs:
+  hello_world: "Example code here"
+  extended_description: "More details"
