@@ -92,6 +92,24 @@ We are implementing a YAML extension for DuckDB, similar to the existing JSON ex
    - Full backward compatibility with boolean values
    - Case-insensitive string mode values
 
+9. **Empty YAML Maps Fix (Issue #33)**:
+   - Empty YAML maps (`{}`) were causing "STRUCT to STRUCT cast must have at least one matching member" errors
+   - Root cause: Empty maps created `STRUCT()` with no children, which DuckDB couldn't cast
+   - Solution: Empty maps now return `yaml` type instead of empty `STRUCT()`
+   - `MergeStructTypes` updated to handle empty structs when merging (returns non-empty one)
+   - Sequence/document type detection handles `yaml`-`STRUCT` combinations by preferring STRUCT
+   - This allows empty maps to coexist with populated maps in lists and merged schemas
+
+10. **Document Suffix Stripping (Issue #34)**:
+    - Added `strip_document_suffixes` parameter (default: `true`) to handle non-standard YAML headers
+    - Some applications (e.g., Unity) add custom keywords after standard header elements:
+      - `--- !u!1 &12345 stripped` → `--- !u!1 &12345`
+    - The `stripped` keyword (Unity's marker for placeholder prefab objects) caused yaml-cpp to fail
+    - `StripDocumentSuffixes()` function sanitizes document headers before parsing
+    - Removes bare words appearing after tag/anchor on `---` lines
+    - Enables parsing of Unity `.unity`, `.prefab`, and `.asset` files
+    - Can be disabled with `strip_document_suffixes=false` if needed
+
 ## Design Decisions
 
 - We're using yaml-cpp for parsing YAML files
@@ -188,3 +206,5 @@ To address the segfault issue in the value_to_yaml function, we've implemented a
 - Update 14: Released v1.5.0 with JSON parity functions. Added `->>` operator, `yaml_structure`, `yaml_contains`, `yaml_merge_patch`, `yaml_value`, and function aliases (`yaml_extract_path`, `yaml_extract_path_text`, `to_yaml`). Closed issues #23-26, #28-29, #31. Closed #27 and #30 as wontfix. Updated community-extensions PR.
 - Update 15: Closed issue #13 (jagged struct properties in glob patterns) - was already fixed in commits e6b743a and d57138e. v1.5.0 deployed to community extensions and verified working. No open issues remaining.
 - Update 16: Released v1.6.0 with extended multi-document modes. Added `frontmatter` mode (first doc as metadata, rest as data rows with `meta_` prefix columns) and `list` mode (all documents as single row with STRUCT[] column). Full backward compatibility maintained with boolean values. Added comprehensive tests (85 assertions across 11 sections).
+- Update 17: Fixed issue #33 (empty YAML maps causing STRUCT cast errors). Empty maps now return `yaml` type instead of `STRUCT()`. Updated `MergeStructTypes` and type detection to handle empty struct merging gracefully. Added test file `yaml_empty_maps.test`.
+- Update 18: Fixed issue #34 (Unity YAML files failing to parse). Added `strip_document_suffixes` parameter (default: true) to remove non-standard suffixes like Unity's `stripped` keyword from document headers. Implemented `StripDocumentSuffixes()` preprocessing function. Unity `.unity`, `.meta`, and `.prefab` files now parse correctly. Added test file `yaml_document_suffixes.test`.
