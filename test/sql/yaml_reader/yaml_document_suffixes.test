@@ -1,0 +1,115 @@
+# name: test/sql/yaml_reader/yaml_document_suffixes.test
+# description: Test handling of non-standard document suffixes (issue #34)
+# group: [yaml_reader]
+
+require yaml
+
+#
+# ============================================================================
+# Document suffix stripping tests - Issue #34
+# Some applications add custom keywords after the standard document header
+# elements (tag, anchor). This tests the strip_document_suffixes option.
+# ============================================================================
+#
+
+# Test: Basic document suffix stripping (Unity-style "stripped" keyword)
+query II
+SELECT * FROM parse_yaml('---
+name: test
+value: 42');
+----
+test	42
+
+# Test: Document with tag and anchor (no suffix - should work normally)
+query II
+SELECT * FROM parse_yaml('--- !custom &ref1
+name: test
+value: 42');
+----
+test	42
+
+# Test: Multi-document with consistent structure
+query II
+SELECT * FROM parse_yaml('---
+name: first
+value: 1
+---
+name: second
+value: 2');
+----
+first	1
+second	2
+
+#
+# ============================================================================
+# File-based tests with strip_document_suffixes parameter
+# ============================================================================
+#
+
+# Create test file with Unity-style suffixes
+statement ok
+COPY (SELECT '--- !u!1 &12345 stripped
+GameObject:
+  name: TestObject
+  active: true
+--- !u!4 &67890 stripped
+Transform:
+  position: {x: 0, y: 0, z: 0}' AS content) TO '__TEST_DIR__/unity_style.yaml' (FORMAT CSV, HEADER false, QUOTE '');
+
+# Test: Read file with document suffixes (default: strip_document_suffixes=true)
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/unity_style.yaml');
+----
+2
+
+# Test: First document structure
+query II
+SELECT GameObject.name, GameObject.active FROM read_yaml('__TEST_DIR__/unity_style.yaml') LIMIT 1;
+----
+TestObject	true
+
+# Test: Explicitly enable stripping
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/unity_style.yaml', strip_document_suffixes=true);
+----
+2
+
+# Test: Disable stripping should fail on Unity files
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/unity_style.yaml', strip_document_suffixes=false);
+----
+Error parsing
+
+#
+# ============================================================================
+# Edge cases
+# ============================================================================
+#
+
+# Test: Document with only tag (no anchor, no suffix)
+query I
+SELECT name FROM parse_yaml('--- !mytag
+name: tagged');
+----
+tagged
+
+# Test: Document with only anchor (no tag, no suffix)
+query I
+SELECT name FROM parse_yaml('--- &myanchor
+name: anchored');
+----
+anchored
+
+# Test: Plain document separator (no tag, no anchor)
+query I
+SELECT name FROM parse_yaml('---
+name: plain');
+----
+plain
+
+# Test: Inline document content should not be stripped
+query I
+SELECT a FROM parse_yaml('--- {a: 1}');
+----
+1
+
