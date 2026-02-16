@@ -2,8 +2,110 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include <sstream>
 
 namespace duckdb {
+
+// Strip non-standard suffixes from YAML document headers (issue #34)
+// Transforms: "--- !tag &anchor suffix" -> "--- !tag &anchor"
+// This enables parsing of files with custom document annotations like Unity's "stripped" keyword
+string YAMLReader::StripDocumentSuffixes(const string &yaml_content) {
+	std::istringstream input(yaml_content);
+	std::ostringstream output;
+	string line;
+	bool first_line = true;
+
+	while (std::getline(input, line)) {
+		if (!first_line) {
+			output << '\n';
+		}
+		first_line = false;
+
+		// Check if this is a document header line (starts with ---)
+		if (line.size() >= 3 && line[0] == '-' && line[1] == '-' && line[2] == '-') {
+			// Parse the header: --- [!tag] [&anchor] [suffix]
+			// We want to keep --- !tag &anchor but remove any suffix
+
+			size_t pos = 3; // Start after ---
+
+			// Skip whitespace after ---
+			while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) {
+				pos++;
+			}
+
+			// Check for tag (starts with !)
+			size_t tag_end = pos;
+			if (pos < line.size() && line[pos] == '!') {
+				// Find end of tag (next whitespace)
+				while (tag_end < line.size() && line[tag_end] != ' ' && line[tag_end] != '\t') {
+					tag_end++;
+				}
+				pos = tag_end;
+
+				// Skip whitespace after tag
+				while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) {
+					pos++;
+				}
+			}
+
+			// Check for anchor (starts with &)
+			size_t anchor_end = pos;
+			if (pos < line.size() && line[pos] == '&') {
+				// Find end of anchor (next whitespace)
+				while (anchor_end < line.size() && line[anchor_end] != ' ' && line[anchor_end] != '\t') {
+					anchor_end++;
+				}
+				pos = anchor_end;
+			}
+
+			// If there's anything after the anchor, it's a suffix we need to strip
+			// Output only up to the anchor
+			if (anchor_end > 3) {
+				// We found tag/anchor, output up to anchor_end
+				output << line.substr(0, anchor_end);
+			} else if (tag_end > 3) {
+				// We found only a tag, output up to tag_end
+				output << line.substr(0, tag_end);
+			} else {
+				// Just "---" possibly with trailing content - keep just "---"
+				// But check if there's actual content (like "--- {a: 1}")
+				// Skip whitespace to see what's next
+				while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) {
+					pos++;
+				}
+				if (pos < line.size() && line[pos] != '!' && line[pos] != '&') {
+					// There's content on the same line, could be inline document
+					// Check if it looks like a bare word (suffix) vs actual YAML content
+					size_t word_end = pos;
+					while (word_end < line.size() && line[word_end] != ' ' && line[word_end] != '\t' &&
+					       line[word_end] != ':' && line[word_end] != '{' && line[word_end] != '[') {
+						word_end++;
+					}
+					// If the word doesn't have YAML structure chars, it's likely a suffix
+					if (word_end < line.size() &&
+					    (line[word_end] == ':' || line[word_end] == '{' || line[word_end] == '[')) {
+						// Looks like actual YAML content, keep the line as-is
+						output << line;
+					} else if (word_end == line.size()) {
+						// Just a bare word at end of line - strip it
+						output << "---";
+					} else {
+						// Keep the line as-is (complex case)
+						output << line;
+					}
+				} else {
+					// No content after ---, keep as-is
+					output << line;
+				}
+			}
+		} else {
+			// Not a document header line, keep as-is
+			output << line;
+		}
+	}
+
+	return output.str();
+}
 
 // Helper function to get files from a Value (which can be a string or list of strings)
 vector<string> YAMLReader::GetFiles(ClientContext &context, const Value &path_value, bool ignore_errors) {
@@ -124,6 +226,12 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 	// Read the file content
 	string content(file_size, ' ');
 	fs.Read(*handle, const_cast<char *>(content.c_str()), file_size);
+
+	// Strip non-standard document suffixes if enabled (issue #34)
+	// This allows parsing files with custom annotations like Unity's "stripped" keyword
+	if (options.strip_document_suffixes) {
+		content = StripDocumentSuffixes(content);
+	}
 
 	vector<YAML::Node> docs;
 

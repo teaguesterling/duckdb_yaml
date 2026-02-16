@@ -229,6 +229,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		// When using records path, we don't expand root sequences (the records path points to the sequence)
 		options.expand_root_sequence = false;
 	}
+	if (seen_parameters.find("strip_document_suffixes") != seen_parameters.end()) {
+		options.strip_document_suffixes = input.named_parameters["strip_document_suffixes"].GetValue<bool>();
+	}
 
 	// Create bind data
 	auto result = make_uniq<YAMLReadRowsBindData>(file_path, options);
@@ -673,6 +676,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 			throw BinderException(
 			    "read_yaml_objects \"maximum_sample_files\" parameter must be positive, or -1 to remove the limit");
 		}
+	}
+	if (seen_parameters.find("strip_document_suffixes") != seen_parameters.end()) {
+		options.strip_document_suffixes = input.named_parameters["strip_document_suffixes"].GetValue<bool>();
 	}
 
 	// Create bind data

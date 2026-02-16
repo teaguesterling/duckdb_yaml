@@ -78,6 +78,11 @@ public:
 
 		// LIST mode options
 		string list_column_name = "documents"; // Column name for the STRUCT[] in LIST mode
+
+		// Document header sanitization (issue #34)
+		// Strip non-standard suffixes from document headers (e.g., "--- !tag &anchor suffix" -> "--- !tag &anchor")
+		// This enables parsing of files with custom document annotations like Unity's "stripped" keyword
+		bool strip_document_suffixes = true;
 	};
 
 	/**
@@ -288,6 +293,20 @@ public:
 	 * @return vector<YAML::Node> Recovered documents
 	 */
 	static vector<YAML::Node> RecoverPartialYAMLDocuments(const string &yaml_content);
+
+	/**
+	 * @brief Strip non-standard suffixes from YAML document headers (issue #34)
+	 *
+	 * Some applications (e.g., Unity) add custom keywords after the standard
+	 * document header elements (tag, anchor). For example:
+	 *   "--- !u!1 &12345 stripped" -> "--- !u!1 &12345"
+	 *
+	 * This enables parsing of files that would otherwise fail with standard YAML parsers.
+	 *
+	 * @param yaml_content The YAML content to sanitize
+	 * @return string The sanitized YAML content with document suffixes removed
+	 */
+	static string StripDocumentSuffixes(const string &yaml_content);
 
 	/**
 	 * @brief Helper function to merge two struct types, preserving fields from both
