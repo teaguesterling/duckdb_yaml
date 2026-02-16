@@ -1,0 +1,128 @@
+# name: test/sql/yaml_reader/yaml_empty_maps.test
+# description: Test handling of empty YAML maps (issue #33)
+# group: [yaml_reader]
+
+require yaml
+
+#
+# ============================================================================
+# Empty map handling tests - Issue #33
+# Empty YAML maps {} should be handled gracefully, not cause STRUCT cast errors
+# ============================================================================
+#
+
+# Test: Simple empty map at top level
+query I
+SELECT typeof(empty) FROM parse_yaml('empty: {}');
+----
+yaml
+
+# Test: Empty map with other fields
+query II
+SELECT name, typeof(data) FROM parse_yaml('name: test
+data: {}');
+----
+test	yaml
+
+# Test: Nested structure with empty map
+query III
+SELECT name, typeof(config), typeof(config.settings) FROM parse_yaml('name: test
+config:
+  settings: {}
+  enabled: true');
+----
+test	STRUCT(settings yaml, enabled BOOLEAN)	yaml
+
+# Test: Multiple empty maps
+query II
+SELECT typeof(a), typeof(b) FROM parse_yaml('a: {}
+b: {}');
+----
+yaml	yaml
+
+# Test: Empty map inside a list
+query I
+SELECT typeof(items) FROM parse_yaml('items:
+  - name: foo
+    meta: {}
+  - name: bar
+    meta: {}');
+----
+STRUCT("name" VARCHAR, meta yaml)[]
+
+# Test: Deeply nested empty map
+query I
+SELECT typeof(root.level1.level2.empty) FROM parse_yaml('root:
+  level1:
+    level2:
+      empty: {}
+      value: 42');
+----
+yaml
+
+#
+# ============================================================================
+# Unity .meta file style tests
+# These patterns are common in Unity project files
+# ============================================================================
+#
+
+# Test: Unity-style meta structure with externalObjects
+query III
+SELECT fileFormatVersion, guid, typeof(DefaultImporter) FROM parse_yaml('fileFormatVersion: 2
+guid: abc123
+DefaultImporter:
+  externalObjects: {}
+  userData:
+  assetBundleName:
+  assetBundleVariant: ');
+----
+2	abc123	STRUCT(externalObjects yaml, userData VARCHAR, assetBundleName VARCHAR, assetBundleVariant VARCHAR)
+
+# Test: Multiple Unity-style imports with different structures
+query I
+SELECT count(*) FROM parse_yaml('---
+fileFormatVersion: 2
+guid: abc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+---
+fileFormatVersion: 2
+guid: def
+DefaultImporter:
+  externalObjects: {}
+  userData: test');
+----
+2
+
+#
+# ============================================================================
+# read_yaml_objects with empty maps
+# ============================================================================
+#
+
+# Test: parse_yaml should handle inline YAML with empty map
+query I
+SELECT typeof(empty) FROM parse_yaml('empty: {}');
+----
+yaml
+
+#
+# ============================================================================
+# Value extraction from empty maps
+# ============================================================================
+#
+
+# Test: Extracting from empty map returns NULL
+query I
+SELECT empty->>'$.key' FROM parse_yaml('empty: {}');
+----
+NULL
+
+# Test: Empty map value
+query I
+SELECT empty FROM parse_yaml('empty: {}');
+----
+{}
+
