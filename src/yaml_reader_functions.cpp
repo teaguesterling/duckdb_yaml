@@ -51,6 +51,16 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 	auto struct1_children = StructType::GetChildTypes(type1);
 	auto struct2_children = StructType::GetChildTypes(type2);
 
+	// Handle empty structs (issue #33): empty maps {} create STRUCT() with no children
+	// When merging with a non-empty struct, return the non-empty one
+	// This allows empty YAML maps to coexist with populated maps in lists/documents
+	if (struct1_children.empty()) {
+		return type2;
+	}
+	if (struct2_children.empty()) {
+		return type1;
+	}
+
 	// Start with all children from the first struct
 	child_list_t<LogicalType> merged_children = struct1_children;
 

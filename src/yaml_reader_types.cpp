@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -151,6 +152,20 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 					}
 				}
 				continue; // Keep checking
+			} else if ((common_type.HasAlias() && common_type.GetAlias() == "yaml" &&
+			            element_type.id() == LogicalTypeId::STRUCT) ||
+			           (element_type.HasAlias() && element_type.GetAlias() == "yaml" &&
+			            common_type.id() == LogicalTypeId::STRUCT)) {
+				// Handle empty maps (yaml type) mixed with structs (issue #33)
+				// Empty maps can be converted to empty struct values, so use the struct type
+				if (common_type.id() == LogicalTypeId::STRUCT) {
+					// common_type is already STRUCT, keep it
+					continue;
+				} else {
+					// element_type is STRUCT, use it
+					common_type = element_type;
+					continue;
+				}
 			} else if (common_type.IsNumeric() && element_type.IsNumeric()) {
 				// Combine numeric types - promote to the wider type
 				// First check if either is DOUBLE
@@ -182,6 +197,12 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 			LogicalType value_type = DetectYAMLType(it->second);
 			struct_children.push_back(make_pair(key, value_type));
 		}
+		// Empty maps create STRUCT() with no children, which DuckDB cannot cast
+		// Return YAML type for empty maps to preserve them as opaque values (issue #33)
+		// Note: MergeStructTypes handles empty structs when merging with non-empty ones
+		if (struct_children.empty()) {
+			return YAMLTypes::YAMLType();
+		}
 		return LogicalType::STRUCT(struct_children);
 	}
 	default:
@@ -206,6 +227,18 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 		// If both are structs, merge them recursively
 		if (merged_type.id() == LogicalTypeId::STRUCT && node_type.id() == LogicalTypeId::STRUCT) {
 			merged_type = MergeStructTypes(merged_type, node_type);
+		} else if ((merged_type.HasAlias() && merged_type.GetAlias() == "yaml" &&
+		            node_type.id() == LogicalTypeId::STRUCT) ||
+		           (node_type.HasAlias() && node_type.GetAlias() == "yaml" &&
+		            merged_type.id() == LogicalTypeId::STRUCT)) {
+			// Handle empty maps (yaml type) mixed with structs (issue #33)
+			// Empty maps can be converted to empty struct values, so use the struct type
+			if (merged_type.id() == LogicalTypeId::STRUCT) {
+				// merged_type is already STRUCT, keep it
+			} else {
+				// node_type is STRUCT, use it
+				merged_type = node_type;
+			}
 		} else if (merged_type.id() != node_type.id()) {
 			// Different types, fall back to VARCHAR
 			merged_type = LogicalType::VARCHAR;
