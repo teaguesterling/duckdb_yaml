@@ -12,3 +12,9 @@ test/python/__pycache__/
 duckdb_unittest_tempdir/
 duckdb-community-extensions/
 site/
+
+# blq
+.lq/*
+!.lq/hooks/
+!.lq/config.toml
+!.lq/commands.toml
