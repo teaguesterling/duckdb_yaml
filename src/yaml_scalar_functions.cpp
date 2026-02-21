@@ -173,7 +173,7 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 		}
 
 		// Validate known parameter names
-		if (param_name == "style") {
+		if (param_name == "style" || param_name == "multiline" || param_name == "indent") {
 			// Valid parameter, will be processed in execution function
 		} else {
 			throw BinderException("Unknown parameter '%s' for format_yaml", param_name);
@@ -187,6 +187,8 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 static void FormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	yaml_utils::YAMLFormat format = yaml_utils::YAMLSettings::GetDefaultFormat();
+	yaml_utils::YAMLStringStyle string_style = yaml_utils::YAMLStringStyle::AUTO;
+	idx_t indent = 2;
 
 	// Access named parameters from the bound function expression (like struct_update)
 	auto &func_args = state.expr.Cast<BoundFunctionExpression>().children;
@@ -201,7 +203,6 @@ static void FormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
 		string param_name = StringUtil::Lower(child->alias);
 
 		if (param_name == "style") {
-			// Get the style value from the corresponding argument
 			Value style_value = args.data[arg_idx].GetValue(0);
 			string style_str = StringUtil::Lower(style_value.ToString());
 			if (style_str == "block") {
@@ -210,6 +211,33 @@ static void FormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
 				format = yaml_utils::YAMLFormat::FLOW;
 			} else {
 				throw InvalidInputException("Invalid YAML style '%s'. Valid options are 'flow' or 'block'.", style_str);
+			}
+		} else if (param_name == "multiline") {
+			Value multiline_value = args.data[arg_idx].GetValue(0);
+			string multiline_str = StringUtil::Lower(multiline_value.ToString());
+			if (multiline_str == "auto") {
+				string_style = yaml_utils::YAMLStringStyle::AUTO;
+			} else if (multiline_str == "literal") {
+				string_style = yaml_utils::YAMLStringStyle::LITERAL;
+			} else if (multiline_str == "quoted") {
+				string_style = yaml_utils::YAMLStringStyle::QUOTED;
+			} else {
+				throw InvalidInputException(
+				    "Invalid YAML multiline '%s'. Valid options are 'auto', 'literal', or 'quoted'.", multiline_str);
+			}
+		} else if (param_name == "indent") {
+			Value indent_value = args.data[arg_idx].GetValue(0);
+			try {
+				int indent_int = std::stoi(indent_value.ToString());
+				if (indent_int < 1 || indent_int > 10) {
+					throw InvalidInputException("Invalid YAML indent '%d'. Must be between 1 and 10.", indent_int);
+				}
+				indent = static_cast<idx_t>(indent_int);
+			} catch (const InvalidInputException &) {
+				throw;
+			} catch (...) {
+				throw InvalidInputException("Invalid YAML indent '%s'. Must be an integer between 1 and 10.",
+				                            indent_value.ToString());
 			}
 		} else {
 			throw InvalidInputException("Unknown parameter '%s' for format_yaml", param_name);
@@ -223,8 +251,8 @@ static void FormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
 
 		// YAML generation using determined parameters
 		try {
-			// Format the value as YAML with the specified style
-			std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+			// Format the value as YAML with the specified style, multiline, and indent
+			std::string yaml_str = yaml_utils::ValueToYAMLString(value, format, string_style, indent);
 			result.SetValue(row_idx, Value(yaml_str));
 		} catch (const std::exception &e) {
 			// Only catch YAML generation errors, return null for data conversion issues

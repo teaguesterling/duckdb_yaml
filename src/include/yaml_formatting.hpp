@@ -30,7 +30,9 @@ std::string ApplySequenceLayout(const std::string &yaml_str);
 std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_first_document, bool is_block_style);
 
 // Format a single value with the specified layout
-std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout);
+std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout,
+                                  yaml_utils::YAMLStringStyle string_style = yaml_utils::YAMLStringStyle::AUTO,
+                                  idx_t indent = 2);
 
 // Post-process YAML output for multiple rows based on layout
 std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout, yaml_utils::YAMLFormat format,

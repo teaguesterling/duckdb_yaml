@@ -145,6 +145,159 @@ SELECT id, data FROM read_yaml('__TEST_DIR__/doc_separator_block.yaml') ORDER BY
 statement ok
 DROP TABLE separator_test;
 
+#===--------------------------------------------------------------------===
+# Multiline string support tests
+#===--------------------------------------------------------------------===
+
+# Create a table with multiline string content using E'\n' syntax
+statement ok
+CREATE TABLE multiline_test (id INTEGER, description VARCHAR);
+
+statement ok
+INSERT INTO multiline_test VALUES
+    (1, E'line one\nline two\nline three'),
+    (2, 'Single line only'),
+    (3, E'First paragraph\n\nSecond paragraph');
+
+# Test default COPY TO now uses block style with literal multiline (auto resolves to literal for block)
+statement ok
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/multiline_default.yaml' (FORMAT yaml);
+
+# Verify the YAML file contains literal block scalar markers (|)
+# read_text returns the raw file content so we can check for the | indicator
+query I
+SELECT contains(content, '|') FROM read_text('__TEST_DIR__/multiline_default.yaml') WHERE content LIKE '%line one%';
+----
+true
+
+# Verify multiline roundtrip preserves content (use replace to make newlines visible)
+query I
+SELECT replace(description, chr(10), '<NL>') FROM read_yaml('__TEST_DIR__/multiline_default.yaml') WHERE id = 1;
+----
+line one<NL>line two<NL>line three<NL>
+
+query I
+SELECT description FROM read_yaml('__TEST_DIR__/multiline_default.yaml') WHERE id = 2;
+----
+Single line only
+
+query I
+SELECT replace(description, chr(10), '<NL>') FROM read_yaml('__TEST_DIR__/multiline_default.yaml') WHERE id = 3;
+----
+First paragraph<NL><NL>Second paragraph
+
+# Test explicit MULTILINE literal with block style
+statement ok
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/multiline_literal.yaml' (FORMAT yaml, STYLE block, MULTILINE literal);
+
+# Verify literal block indicators are present
+query I
+SELECT contains(content, '|') FROM read_text('__TEST_DIR__/multiline_literal.yaml') WHERE content LIKE '%line one%';
+----
+true
+
+# Roundtrip check
+query I
+SELECT replace(description, chr(10), '<NL>') FROM read_yaml('__TEST_DIR__/multiline_literal.yaml') WHERE id = 1;
+----
+line one<NL>line two<NL>line three<NL>
+
+# Test MULTILINE quoted with block style (forces escaped strings instead of literal blocks)
+statement ok
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/multiline_quoted.yaml' (FORMAT yaml, STYLE block, MULTILINE quoted);
+
+# Verify quoted mode does NOT contain literal block indicators for the multiline value
+# The file should use quoted strings with escaped newlines instead
+query I
+SELECT content NOT LIKE '%description: |%' FROM read_text('__TEST_DIR__/multiline_quoted.yaml') WHERE content LIKE '%line one%';
+----
+true
+
+# Roundtrip check - content should still be preserved
+query I
+SELECT replace(description, chr(10), '<NL>') FROM read_yaml('__TEST_DIR__/multiline_quoted.yaml') WHERE id = 1;
+----
+line one<NL>line two<NL>line three
+
+# Test INDENT parameter with nested structures
+statement ok
+CREATE TABLE indent_test (id INTEGER, info STRUCT(name VARCHAR, tags VARCHAR[]));
+
+statement ok
+INSERT INTO indent_test VALUES
+    (1, {'name': 'Alice', 'tags': ['dev', 'admin']}),
+    (2, {'name': 'Bob', 'tags': ['user']});
+
+statement ok
+COPY (SELECT * FROM indent_test) TO '__TEST_DIR__/indent4.yaml' (FORMAT yaml, STYLE block, INDENT 4);
+
+# Verify indent=4 produces 4-space indentation in the output
+query I
+SELECT contains(content, '    name:') FROM read_text('__TEST_DIR__/indent4.yaml');
+----
+true
+
+# Verify indent roundtrip
+query IT
+SELECT id, info FROM read_yaml('__TEST_DIR__/indent4.yaml') ORDER BY id;
+----
+1	{'name': Alice, 'tags': [dev, admin]}
+2	{'name': Bob, 'tags': [user]}
+
+statement ok
+DROP TABLE indent_test;
+
+# Test error handling for invalid MULTILINE value
+statement error
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, MULTILINE badvalue);
+----
+Invalid YAML multiline 'badvalue'. Valid options are 'auto', 'literal', or 'quoted'.
+
+# Test error handling for invalid INDENT value
+statement error
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, INDENT 0);
+----
+Invalid YAML indent '0'. Must be an integer between 1 and 10.
+
+statement error
+COPY (SELECT * FROM multiline_test) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, INDENT 11);
+----
+Invalid YAML indent '11'. Must be an integer between 1 and 10.
+
+# Test format_yaml() with multiline and indent parameters using E'\n' strings
+# Verify literal block scalar is used for multiline strings
+query I
+SELECT contains(format_yaml({'greeting': E'hello\nworld'}, style := 'block', multiline := 'literal'), '|');
+----
+true
+
+# Verify indent parameter works
+query I
+SELECT contains(format_yaml({'a': {'b': 1}}, style := 'block', indent := 4), '    b:');
+----
+true
+
+# Verify quoted mode avoids literal blocks
+query I
+SELECT format_yaml({'msg': E'line1\nline2'}, style := 'block', multiline := 'quoted') NOT LIKE '%|%';
+----
+true
+
+# Test format_yaml() error for invalid multiline
+statement error
+SELECT format_yaml({'a': 1}, multiline := 'bad');
+----
+Invalid YAML multiline 'bad'. Valid options are 'auto', 'literal', or 'quoted'.
+
+# Test format_yaml() error for invalid indent
+statement error
+SELECT format_yaml({'a': 1}, indent := '0');
+----
+Invalid YAML indent
+
+statement ok
+DROP TABLE multiline_test;
+
 # Clean up test tables
 statement ok
 DROP TABLE test_data;

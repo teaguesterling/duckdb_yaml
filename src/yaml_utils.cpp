@@ -52,9 +52,15 @@ std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {
 	}
 }
 
-void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format) {
-	constexpr idx_t YAML_INDENT_SIZE = 2;
-	out.SetIndent(YAML_INDENT_SIZE);
+YAMLStringStyle ResolveStringStyle(YAMLStringStyle style, YAMLFormat format) {
+	if (style != YAMLStringStyle::AUTO) {
+		return style;
+	}
+	return (format == YAMLFormat::BLOCK) ? YAMLStringStyle::LITERAL : YAMLStringStyle::QUOTED;
+}
+
+void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format, idx_t indent) {
+	out.SetIndent(indent);
 	if (format == YAMLFormat::FLOW) {
 		out.SetMapFormat(YAML::Flow);
 		out.SetSeqFormat(YAML::Flow);
@@ -64,10 +70,54 @@ void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format) {
 	}
 }
 
-std::string EmitYAML(const YAML::Node &node, YAMLFormat format) {
+void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style) {
+	switch (node.Type()) {
+	case YAML::NodeType::Scalar: {
+		const auto &scalar = node.Scalar();
+		// Only apply Literal style to scalars that actually contain newlines
+		if (resolved_style == YAMLStringStyle::LITERAL && scalar.find('\n') != std::string::npos) {
+			out << YAML::Literal << scalar;
+		} else {
+			out << node;
+		}
+		break;
+	}
+	case YAML::NodeType::Sequence: {
+		out << YAML::BeginSeq;
+		for (const auto &child : node) {
+			EmitNodeWithStringStyle(out, child, resolved_style);
+		}
+		out << YAML::EndSeq;
+		break;
+	}
+	case YAML::NodeType::Map: {
+		out << YAML::BeginMap;
+		for (const auto &pair : node) {
+			out << YAML::Key;
+			// Keys always use default emission (never literal)
+			out << pair.first;
+			out << YAML::Value;
+			EmitNodeWithStringStyle(out, pair.second, resolved_style);
+		}
+		out << YAML::EndMap;
+		break;
+	}
+	default:
+		// Null and Undefined - delegate directly
+		out << node;
+		break;
+	}
+}
+
+std::string EmitYAML(const YAML::Node &node, YAMLFormat format, YAMLStringStyle string_style, idx_t indent) {
 	YAML::Emitter out;
-	ConfigureEmitter(out, format);
-	out << node;
+	ConfigureEmitter(out, format, indent);
+	auto resolved = ResolveStringStyle(string_style, format);
+	if (resolved == YAMLStringStyle::LITERAL) {
+		EmitNodeWithStringStyle(out, node, resolved);
+	} else {
+		out << node;
+	}
 	return out.c_str();
 }
 
@@ -505,15 +555,20 @@ YAML::Node ValueToYAMLNode(const Value &value) {
 	}
 }
 
-std::string ValueToYAMLString(const Value &value, YAMLFormat format) {
+std::string ValueToYAMLString(const Value &value, YAMLFormat format, YAMLStringStyle string_style, idx_t indent) {
 	try {
 		// Convert to YAML::Node first (this respects emitter configuration)
 		YAML::Node node = ValueToYAMLNode(value);
 
-		// Now emit with proper format settings
+		// Now emit with proper format settings and string style
 		YAML::Emitter out;
-		ConfigureEmitter(out, format);
-		out << node;
+		ConfigureEmitter(out, format, indent);
+		auto resolved = ResolveStringStyle(string_style, format);
+		if (resolved == YAMLStringStyle::LITERAL) {
+			EmitNodeWithStringStyle(out, node, resolved);
+		} else {
+			out << node;
+		}
 
 		// Check if we have a valid YAML string
 		if (out.good() && out.c_str() != nullptr) {

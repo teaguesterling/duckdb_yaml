@@ -34,9 +34,10 @@ std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_first_do
 	return "---\n" + yaml_str;
 }
 
-std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout) {
+std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout,
+                                  yaml_utils::YAMLStringStyle string_style, idx_t indent) {
 	// Get the base YAML string
-	std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+	std::string yaml_str = yaml_utils::ValueToYAMLString(value, format, string_style, indent);
 
 	if (layout == YAMLLayout::SEQUENCE) {
 		return ApplySequenceLayout(yaml_str);

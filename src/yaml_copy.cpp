@@ -23,8 +23,10 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	auto &copied_info = *copy.info;
 
 	// Parse YAML-specific options, creating options for the CSV writer
-	string yaml_style = "";  // Default to empty, will use global default
-	string yaml_layout = ""; // Default to empty, will infer from style
+	string yaml_style = "";      // Default to empty, will default to "block"
+	string yaml_layout = "";     // Default to empty, will infer from style
+	string yaml_multiline = "";  // Default to empty, will resolve to "auto"
+	string yaml_indent = "";     // Default to empty, will use "2"
 	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"yaml"}}};
 
 	for (const auto &kv : copied_info.options) {
@@ -48,6 +50,34 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 			if (lowercase_layout != "sequence" && lowercase_layout != "document") {
 				throw BinderException("Invalid YAML layout '%s'. Valid options are 'sequence' or 'document'.",
 				                      yaml_layout.c_str());
+			}
+		} else if (loption == "multiline") {
+			if (kv.second.size() != 1) {
+				ThrowYAMLCopyParameterException(loption);
+			}
+			yaml_multiline = StringValue::Get(kv.second.back());
+			auto lowercase_multiline = StringUtil::Lower(yaml_multiline);
+			if (lowercase_multiline != "auto" && lowercase_multiline != "literal" &&
+			    lowercase_multiline != "quoted") {
+				throw BinderException(
+				    "Invalid YAML multiline '%s'. Valid options are 'auto', 'literal', or 'quoted'.",
+				    yaml_multiline.c_str());
+			}
+		} else if (loption == "indent") {
+			if (kv.second.size() != 1) {
+				ThrowYAMLCopyParameterException(loption);
+			}
+			yaml_indent = kv.second.back().ToString();
+			int indent_val;
+			try {
+				indent_val = std::stoi(yaml_indent);
+			} catch (...) {
+				throw BinderException("Invalid YAML indent '%s'. Must be an integer between 1 and 10.",
+				                      yaml_indent.c_str());
+			}
+			if (indent_val < 1 || indent_val > 10) {
+				throw BinderException("Invalid YAML indent '%s'. Must be an integer between 1 and 10.",
+				                      yaml_indent.c_str());
 			}
 		} else if (loption == "compression" || loption == "encoding" || loption == "per_thread_output" ||
 		           loption == "file_size_bytes" || loption == "use_tmp_file" || loption == "overwrite_or_ignore" ||
@@ -107,7 +137,7 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	internal_layout_value->SetAlias("layout");
 	format_yaml_children.emplace_back(std::move(internal_layout_value));
 
-	// Add the target layout and style as additional parameters for post-processing
+	// Add the target layout, style, multiline, and indent as trailing positional args
 	if (!yaml_layout.empty()) {
 		auto target_layout_value = make_uniq<ConstantExpression>(yaml_layout);
 		format_yaml_children.emplace_back(std::move(target_layout_value));
@@ -120,8 +150,26 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 		auto target_style_value = make_uniq<ConstantExpression>(yaml_style);
 		format_yaml_children.emplace_back(std::move(target_style_value));
 	} else {
-		auto target_style_value = make_uniq<ConstantExpression>("flow"); // Default
+		auto target_style_value = make_uniq<ConstantExpression>("block"); // Default changed to block
 		format_yaml_children.emplace_back(std::move(target_style_value));
+	}
+
+	// Multiline style (auto/literal/quoted)
+	if (!yaml_multiline.empty()) {
+		auto multiline_value = make_uniq<ConstantExpression>(yaml_multiline);
+		format_yaml_children.emplace_back(std::move(multiline_value));
+	} else {
+		auto multiline_value = make_uniq<ConstantExpression>("auto"); // Default
+		format_yaml_children.emplace_back(std::move(multiline_value));
+	}
+
+	// Indent size
+	if (!yaml_indent.empty()) {
+		auto indent_value = make_uniq<ConstantExpression>(yaml_indent);
+		format_yaml_children.emplace_back(std::move(indent_value));
+	} else {
+		auto indent_value = make_uniq<ConstantExpression>("2"); // Default
+		format_yaml_children.emplace_back(std::move(indent_value));
 	}
 
 	// Create copy_format_yaml function call (we'll register this function to handle post-processing)
@@ -146,12 +194,17 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 static void CopyFormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	// Get target layout and style from the last two arguments
-	Value target_layout_value = args.data[args.ColumnCount() - 2].GetValue(0);
-	Value target_style_value = args.data[args.ColumnCount() - 1].GetValue(0);
+	// Get trailing positional args: layout, style, multiline, indent (last 4)
+	auto col_count = args.ColumnCount();
+	Value target_layout_value = args.data[col_count - 4].GetValue(0);
+	Value target_style_value = args.data[col_count - 3].GetValue(0);
+	Value target_multiline_value = args.data[col_count - 2].GetValue(0);
+	Value target_indent_value = args.data[col_count - 1].GetValue(0);
 
 	string target_layout_str = StringUtil::Lower(target_layout_value.ToString());
 	string target_style = StringUtil::Lower(target_style_value.ToString());
+	string target_multiline = StringUtil::Lower(target_multiline_value.ToString());
+	idx_t indent = static_cast<idx_t>(std::stoi(target_indent_value.ToString()));
 
 	// Convert layout string to enum
 	yaml_formatting::YAMLLayout layout = yaml_formatting::YAMLLayout::DOCUMENT;
@@ -167,13 +220,21 @@ static void CopyFormatYAMLFunction(DataChunk &args, ExpressionState &state, Vect
 		format = yaml_utils::YAMLFormat::FLOW;
 	}
 
+	// Determine multiline string style
+	yaml_utils::YAMLStringStyle string_style = yaml_utils::YAMLStringStyle::AUTO;
+	if (target_multiline == "literal") {
+		string_style = yaml_utils::YAMLStringStyle::LITERAL;
+	} else if (target_multiline == "quoted") {
+		string_style = yaml_utils::YAMLStringStyle::QUOTED;
+	}
+
 	// Process each row with post-processing
 	for (idx_t row_idx = 0; row_idx < args.size(); row_idx++) {
 		Value value = input.GetValue(row_idx);
 
 		try {
-			// Get the base YAML string
-			std::string yaml_str = yaml_utils::ValueToYAMLString(value, format);
+			// Get the base YAML string with string style and indent
+			std::string yaml_str = yaml_utils::ValueToYAMLString(value, format, string_style, indent);
 
 			// Apply layout-specific formatting
 			yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, row_idx);
