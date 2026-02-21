@@ -23,10 +23,10 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	auto &copied_info = *copy.info;
 
 	// Parse YAML-specific options, creating options for the CSV writer
-	string yaml_style = "";      // Default to empty, will default to "block"
-	string yaml_layout = "";     // Default to empty, will infer from style
-	string yaml_multiline = "";  // Default to empty, will resolve to "auto"
-	string yaml_indent = "";     // Default to empty, will use "2"
+	string yaml_style = "";     // Default to empty, will default to "block"
+	string yaml_layout = "";    // Default to empty, will infer from style
+	string yaml_multiline = ""; // Default to empty, will resolve to "auto"
+	string yaml_indent = "";    // Default to empty, will use "2"
 	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"yaml"}}};
 
 	for (const auto &kv : copied_info.options) {
@@ -57,11 +57,9 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 			}
 			yaml_multiline = StringValue::Get(kv.second.back());
 			auto lowercase_multiline = StringUtil::Lower(yaml_multiline);
-			if (lowercase_multiline != "auto" && lowercase_multiline != "literal" &&
-			    lowercase_multiline != "quoted") {
-				throw BinderException(
-				    "Invalid YAML multiline '%s'. Valid options are 'auto', 'literal', or 'quoted'.",
-				    yaml_multiline.c_str());
+			if (lowercase_multiline != "auto" && lowercase_multiline != "literal" && lowercase_multiline != "quoted") {
+				throw BinderException("Invalid YAML multiline '%s'. Valid options are 'auto', 'literal', or 'quoted'.",
+				                      yaml_multiline.c_str());
 			}
 		} else if (loption == "indent") {
 			if (kv.second.size() != 1) {

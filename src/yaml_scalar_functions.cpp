@@ -150,7 +150,6 @@ struct FormatYAMLBindData : public FunctionData {
 
 static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments.empty()) {
 		throw InvalidInputException("format_yaml requires at least one argument");
 	}

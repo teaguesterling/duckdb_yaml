@@ -51,7 +51,6 @@ enum class MultiDocumentMode {
  * - Explicit column type specification
  */
 class YAMLReader {
-
 public:
 	// Structure to hold YAML read options
 	struct YAMLReadOptions {
