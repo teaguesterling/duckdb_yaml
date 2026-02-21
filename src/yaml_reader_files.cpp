@@ -192,7 +192,7 @@ vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pa
 
 	// Use GlobFiles which handles extension auto-loading and directory filtering
 	try {
-		auto glob_files = fs.GlobFiles(pattern, context, FileGlobOptions::ALLOW_EMPTY);
+		auto glob_files = fs.GlobFiles(pattern, FileGlobOptions::ALLOW_EMPTY);
 		for (auto &file : glob_files) {
 			result.push_back(file.path);
 		}
