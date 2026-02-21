@@ -13,32 +13,22 @@ COPY (SELECT * FROM my_table) TO 'output.yaml' (FORMAT yaml);
 
 | Parameter | Values | Default | Description |
 |-----------|--------|---------|-------------|
-| `STYLE` | `flow`, `block` | `flow` | YAML formatting style |
+| `STYLE` | `flow`, `block` | `block` | YAML formatting style |
 | `LAYOUT` | `document`, `sequence` | `document` | How rows are organized |
+| `MULTILINE` | `auto`, `literal`, `quoted` | `auto` | How multiline strings are emitted |
+| `INDENT` | `1`-`10` | `2` | Indentation width for block style |
 
 ### STYLE Parameter
 
 Controls the YAML formatting:
 
-=== "Flow Style (default)"
-
-    Compact, inline format:
-
-    ```sql
-    COPY (SELECT * FROM users) TO 'users.yaml' (FORMAT yaml, STYLE flow);
-    ```
-
-    Output:
-    ```yaml
-    {id: 1, name: Alice, email: alice@example.com}
-    {id: 2, name: Bob, email: bob@example.com}
-    ```
-
-=== "Block Style"
+=== "Block Style (default)"
 
     Multi-line format with indentation:
 
     ```sql
+    COPY (SELECT * FROM users) TO 'users.yaml' (FORMAT yaml);
+    -- or explicitly:
     COPY (SELECT * FROM users) TO 'users.yaml' (FORMAT yaml, STYLE block);
     ```
 
@@ -52,6 +42,20 @@ Controls the YAML formatting:
     id: 2
     name: Bob
     email: bob@example.com
+    ```
+
+=== "Flow Style"
+
+    Compact, inline format:
+
+    ```sql
+    COPY (SELECT * FROM users) TO 'users.yaml' (FORMAT yaml, STYLE flow);
+    ```
+
+    Output:
+    ```yaml
+    {id: 1, name: Alice, email: alice@example.com}
+    {id: 2, name: Bob, email: bob@example.com}
     ```
 
 ### LAYOUT Parameter
@@ -91,6 +95,69 @@ Controls how multiple rows are organized:
     - id: 2
       name: Item Two
     ```
+
+### MULTILINE Parameter
+
+Controls how strings containing newlines are emitted:
+
+=== "Auto (default)"
+
+    Resolves based on the style: `literal` for block style, `quoted` for flow style.
+
+    ```sql
+    COPY (SELECT * FROM docs) TO 'output.yaml' (FORMAT yaml);
+    ```
+
+=== "Literal"
+
+    Uses YAML literal block scalars (`|`) for multiline strings:
+
+    ```sql
+    COPY (SELECT * FROM docs) TO 'output.yaml' (FORMAT yaml, MULTILINE literal);
+    ```
+
+    Output:
+    ```yaml
+    description: |
+      This is line one
+      This is line two
+    ```
+
+=== "Quoted"
+
+    Uses quoted strings with escape sequences:
+
+    ```sql
+    COPY (SELECT * FROM docs) TO 'output.yaml' (FORMAT yaml, MULTILINE quoted);
+    ```
+
+    Output:
+    ```yaml
+    description: 'This is line one
+      This is line two'
+    ```
+
+!!! note
+    YAML literal block scalars (`|`) use "clip" chomping, which adds a single trailing newline when the value is read back. This is standard YAML behavior. yaml-cpp does not support `|-` (strip) or `|+` (keep) chomping indicators.
+
+### INDENT Parameter
+
+Controls the indentation width for block style output:
+
+```sql
+-- Use 4-space indentation
+COPY (SELECT * FROM data) TO 'output.yaml' (FORMAT yaml, STYLE block, INDENT 4);
+```
+
+Output:
+```yaml
+user:
+    name: Alice
+    address:
+        city: New York
+```
+
+Valid values are 1 through 10. Default is 2.
 
 ## Combining Options
 

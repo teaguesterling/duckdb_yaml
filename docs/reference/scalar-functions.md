@@ -186,23 +186,38 @@ SELECT value_to_yaml({'name': 'John', 'scores': [1, 2, 3]});
 ### format_yaml
 
 ```sql
-format_yaml(yaml YAML, style VARCHAR) → VARCHAR
+format_yaml(value ANY, style := 'flow', multiline := 'auto', indent := 2) → VARCHAR
 ```
 
-Formats YAML with a specific style.
+Formats a value as YAML with configurable style.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `yaml` | YAML | YAML value to format |
-| `style` | VARCHAR | `'flow'` or `'block'` |
+| `value` | ANY | Value to format as YAML |
+| `style` | VARCHAR | `'flow'` or `'block'` (named parameter) |
+| `multiline` | VARCHAR | `'auto'`, `'literal'`, or `'quoted'` (named parameter) |
+| `indent` | INTEGER | `1`-`10`, indentation width (named parameter) |
 
 **Returns:** Formatted YAML string.
 
 ```sql
-SELECT format_yaml('{a: 1, b: 2}'::YAML, 'block');
+SELECT format_yaml({'a': 1, 'b': 2}, style := 'block');
 -- Returns:
 -- a: 1
 -- b: 2
+
+-- Multiline strings with literal block scalars
+SELECT format_yaml({'msg': E'hello\nworld'}, style := 'block', multiline := 'literal');
+-- Returns:
+-- msg: |
+--   hello
+--   world
+
+-- Custom indentation
+SELECT format_yaml({'a': {'b': 1}}, style := 'block', indent := 4);
+-- Returns:
+-- a:
+--     b: 1
 ```
 
 ---

@@ -377,8 +377,8 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 
 | Value | Description |
 |-------|-------------|
-| `flow` (default) | Compact inline format |
-| `block` | Multi-line indented format |
+| `block` (default) | Multi-line indented format |
+| `flow` | Compact inline format |
 
 ### LAYOUT
 
@@ -387,9 +387,23 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 | `document` (default) | Each row as YAML document |
 | `sequence` | All rows as sequence items |
 
+### MULTILINE
+
+| Value | Description |
+|-------|-------------|
+| `auto` (default) | Resolves to `literal` for block style, `quoted` for flow |
+| `literal` | Use YAML literal block scalars (`\|`) for multiline strings |
+| `quoted` | Use quoted strings with escape sequences |
+
+### INDENT
+
+| Value | Description |
+|-------|-------------|
+| `1`-`10` (default: `2`) | Indentation width for block style output |
+
 **Example:**
 
 ```sql
 COPY (SELECT * FROM data) TO 'output.yaml'
-(FORMAT yaml, STYLE block, LAYOUT sequence);
+(FORMAT yaml, STYLE block, LAYOUT sequence, MULTILINE literal, INDENT 4);
 ```
