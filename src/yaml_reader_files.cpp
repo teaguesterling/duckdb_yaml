@@ -4,34 +4,14 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include <sstream>
 
-namespace duckdb {
-
-// Compatibility wrapper for GlobFiles API change in DuckDB v1.5
+// Detect DuckDB v1.5+ by checking for open_file_info.hpp (new in v1.5)
 // v1.4: GlobFiles(pattern, context, FileGlobOptions) -> vector<string>
 // v1.5: GlobFiles(pattern, FileGlobOptions) -> vector<OpenFileInfo>
-// Uses SFINAE to select the correct overload at compile time.
-template <typename FS, typename = decltype(std::declval<FS>().GlobFiles("", FileGlobOptions::ALLOW_EMPTY))>
-static vector<string> GlobFilesCompat(FS &fs, const string &pattern, ClientContext &, FileGlobOptions options) {
-	vector<string> result;
-	auto glob_files = fs.GlobFiles(pattern, options);
-	for (auto &file : glob_files) {
-		result.push_back(file.path);
-	}
-	return result;
-}
+#if __has_include("duckdb/common/open_file_info.hpp")
+#define DUCKDB_GLOB_V15
+#endif
 
-template <typename FS,
-          typename = decltype(std::declval<FS>().GlobFiles("", std::declval<ClientContext &>(),
-                                                           FileGlobOptions::ALLOW_EMPTY)),
-          typename = void>
-static vector<string> GlobFilesCompat(FS &fs, const string &pattern, ClientContext &context, FileGlobOptions options) {
-	vector<string> result;
-	auto glob_files = fs.GlobFiles(pattern, context, options);
-	for (auto &file : glob_files) {
-		result.push_back(file);
-	}
-	return result;
-}
+namespace duckdb {
 
 // Strip non-standard suffixes from YAML document headers (issue #34)
 // Transforms: "--- !tag &anchor suffix" -> "--- !tag &anchor"
@@ -219,8 +199,17 @@ vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pa
 
 	// Use GlobFiles which handles extension auto-loading and directory filtering
 	try {
-		auto files = GlobFilesCompat(fs, pattern, context, FileGlobOptions::ALLOW_EMPTY);
-		result.insert(result.end(), files.begin(), files.end());
+#ifdef DUCKDB_GLOB_V15
+		auto glob_files = fs.GlobFiles(pattern, FileGlobOptions::ALLOW_EMPTY);
+		for (auto &file : glob_files) {
+			result.push_back(file.path);
+		}
+#else
+		auto glob_files = fs.GlobFiles(pattern, context, FileGlobOptions::ALLOW_EMPTY);
+		for (auto &file : glob_files) {
+			result.push_back(file);
+		}
+#endif
 	} catch (const NotImplementedException &) {
 		// No glob support available
 	} catch (const std::exception &) {
