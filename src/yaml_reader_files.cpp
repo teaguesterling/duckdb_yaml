@@ -4,10 +4,10 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include <sstream>
 
-// Detect DuckDB v1.5+ by checking for open_file_info.hpp (new in v1.5)
-// v1.4: GlobFiles(pattern, context, FileGlobOptions) -> vector<string>
-// v1.5: GlobFiles(pattern, FileGlobOptions) -> vector<OpenFileInfo>
-#if __has_include("duckdb/common/open_file_info.hpp")
+// Detect DuckDB v1.5+ via a header that only exists in v1.5
+// v1.4: GlobFiles(pattern, context, FileGlobOptions)
+// v1.5: GlobFiles(pattern, FileGlobOptions) - context parameter removed
+#if __has_include("duckdb/common/column_index_map.hpp")
 #define DUCKDB_GLOB_V15
 #endif
 
