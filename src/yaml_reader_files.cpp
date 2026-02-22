@@ -207,7 +207,7 @@ vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pa
 #else
 		auto glob_files = fs.GlobFiles(pattern, context, FileGlobOptions::ALLOW_EMPTY);
 		for (auto &file : glob_files) {
-			result.push_back(file);
+			result.push_back(file.path);
 		}
 #endif
 	} catch (const NotImplementedException &) {
