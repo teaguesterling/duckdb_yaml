@@ -68,7 +68,7 @@ CREATE TABLE configs(id INTEGER, config YAML);
 
 -- Insert YAML data
 INSERT INTO configs VALUES 
-    (1, 'environment: prod\nport: 8080'),
+    (1, E'environment: prod\nport: 8080'),
     (2, '{environment: dev, port: 3000}');
 
 -- Query YAML data
