@@ -1,0 +1,5 @@
+specifications:
+  - id: A
+    data_models: []
+  - id: B
+    data_models: [OVR-DM-001]

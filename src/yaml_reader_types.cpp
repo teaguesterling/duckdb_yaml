@@ -406,13 +406,25 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 	case YAML::NodeType::Sequence: {
 		if (target_type.id() != LogicalTypeId::LIST) {
 			return Value(target_type); // NULL if not expecting a list
-		} else if (node.size() == 0) {
-			// Empty lists need an explicit type (ISSUE #8)
-			return Value::LIST(target_type, {});
 		}
-
-		// Get child type for list
+		// Get child type for list (used by both the empty-list and non-empty branches).
 		auto child_type = ListType::GetChildType(target_type);
+		if (node.size() == 0) {
+			// Empty lists need an explicit element type — pass the CHILD type, not
+			// `target_type` (which is the whole LIST<child>). Previously this passed
+			// `target_type`, producing a Value with type LIST<LIST<child>> that
+			// poisoned outer struct unification (issue #37) when the first row of a
+			// struct-array field had an empty list and a later row had data:
+			//
+			//   data_models: []                  -> LIST<LIST<VARCHAR>>  (bug)
+			//   data_models: [OVR-DM-001]        -> LIST<VARCHAR>        (correct)
+			//
+			// Unification then tried to cast the second row's VARCHAR element to
+			// LIST<VARCHAR> and failed with the misleading "Failed to cast value:
+			// Type VARCHAR ... can't be cast to the destination type VARCHAR[]"
+			// error from the bug report. The fix is to use child_type uniformly.
+			return Value::LIST(child_type, {});
+		}
 
 		// Create list of values - recursively convert each element
 		vector<Value> values;
