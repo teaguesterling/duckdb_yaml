@@ -149,7 +149,7 @@ static void YAMLTypeUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<string_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
 			    return StringVector::AddString(result, "null", 4);
 		    }
@@ -160,7 +160,8 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 			    auto node = ExtractFromYAML(root, path_components);
 
 			    if (!node) {
-				    return std::nullopt; // Nonexistent path → SQL NULL
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
+				    return string_t();
 			    }
 			    string type_str;
 			    switch (node.Type()) {
@@ -195,7 +196,7 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<string_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
 			    return StringVector::AddString(result, "null", 4);
 		    }
@@ -206,7 +207,8 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 			    auto node = ExtractFromYAML(root, path_components);
 
 			    if (!node) {
-				    return std::nullopt; // Nonexistent path → SQL NULL
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
+				    return string_t();
 			    }
 
 			    YAML::Emitter out;
@@ -226,9 +228,10 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<string_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return string_t();
 		    }
 
 		    try {
@@ -237,11 +240,13 @@ static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, V
 			    auto node = ExtractFromYAML(root, path_components);
 
 			    if (!node) {
-				    return std::nullopt; // Nonexistent path → SQL NULL
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
+				    return string_t();
 			    }
 
 			    if (node.IsNull()) {
-				    return std::nullopt; // YAML null → SQL NULL (matches JSON behavior)
+				    mask.SetInvalid(idx); // YAML null → SQL NULL (matches JSON behavior)
+				    return string_t();
 			    }
 
 			    if (!node.IsScalar()) {
@@ -619,9 +624,10 @@ static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vect
 static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<string_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return string_t();
 		    }
 
 		    try {
@@ -630,15 +636,18 @@ static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 			    auto node = ExtractFromYAML(root, path_components);
 
 			    if (!node || !node.IsDefined()) {
-				    return std::nullopt; // Missing path → SQL NULL
+				    mask.SetInvalid(idx); // Missing path → SQL NULL
+				    return string_t();
 			    }
 
 			    if (!node.IsScalar()) {
-				    return std::nullopt; // Non-scalar (array / object) → SQL NULL
+				    mask.SetInvalid(idx); // Non-scalar → SQL NULL
+				    return string_t();
 			    }
 
 			    if (node.IsNull()) {
-				    return std::nullopt; // YAML null → SQL NULL
+				    mask.SetInvalid(idx); // YAML null → SQL NULL
+				    return string_t();
 			    }
 
 			    string str_val = node.Scalar();

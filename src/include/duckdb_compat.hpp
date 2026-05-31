@@ -1,7 +1,6 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include <optional>
 
 // duckdb_compat.hpp — cross-version shim for DuckDB extensions.
 //
@@ -12,8 +11,16 @@
 // header reshuffle), then dispatch via a single #ifdef block.
 //
 // Cross-version coverage:
-//   - duckdb v1.4.x / v1.5.x: old API everywhere
-//   - duckdb main / v1.6.x:   new API everywhere
+//   - duckdb v1.4.x / v1.5.x: old API everywhere (built with -std=c++11)
+//   - duckdb main / v1.6.x:   new API everywhere (built with -std=c++17)
+//
+// Important: this header is included on BOTH sides; nothing in it must require
+// C++17 unconditionally. `std::optional` is only used inside the
+// `DUCKDB_HAS_NEW_VECTOR_HEADERS` branches (which only compile on duckdb main,
+// where C++17 is available). Forcing the whole extension to C++17 against
+// duckdb v1.5.x's C++11 internals breaks linkage (static const data members
+// in duckdb headers acquire implicit inline linkage in C++17 but not in C++11
+// — multiple-definition errors at link time).
 //
 // See teaguesterling/duckdb_markdown's docs/DUCKDB_API_MIGRATION.md for the
 // long-form rationale + upgrade checklist for other extensions.
@@ -22,6 +29,7 @@
 #define DUCKDB_HAS_NEW_VECTOR_HEADERS 1
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include <optional> // C++17, only needed on the new-API path
 #endif
 
 namespace duckdb {
@@ -29,35 +37,27 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // CompatSetOutputCardinality
 //===--------------------------------------------------------------------===//
-//
-// DuckDB main mandates per-vector Size() tracking; DataChunk::SetCardinality
-// only updates chunk.count. SetChildCardinality additionally calls
-// FlatVector::SetSize on every column so query operators reading vec.Size()
-// see the right value. Without this, VariadicExecutor (and similar) reports:
-//   "Mismatch in input vector sizes ... expected 0 rows but got N"
 
+inline void CompatSetOutputCardinality(DataChunk &chunk, idx_t count) {
 #ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
-inline void CompatSetOutputCardinality(DataChunk &chunk, idx_t count) {
 	chunk.SetChildCardinality(count);
-}
 #else
-inline void CompatSetOutputCardinality(DataChunk &chunk, idx_t count) {
 	chunk.SetCardinality(count);
-}
 #endif
+}
 
 //===--------------------------------------------------------------------===//
 // SetValueCasted
 //===--------------------------------------------------------------------===//
 //
-// On duckdb main, VectorStringBuffer::SetValue and StandardVectorBuffer::SetValue
-// fall back to Value::DefaultCastAs(target_type) when val.type() != column.type().
-// DefaultCastAs uses a stack-local CastFunctionSet that does NOT see
-// extension-registered casts (loader.RegisterCastFunction); the cast silently
-// returns NULL and SetValue writes NULL. Pre-casting via Value::CastAs(
-// ClientContext&, target_type) uses the catalog's cast set, which includes
-// extension casts. Behaves identically on v1.4.x / v1.5.x where the old
-// SetValue tolerated alias-only mismatches.
+// Cross-version helper. On duckdb main, VectorStringBuffer::SetValue and
+// StandardVectorBuffer::SetValue fall back to Value::DefaultCastAs(target_type)
+// when val.type() != column.type(). DefaultCastAs uses a stack-local
+// CastFunctionSet that does NOT see extension-registered casts
+// (loader.RegisterCastFunction); the cast silently returns NULL and SetValue
+// writes NULL. Pre-casting via Value::CastAs(ClientContext&, target_type) uses
+// the catalog's cast set, which includes extension casts. Behaves identically
+// on v1.4.x / v1.5.x where the old SetValue tolerated alias-only mismatches.
 //
 // yaml has a YAMLType alias on VARCHAR (see yaml_types.cpp), so this matters
 // anywhere a Value(string) is written to a YAMLType-typed output column.
@@ -70,79 +70,67 @@ inline void SetValueCasted(ClientContext &context, Vector &vec, idx_t idx, const
 // CompatUnaryExecuteWithNulls / CompatBinaryExecuteWithNulls
 //===--------------------------------------------------------------------===//
 //
-// `UnaryExecutor::ExecuteWithNulls` and `BinaryExecutor::ExecuteWithNulls` were
-// removed from duckdb main (commit `987ea2c409` — "Functions can throw errors",
-// #15166). On main, the equivalent is `Execute<INPUT, RESULT>` where the
-// lambda returns `std::optional<RESULT>` (auto-detected via SFINAE inside the
-// template — see duckdb/common/vector_operations/unary_executor.hpp:241). The
-// framework reads validity from the input and writes NULL to the output if the
-// optional is `nullopt`.
-//
-// We expose a single API used by the call-sites:
+// Callsites use the OLD mask-based signature for the lambda:
 //
 //   CompatUnaryExecuteWithNulls<INPUT, RESULT>(
 //       input, result, count,
-//       [&](INPUT v) -> std::optional<RESULT> {
-//           if (some_condition) return std::nullopt;  // emit SQL NULL
+//       [&](INPUT v, ValidityMask &mask, idx_t idx) -> RESULT {
+//           if (!mask.RowIsValid(idx)) return RESULT{};       // NULL input
+//           if (some_condition) {
+//               mask.SetInvalid(idx);                          // explicit NULL output
+//               return RESULT{};
+//           }
 //           return compute(v);
 //       });
 //
-// On duckdb main, this delegates directly to `UnaryExecutor::Execute<INPUT,
-// RESULT>` (which sees the `std::optional<RESULT>` return and turns on
-// per-row null propagation).
+// The same lambda compiles against both v1.5.x and main:
+//   - v1.5.x: forwarded directly to `UnaryExecutor::ExecuteWithNulls`.
+//   - main: `ExecuteWithNulls` was removed in `987ea2c409`; we adapt by
+//     constructing a fresh `ValidityMask` per row, calling the lambda with
+//     it (idx=0), and translating its post-state to `std::optional<RESULT>`
+//     for `UnaryExecutor::Execute`'s SFINAE-detected null-emitting overload.
 //
-// On v1.4.x / v1.5.x, we wrap the lambda into the old `ExecuteWithNulls`
-// signature `(INPUT, ValidityMask&, idx_t) -> RESULT`, mapping `nullopt`
-// to `mask.SetInvalid(idx)`.
-//
-// `INPUT NULL → output NULL` is handled by the framework on both sides; the
-// lambda only sees defined inputs.
+// The "scratch mask" pattern keeps the C++17-only `std::optional` confined to
+// the main-only branch, so the v1.5.x extension keeps building with `-std=c++11`
+// alongside duckdb's C++11 internals.
 
 #ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
 
 template <class INPUT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatUnaryExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count, fun);
+	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count, [fun](INPUT_TYPE in) -> std::optional<RESULT_TYPE> {
+		ValidityMask scratch; // default-constructed → all rows valid
+		RESULT_TYPE val = fun(in, scratch, idx_t(0));
+		if (!scratch.RowIsValid(0)) {
+			return std::nullopt;
+		}
+		return val;
+	});
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatBinaryExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-	BinaryExecutor::Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right, result, count, fun);
+	BinaryExecutor::Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+	    left, right, result, count, [fun](LEFT_TYPE l, RIGHT_TYPE r) -> std::optional<RESULT_TYPE> {
+		    ValidityMask scratch;
+		    RESULT_TYPE val = fun(l, r, scratch, idx_t(0));
+		    if (!scratch.RowIsValid(0)) {
+			    return std::nullopt;
+		    }
+		    return val;
+	    });
 }
 
-#else // v1.4.x / v1.5.x — wrap optional<RESULT> lambdas into the mask-based form
+#else // v1.4.x / v1.5.x — pass the callsite lambda straight through
 
 template <class INPUT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatUnaryExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-	UnaryExecutor::ExecuteWithNulls<INPUT_TYPE, RESULT_TYPE>(
-	    input, result, count, [fun](INPUT_TYPE in, ValidityMask &mask, idx_t idx) -> RESULT_TYPE {
-		    if (!mask.RowIsValid(idx)) {
-			    return RESULT_TYPE{};
-		    }
-		    std::optional<RESULT_TYPE> r = fun(in);
-		    if (!r.has_value()) {
-			    mask.SetInvalid(idx);
-			    return RESULT_TYPE{};
-		    }
-		    return *r;
-	    });
+	UnaryExecutor::ExecuteWithNulls<INPUT_TYPE, RESULT_TYPE>(input, result, count, fun);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatBinaryExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-	BinaryExecutor::ExecuteWithNulls<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-	    left, right, result, count,
-	    [fun](LEFT_TYPE l, RIGHT_TYPE r, ValidityMask &mask, idx_t idx) -> RESULT_TYPE {
-		    if (!mask.RowIsValid(idx)) {
-			    return RESULT_TYPE{};
-		    }
-		    std::optional<RESULT_TYPE> opt = fun(l, r);
-		    if (!opt.has_value()) {
-			    mask.SetInvalid(idx);
-			    return RESULT_TYPE{};
-		    }
-		    return *opt;
-	    });
+	BinaryExecutor::ExecuteWithNulls<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right, result, count, fun);
 }
 
 #endif

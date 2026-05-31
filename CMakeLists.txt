@@ -1,13 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
 
-# This extension's compat layer (src/include/duckdb_compat.hpp) uses
-# std::optional<T> as the cross-version NULL-output signal for the
-# Compat*ExecuteWithNulls helpers. duckdb's stable v1.5.x default flags
-# build extensions with `-std=c++11`; we need C++17 here. duckdb main is
-# already C++17, so this is a no-op there.
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # Set extension name here
 set(TARGET_NAME yaml)
 

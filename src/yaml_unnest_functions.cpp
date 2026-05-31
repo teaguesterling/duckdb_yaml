@@ -115,14 +115,17 @@ static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &
 
 static void YAMLArrayLengthUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatUnaryExecuteWithNulls<string_t, int64_t>(
-	    args.data[0], result, args.size(), [&](string_t yaml_str) -> std::optional<int64_t> {
+	    args.data[0], result, args.size(),
+	    [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> int64_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return 0;
 		    }
 		    try {
 			    YAML::Node node = YAML::Load(yaml_str.GetString());
 			    if (!node.IsSequence()) {
-				    return std::nullopt; // Not an array → SQL NULL
+				    mask.SetInvalid(idx); // Not an array → SQL NULL
+				    return 0;
 			    }
 			    return static_cast<int64_t>(node.size());
 		    } catch (const std::exception &e) {
@@ -134,16 +137,18 @@ static void YAMLArrayLengthUnaryFunction(DataChunk &args, ExpressionState &state
 static void YAMLArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, int64_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<int64_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> int64_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return 0;
 		    }
 		    try {
 			    YAML::Node root = YAML::Load(yaml_str.GetString());
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 			    if (!node || !node.IsSequence()) {
-				    return std::nullopt; // Path missing or not an array → SQL NULL
+				    mask.SetInvalid(idx); // Path missing or not an array → SQL NULL
+				    return 0;
 			    }
 			    return static_cast<int64_t>(node.size());
 		    } catch (const std::exception &e) {
@@ -158,14 +163,17 @@ static void YAMLArrayLengthBinaryFunction(DataChunk &args, ExpressionState &stat
 
 static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatUnaryExecuteWithNulls<string_t, list_entry_t>(
-	    args.data[0], result, args.size(), [&](string_t yaml_str) -> std::optional<list_entry_t> {
+	    args.data[0], result, args.size(),
+	    [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return {0, 0};
 		    }
 		    try {
 			    YAML::Node node = YAML::Load(yaml_str.GetString());
 			    if (!node.IsMap()) {
-				    return std::nullopt; // Not an object → SQL NULL
+				    mask.SetInvalid(idx); // Not an object → SQL NULL
+				    return {0, 0};
 			    }
 
 			    // Collect all keys
@@ -201,16 +209,18 @@ static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 static void YAMLKeysBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatBinaryExecuteWithNulls<string_t, string_t, list_entry_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str) -> std::optional<list_entry_t> {
+	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
 		    if (yaml_str.GetSize() == 0) {
-			    return std::nullopt;
+			    mask.SetInvalid(idx);
+			    return {0, 0};
 		    }
 		    try {
 			    YAML::Node root = YAML::Load(yaml_str.GetString());
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 			    if (!node || !node.IsMap()) {
-				    return std::nullopt; // Path missing or not an object → SQL NULL
+				    mask.SetInvalid(idx); // Path missing or not an object → SQL NULL
+				    return {0, 0};
 			    }
 
 			    // Collect all keys
