@@ -1,4 +1,5 @@
 #include "yaml_unnest_functions.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "duckdb/common/exception.hpp"
@@ -113,22 +114,16 @@ static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &
 //===--------------------------------------------------------------------===//
 
 static void YAMLArrayLengthUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteWithNulls<string_t, int64_t>(
-	    args.data[0], result, args.size(), [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> int64_t {
+	CompatUnaryExecuteWithNulls<string_t, int64_t>(
+	    args.data[0], result, args.size(), [&](string_t yaml_str) -> std::optional<int64_t> {
 		    if (yaml_str.GetSize() == 0) {
-			    mask.SetInvalid(idx);
-			    return 0;
+			    return std::nullopt;
 		    }
-
 		    try {
 			    YAML::Node node = YAML::Load(yaml_str.GetString());
-
 			    if (!node.IsSequence()) {
-				    // Not an array - return NULL
-				    mask.SetInvalid(idx);
-				    return 0;
+				    return std::nullopt; // Not an array → SQL NULL
 			    }
-
 			    return static_cast<int64_t>(node.size());
 		    } catch (const std::exception &e) {
 			    throw InvalidInputException("Error parsing YAML: %s", e.what());
@@ -137,25 +132,19 @@ static void YAMLArrayLengthUnaryFunction(DataChunk &args, ExpressionState &state
 }
 
 static void YAMLArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, int64_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, int64_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> int64_t {
+	    [&](string_t yaml_str, string_t path_str) -> std::optional<int64_t> {
 		    if (yaml_str.GetSize() == 0) {
-			    mask.SetInvalid(idx);
-			    return 0;
+			    return std::nullopt;
 		    }
-
 		    try {
 			    YAML::Node root = YAML::Load(yaml_str.GetString());
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
-
 			    if (!node || !node.IsSequence()) {
-				    // Path doesn't exist or not an array - return NULL
-				    mask.SetInvalid(idx);
-				    return 0;
+				    return std::nullopt; // Path missing or not an array → SQL NULL
 			    }
-
 			    return static_cast<int64_t>(node.size());
 		    } catch (const std::exception &e) {
 			    throw InvalidInputException("Error in yaml_array_length: %s", e.what());
@@ -168,20 +157,15 @@ static void YAMLArrayLengthBinaryFunction(DataChunk &args, ExpressionState &stat
 //===--------------------------------------------------------------------===//
 
 static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteWithNulls<string_t, list_entry_t>(
-	    args.data[0], result, args.size(), [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
+	CompatUnaryExecuteWithNulls<string_t, list_entry_t>(
+	    args.data[0], result, args.size(), [&](string_t yaml_str) -> std::optional<list_entry_t> {
 		    if (yaml_str.GetSize() == 0) {
-			    mask.SetInvalid(idx);
-			    return {0, 0};
+			    return std::nullopt;
 		    }
-
 		    try {
 			    YAML::Node node = YAML::Load(yaml_str.GetString());
-
 			    if (!node.IsMap()) {
-				    // Not an object - return NULL
-				    mask.SetInvalid(idx);
-				    return {0, 0};
+				    return std::nullopt; // Not an object → SQL NULL
 			    }
 
 			    // Collect all keys
@@ -191,14 +175,12 @@ static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 				    keys.push_back(Value(key));
 			    }
 
-			    // Create list value
-			    auto list_value = Value::LIST(LogicalType::VARCHAR, keys);
-
-			    // Get the list child vector
+			    // Get the list child vector. const_cast on the data pointer: on duckdb
+			    // main FlatVector::GetData<T> returns const T*, on v1.5.x non-const —
+			    // the cast is a no-op on the old API and the right strip on the new one.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = FlatVector::GetData<string_t>(child_vector);
+			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
 
-			    // Add strings to child vector
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
 			    entry.length = keys.size();
@@ -217,23 +199,18 @@ static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static void YAMLKeysBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, list_entry_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, list_entry_t>(
 	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
+	    [&](string_t yaml_str, string_t path_str) -> std::optional<list_entry_t> {
 		    if (yaml_str.GetSize() == 0) {
-			    mask.SetInvalid(idx);
-			    return {0, 0};
+			    return std::nullopt;
 		    }
-
 		    try {
 			    YAML::Node root = YAML::Load(yaml_str.GetString());
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
-
 			    if (!node || !node.IsMap()) {
-				    // Path doesn't exist or not an object - return NULL
-				    mask.SetInvalid(idx);
-				    return {0, 0};
+				    return std::nullopt; // Path missing or not an object → SQL NULL
 			    }
 
 			    // Collect all keys
@@ -243,11 +220,10 @@ static void YAMLKeysBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 				    keys.push_back(Value(key));
 			    }
 
-			    // Get the list child vector
+			    // const_cast: see comment in YAMLKeysUnaryFunction above.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = FlatVector::GetData<string_t>(child_vector);
+			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
 
-			    // Add strings to child vector
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
 			    entry.length = keys.size();
@@ -320,7 +296,7 @@ static void YAMLArrayElementsFunction(ClientContext &context, TableFunctionInput
 
 	// Check if we're done
 	if (bind_data.current_idx >= bind_data.elements.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -337,7 +313,7 @@ static void YAMLArrayElementsFunction(ClientContext &context, TableFunctionInput
 	}
 
 	bind_data.current_idx += count;
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -400,7 +376,7 @@ static void YAMLEachFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	// Check if we're done
 	if (bind_data.current_idx >= bind_data.entries.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -422,7 +398,7 @@ static void YAMLEachFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	bind_data.current_idx += count;
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 //===--------------------------------------------------------------------===//

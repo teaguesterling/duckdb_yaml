@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_extension.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -246,7 +247,7 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 	auto &local_state = data_p.local_state->Cast<YAMLFrontmatterLocalState>();
 
 	if (local_state.current_file >= bind_data.file_paths.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -333,7 +334,7 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 		}
 	}
 
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {

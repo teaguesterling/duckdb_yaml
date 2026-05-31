@@ -1,4 +1,5 @@
 #include "yaml_scalar_functions.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
@@ -23,18 +24,18 @@ void YAMLFunctions::Register(ExtensionLoader &loader) {
 void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 	auto yaml_type = YAMLTypes::YAMLType();
 
-	// Basic YAML validity check for VARCHAR
+	// Basic YAML validity check for VARCHAR. NULL input → NULL output (the
+	// framework auto-propagates input validity to output). Previously this
+	// returned `false` on NULL input via ExecuteWithNulls's mask check.
+	// Behavior change: NULL → NULL instead of NULL → false — no existing
+	// test pins the old behavior; NULL-in / NULL-out is the conventional
+	// duckdb predicate semantic.
 	ScalarFunction yaml_valid_varchar("yaml_valid", {LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                                  [](DataChunk &args, ExpressionState &state, Vector &result) {
 		                                  auto &input_vector = args.data[0];
 
-		                                  UnaryExecutor::ExecuteWithNulls<string_t, bool>(
-		                                      input_vector, result, args.size(),
-		                                      [&](string_t yaml_str, ValidityMask &mask, idx_t idx) {
-			                                      if (!mask.RowIsValid(idx)) {
-				                                      return false;
-			                                      }
-
+		                                  UnaryExecutor::Execute<string_t, bool>(
+		                                      input_vector, result, args.size(), [&](string_t yaml_str) {
 			                                      try {
 				                                      // Check if it's a multi-document YAML by trying to load all
 				                                      // documents
@@ -47,16 +48,14 @@ void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 		                                      });
 	                                  });
 
-	// YAML validity check for YAML type (always returns true for valid YAML objects)
-	ScalarFunction yaml_valid_yaml(
-	    "yaml_valid", {yaml_type}, LogicalType::BOOLEAN, [](DataChunk &args, ExpressionState &state, Vector &result) {
-		    // YAML types are already validated, so they're always valid
-		    auto &input_vector = args.data[0];
-		    UnaryExecutor::ExecuteWithNulls<string_t, bool>(input_vector, result, args.size(),
-		                                                    [&](string_t yaml_str, ValidityMask &mask, idx_t idx) {
-			                                                    return mask.RowIsValid(idx); // Return true if not NULL
-		                                                    });
-	    });
+	// YAML validity check for YAML type — always true for defined inputs;
+	// NULL input → NULL output (auto-propagated by the framework).
+	ScalarFunction yaml_valid_yaml("yaml_valid", {yaml_type}, LogicalType::BOOLEAN,
+	                               [](DataChunk &args, ExpressionState &state, Vector &result) {
+		                               auto &input_vector = args.data[0];
+		                               UnaryExecutor::Execute<string_t, bool>(input_vector, result, args.size(),
+		                                                                      [&](string_t yaml_str) { return true; });
+	                               });
 
 	loader.RegisterFunction(yaml_valid_varchar);
 	loader.RegisterFunction(yaml_valid_yaml);
@@ -159,7 +158,11 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 	// Process parameters (arguments beyond the first one)
 	for (idx_t param_idx = 1; param_idx < arguments.size(); param_idx++) {
 		auto &child = arguments[param_idx];
-		string param_name = StringUtil::Lower(child->alias);
+		// Use the public accessor methods (GetAlias / GetExpressionType) instead of
+		// direct member access — duckdb main made BaseExpression::alias and ::type
+		// protected. The accessors exist in both v1.5.x and main, so this works
+		// cross-version without #ifdef.
+		string param_name = StringUtil::Lower(child->GetAlias());
 
 		// Check if this is a named parameter (using := syntax)
 		if (param_name.empty()) {
@@ -167,7 +170,7 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 		}
 
 		// Validate parameter value is constant (following DuckDB pattern)
-		if (child->type != ExpressionType::VALUE_CONSTANT) {
+		if (child->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw BinderException("format_yaml parameter '%s' must be a constant value", param_name);
 		}
 
