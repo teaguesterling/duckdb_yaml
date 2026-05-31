@@ -1,0 +1,48 @@
+# name: test/sql/yaml_reader/yaml_issue_37_empty_list_nesting.test
+# description: Regression for issue #37 — empty list in the FIRST row of a struct-array
+#              field used to be inferred as LIST<LIST<child>> instead of LIST<child>,
+#              causing later rows with populated lists to fail unification with a
+#              misleading "Failed to cast value: Type VARCHAR ... can't be cast to
+#              the destination type VARCHAR[]" error in YAMLNodeToValue's
+#              empty-Sequence branch.
+# group: [yaml_reader]
+
+require yaml
+
+# ============================================================================
+# Repro: empty list first, populated list later  (the failing case in #37)
+# ============================================================================
+# Before the fix, this SELECT failed with a misleading cast error even though
+# DESCRIBE showed the right type. After the fix the SELECT just works.
+
+query II
+SELECT s.id, s.data_models
+FROM (SELECT unnest(specifications) AS s FROM read_yaml('test/yaml/issue_37_empty_first.yaml'))
+ORDER BY s.id;
+----
+A	[]
+B	[OVR-DM-001]
+
+# Sanity-check that the inferred element type is exactly VARCHAR[] (not
+# LIST<LIST<VARCHAR>> as the bug produced). If the bug recurs, the materialised
+# value for row B's data_models would surface here as the doubly-nested shape.
+query I
+SELECT len(s.data_models)
+FROM (SELECT unnest(specifications) AS s FROM read_yaml('test/yaml/issue_37_empty_first.yaml'))
+WHERE s.id = 'B';
+----
+1
+
+# ============================================================================
+# Control: populated list first, empty list later  (worked before the fix too)
+# ============================================================================
+# Keep this as a regression net for the other direction — if a future change
+# breaks the originally-working ordering, this catches it.
+
+query II
+SELECT s.id, s.data_models
+FROM (SELECT unnest(specifications) AS s FROM read_yaml('test/yaml/issue_37_populated_first.yaml'))
+ORDER BY s.id;
+----
+A	[OVR-DM-001]
+B	[]
