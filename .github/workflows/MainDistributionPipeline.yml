@@ -38,3 +38,26 @@ jobs:
       ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
+
+  # Guards against the LINKED_LIBS class of WASM bug (issue #40): the reusable
+  # distribution workflow builds and uploads the .wasm but never inspects or
+  # loads it, so a side module with unresolved yaml-cpp symbols ships green.
+  # This downloads the built v1.5.3 wasm artifacts and statically checks that no
+  # yaml-cpp symbol is imported-but-undefined (no duckdb-wasm runtime needed).
+  # See test/wasm/ for the full explanation.
+  wasm-symbol-check:
+    name: WASM symbol resolution check
+    needs: [duckdb-stable-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: yaml-v1.5.3-extension-wasm_*
+          path: wasm-artifacts
+      - name: Check for unresolved yaml-cpp symbols
+        run: bash test/wasm/run_wasm_checks.sh wasm-artifacts
