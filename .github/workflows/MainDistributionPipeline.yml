@@ -42,11 +42,14 @@ jobs:
   # Guards against the LINKED_LIBS class of WASM bug (issue #40): the reusable
   # distribution workflow builds and uploads the .wasm but never inspects or
   # loads it, so a side module with unresolved yaml-cpp symbols ships green.
-  # This downloads the built v1.5.3 wasm artifacts and statically checks that no
-  # yaml-cpp symbol is imported-but-undefined (no duckdb-wasm runtime needed).
-  # See test/wasm/ for the full explanation.
-  wasm-symbol-check:
-    name: WASM symbol resolution check
+  # Two layers (see test/wasm/):
+  #   1. static symbol check (hard gate) — no duckdb-wasm runtime needed.
+  #   2. live load+query in duckdb-wasm (informational / continue-on-error) —
+  #      expected-red until official duckdb-wasm ships v1.5.3 (the only public
+  #      v1.5.3 engine, haybarn, is built v1.5.4-dev with a newer emscripten,
+  #      so a v1.5.3 extension hits a duckdb/emscripten ABI skew on LOAD).
+  wasm-load-test:
+    name: WASM load test
     needs: [duckdb-stable-build]
     runs-on: ubuntu-latest
     steps:
@@ -59,5 +62,16 @@ jobs:
         with:
           pattern: yaml-v1.5.3-extension-wasm_*
           path: wasm-artifacts
-      - name: Check for unresolved yaml-cpp symbols
+      - name: Static symbol check (yaml-cpp must be linked, not unresolved)
         run: bash test/wasm/run_wasm_checks.sh wasm-artifacts
+      - name: Live load test in duckdb-wasm (informational until official v1.5.3)
+        continue-on-error: true
+        working-directory: test/wasm
+        run: |
+          set -euo pipefail
+          npm install --no-save
+          mkdir -p repo/v1.5.3/wasm_eh
+          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.3-extension-wasm_eh/yaml.duckdb_extension.wasm" \
+             repo/v1.5.3/wasm_eh/
+          node load_test.cjs --repo repo --name yaml --platform eh \
+            --query "SELECT yaml_valid('a: 1') AS ok" --expect '"ok":true'
