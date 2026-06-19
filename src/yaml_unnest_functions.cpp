@@ -589,7 +589,7 @@ static void YAMLAggCombine(Vector &state_vector, Vector &combined_vector, Aggreg
 	}
 }
 
-static void YAMLAggFinalize(Vector &state_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+static void YAMLAggFinalize(Vector &state_vector, DUCKDB_AGG_FINALIZE_INPUT_TYPE &aggr_input_data, Vector &result, idx_t count,
                             idx_t offset) {
 	auto states = FlatVector::GetData<YAMLAggState *>(state_vector);
 
@@ -666,7 +666,7 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 
 	// yaml_build_object function - variadic function
 	auto yaml_build_object_fun = ScalarFunction("yaml_build_object", {}, yaml_type, YAMLBuildObjectFunction);
-	yaml_build_object_fun.varargs = LogicalType::ANY;
+	CompatSetScalarVarArgs(yaml_build_object_fun, LogicalType::ANY);
 	loader.RegisterFunction(yaml_build_object_fun);
 
 	// yaml_agg aggregate function

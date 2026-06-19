@@ -135,11 +135,12 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 
 	// Parse named parameters
 	for (auto &kv : input.named_parameters) {
-		if (kv.first == "as_yaml_objects") {
+		auto kv_name = CompatIdentifierName(kv.first);
+		if (kv_name == "as_yaml_objects") {
 			result->options.as_yaml_objects = BooleanValue::Get(kv.second);
-		} else if (kv.first == "content") {
+		} else if (kv_name == "content") {
 			result->options.include_content = BooleanValue::Get(kv.second);
-		} else if (kv.first == "filename") {
+		} else if (kv_name == "filename") {
 			result->options.include_filename = BooleanValue::Get(kv.second);
 		}
 	}

@@ -666,7 +666,7 @@ static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 template <class FUNCTION_INFO>
 static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 	for (const auto &name : names) {
-		fun.name = name;
+		fun.name = CompatMakeIdentifier(name);
 		functions.push_back(fun);
 	}
 }

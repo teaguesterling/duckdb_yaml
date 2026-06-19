@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
@@ -38,7 +39,7 @@ void YAMLReader::BindColumnTypes(ClientContext &context, TableFunctionBindInput 
 
 	// For each entry in the struct
 	for (idx_t idx = 0; idx < child_types.size(); idx++) {
-		string column_name = child_types[idx].first;
+		string column_name = CompatIdentifierName(child_types[idx].first);
 		Value type_value = struct_values[idx];
 
 		if (type_value.IsNull()) {

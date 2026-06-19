@@ -147,8 +147,10 @@ struct FormatYAMLBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> FormatYAMLBind(DUCKDB_SCALAR_BIND_PARAMS) {
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+	auto &arguments = bind_input.GetArguments();
+#endif
 	if (arguments.empty()) {
 		throw InvalidInputException("format_yaml requires at least one argument");
 	}
@@ -162,7 +164,7 @@ static unique_ptr<FunctionData> FormatYAMLBind(ClientContext &context, ScalarFun
 		// direct member access — duckdb main made BaseExpression::alias and ::type
 		// protected. The accessors exist in both v1.5.x and main, so this works
 		// cross-version without #ifdef.
-		string param_name = StringUtil::Lower(child->GetAlias());
+		string param_name = StringUtil::Lower(CompatIdentifierName(child->GetAlias()));
 
 		// Check if this is a named parameter (using := syntax)
 		if (param_name.empty()) {
@@ -193,16 +195,16 @@ static void FormatYAMLFunction(DataChunk &args, ExpressionState &state, Vector &
 	idx_t indent = 2;
 
 	// Access named parameters from the bound function expression (like struct_update)
-	auto &func_args = state.expr.Cast<BoundFunctionExpression>().children;
+	auto &func_args = CompatBoundChildren(state.expr.Cast<BoundFunctionExpression>());
 
 	// Process named parameters - all parameters beyond first must be named (like struct_update)
 	for (idx_t arg_idx = 1; arg_idx < func_args.size(); arg_idx++) {
 		auto &child = func_args[arg_idx];
-		if (child->alias.empty()) {
+		if (CompatExprAlias(*child).empty()) {
 			throw InvalidInputException("format_yaml requires named parameters, e.g. style := 'block'");
 		}
 
-		string param_name = StringUtil::Lower(child->alias);
+		string param_name = StringUtil::Lower(CompatExprAlias(*child));
 
 		if (param_name == "style") {
 			Value style_value = args.data[arg_idx].GetValue(0);
@@ -285,8 +287,8 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	// Register format_yaml function with named parameters (returns VARCHAR for display/formatting)
 	auto format_yaml_fun =
 	    ScalarFunction("format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLFunction, FormatYAMLBind);
-	format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	format_yaml_fun.varargs = LogicalType::ANY; // Allow variable number of arguments
+	CompatSetScalarNullHandling(format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
+	CompatSetScalarVarArgs(format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
 	loader.RegisterFunction(format_yaml_fun);
 
 	// Register yaml() constructor function (parses YAML string to YAML type)
@@ -376,8 +378,11 @@ struct FromYAMLBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> FromYAMLBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> FromYAMLBind(DUCKDB_SCALAR_BIND_PARAMS) {
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+	auto &arguments = bind_input.GetArguments();
+	auto &bound_function = bind_input.GetBoundFunction();
+#endif
 	if (arguments.size() != 2) {
 		throw InvalidInputException("from_yaml requires exactly 2 arguments: yaml_value and structure");
 	}
@@ -385,29 +390,29 @@ static unique_ptr<FunctionData> FromYAMLBind(ClientContext &context, ScalarFunct
 	auto bind_data = make_uniq<FromYAMLBindData>();
 
 	// The second argument should be a constant structure specification
-	if (arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
+	if (CompatExprReturnType(*arguments[1]).id() == LogicalTypeId::STRUCT) {
 		// If it's a struct type, use it directly
-		bind_data->target_type = arguments[1]->return_type;
-	} else if (arguments[1]->return_type.id() == LogicalTypeId::LIST) {
+		bind_data->target_type = CompatExprReturnType(*arguments[1]);
+	} else if (CompatExprReturnType(*arguments[1]).id() == LogicalTypeId::LIST) {
 		// If it's a list type, use it directly
-		bind_data->target_type = arguments[1]->return_type;
-	} else if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
+		bind_data->target_type = CompatExprReturnType(*arguments[1]);
+	} else if (CompatExprReturnType(*arguments[1]).id() == LogicalTypeId::SQLNULL) {
 		// NULL type defaults to VARCHAR
 		bind_data->target_type = LogicalType::VARCHAR;
 	} else {
 		// For scalar types, use the type directly
-		bind_data->target_type = arguments[1]->return_type;
+		bind_data->target_type = CompatExprReturnType(*arguments[1]);
 	}
 
 	// Set the return type to the target type
-	bound_function.return_type = bind_data->target_type;
+	CompatBindSetReturnType(bound_function, bind_data->target_type);
 
 	return std::move(bind_data);
 }
 
 static void FromYAMLFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_data = func_expr.bind_info->Cast<FromYAMLBindData>();
+	auto &bind_data = CompatBoundBindInfo(func_expr)->Cast<FromYAMLBindData>();
 	auto &target_type = bind_data.target_type;
 
 	auto &yaml_input = args.data[0];
@@ -442,13 +447,13 @@ void YAMLFunctions::RegisterFromYAMLFunction(ExtensionLoader &loader) {
 	// from_yaml(yaml_value, structure) -> structured type
 	auto from_yaml_fun =
 	    ScalarFunction("from_yaml", {yaml_type, LogicalType::ANY}, LogicalType::ANY, FromYAMLFunction, FromYAMLBind);
-	from_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	CompatSetScalarNullHandling(from_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	loader.RegisterFunction(from_yaml_fun);
 
 	// Also register version that takes VARCHAR input
 	auto from_yaml_varchar_fun = ScalarFunction("from_yaml", {LogicalType::VARCHAR, LogicalType::ANY}, LogicalType::ANY,
 	                                            FromYAMLFunction, FromYAMLBind);
-	from_yaml_varchar_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	CompatSetScalarNullHandling(from_yaml_varchar_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	loader.RegisterFunction(from_yaml_varchar_fun);
 }
 

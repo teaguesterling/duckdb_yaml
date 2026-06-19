@@ -136,3 +136,155 @@ inline void CompatBinaryExecuteWithNulls(Vector &left, Vector &right, Vector &re
 #endif
 
 } // namespace duckdb
+
+// --- duckdb::Identifier cross-version helpers (appended) ---
+// DuckDB main introduced duckdb::Identifier, which replaced std::string as the key of
+// child_list_t (STRUCT field names) and several name-typed fields (TableFunctionRef::alias,
+// named_parameters keys). Identifier does not implicitly convert to/from std::string, so
+// reads/constructions at that boundary go through these helpers (no-ops on stable DuckDB).
+#if __has_include("duckdb/common/identifier.hpp")
+#define DUCKDB_HAS_IDENTIFIER 1
+#include "duckdb/common/identifier.hpp"
+#endif
+
+namespace duckdb {
+
+#ifdef DUCKDB_HAS_IDENTIFIER
+inline const string &CompatIdentifierName(const Identifier &id) {
+	return id.GetIdentifierName();
+}
+inline const string &CompatIdentifierName(const string &name) {
+	return name;
+}
+inline Identifier CompatMakeIdentifier(string name) {
+	return Identifier(std::move(name));
+}
+#else
+inline const string &CompatIdentifierName(const string &name) {
+	return name;
+}
+inline string CompatMakeIdentifier(string name) {
+	return name;
+}
+#endif
+
+} // namespace duckdb
+
+// === duckdb main API compat (appended for v1.6.x/main) ===
+#if __has_include("duckdb/planner/expression/bound_function_expression.hpp")
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#endif
+#if __has_include("duckdb/function/scalar_function.hpp")
+#include "duckdb/function/scalar_function.hpp"
+#endif
+
+// Scalar bind-function signature changed on duckdb main:
+//   old: (ClientContext&, ScalarFunction&, vector<unique_ptr<Expression>>&)
+//   new: (BindScalarFunctionInput&)
+// Define bind functions with DUCKDB_SCALAR_BIND_PARAMS and read inputs via the
+// DUCKDB_SCALAR_BIND_CONTEXT / DUCKDB_SCALAR_BIND_ARGS macros.
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+#define DUCKDB_SCALAR_BIND_PARAMS  duckdb::BindScalarFunctionInput &bind_input
+#define DUCKDB_SCALAR_BIND_CONTEXT bind_input.GetClientContext()
+#define DUCKDB_SCALAR_BIND_ARGS    bind_input.GetArguments()
+#else
+#define DUCKDB_SCALAR_BIND_PARAMS                                                                                       \
+	duckdb::ClientContext &context, duckdb::ScalarFunction &bound_function,                                             \
+	    duckdb::vector<duckdb::unique_ptr<duckdb::Expression>> &arguments
+#define DUCKDB_SCALAR_BIND_CONTEXT context
+#define DUCKDB_SCALAR_BIND_ARGS    arguments
+#endif
+
+namespace duckdb {
+
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+inline const LogicalType &CompatExprReturnType(const Expression &e) {
+	return e.GetReturnType();
+}
+inline vector<unique_ptr<Expression>> &CompatBoundChildren(BoundFunctionExpression &e) {
+	return e.GetChildrenMutable();
+}
+inline unique_ptr<FunctionData> &CompatBoundBindInfo(BoundFunctionExpression &e) {
+	return e.BindInfoMutable();
+}
+inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
+	f.SetReturnType(std::move(t));
+}
+inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
+	f.SetNullHandling(h);
+}
+inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+	f.SetVarArgs(std::move(v));
+}
+inline string CompatExprAlias(const BaseExpression &e) {
+	return CompatIdentifierName(e.GetAlias());
+}
+#else
+inline const LogicalType &CompatExprReturnType(const Expression &e) {
+	return e.return_type;
+}
+inline vector<unique_ptr<Expression>> &CompatBoundChildren(BoundFunctionExpression &e) {
+	return e.children;
+}
+inline unique_ptr<FunctionData> &CompatBoundBindInfo(BoundFunctionExpression &e) {
+	return e.bind_info;
+}
+inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
+	f.return_type = std::move(t);
+}
+inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
+	f.null_handling = h;
+}
+inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+	f.varargs = std::move(v);
+}
+inline string CompatExprAlias(const BaseExpression &e) {
+	return e.alias;
+}
+#endif
+
+} // namespace duckdb
+
+// === bind-return-type + aggregate-finalize compat (appended) ===
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+#define DUCKDB_AGG_FINALIZE_INPUT_TYPE duckdb::AggregateFinalizeInputData
+#else
+#define DUCKDB_AGG_FINALIZE_INPUT_TYPE duckdb::AggregateInputData
+#endif
+
+namespace duckdb {
+// Set the return type from inside a scalar bind function. On duckdb main the bind
+// receives a BoundScalarFunction (SetReturnType); on stable it is a ScalarFunction
+// (public return_type field). Templated so it works for whichever type the
+// DUCKDB_SCALAR_BIND_PARAMS macro put in scope as `bound_function`.
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+template <class F>
+inline void CompatBindSetReturnType(F &f, LogicalType t) {
+	f.SetReturnType(std::move(t));
+}
+#else
+template <class F>
+inline void CompatBindSetReturnType(F &f, LogicalType t) {
+	f.return_type = std::move(t);
+}
+#endif
+} // namespace duckdb
+
+// === const overloads for bound-expression accessors (execute fns read a const Expression) ===
+namespace duckdb {
+#ifdef DUCKDB_HAS_NEW_VECTOR_HEADERS
+inline const vector<unique_ptr<Expression>> &CompatBoundChildren(const BoundFunctionExpression &e) {
+	return e.GetChildren();
+}
+inline const unique_ptr<FunctionData> &CompatBoundBindInfo(const BoundFunctionExpression &e) {
+	return e.BindInfo();
+}
+#else
+inline const vector<unique_ptr<Expression>> &CompatBoundChildren(const BoundFunctionExpression &e) {
+	return e.children;
+}
+inline const unique_ptr<FunctionData> &CompatBoundBindInfo(const BoundFunctionExpression &e) {
+	return e.bind_info;
+}
+#endif
+} // namespace duckdb

@@ -1,4 +1,5 @@
 #include "yaml_utils.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -473,7 +474,7 @@ void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
 				}
 
 				for (idx_t field_idx = 0; field_idx < struct_vals.size(); field_idx++) {
-					out << YAML::Key << struct_names[field_idx].first;
+					out << YAML::Key << CompatIdentifierName(struct_names[field_idx].first);
 					out << YAML::Value;
 					EmitValueToYAML(out, struct_vals[field_idx]);
 				}
@@ -545,7 +546,7 @@ YAML::Node ValueToYAMLNode(const Value &value) {
 		const auto &struct_names = StructType::GetChildTypes(value.type());
 
 		for (idx_t field_idx = 0; field_idx < struct_vals.size() && field_idx < struct_names.size(); field_idx++) {
-			const auto key = struct_names[field_idx].first;
+			const string key = CompatIdentifierName(struct_names[field_idx].first);
 			map_node[key] = ValueToYAMLNode(struct_vals[field_idx]); // Recursive
 		}
 		return map_node;

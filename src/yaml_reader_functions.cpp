@@ -171,10 +171,11 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// Check for duplicate parameters
 	std::unordered_set<std::string> seen_parameters;
 	for (auto &param : input.named_parameters) {
-		if (seen_parameters.find(param.first) != seen_parameters.end()) {
-			throw BinderException("Duplicate parameter name: " + param.first);
+		auto param_name = CompatIdentifierName(param.first);
+		if (seen_parameters.find(param_name) != seen_parameters.end()) {
+			throw BinderException("Duplicate parameter name: " + param_name);
 		}
-		seen_parameters.insert(param.first);
+		seen_parameters.insert(param_name);
 	}
 
 	// Check for columns parameter
@@ -635,10 +636,11 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 	// Check for duplicate parameters
 	std::unordered_set<std::string> seen_parameters;
 	for (auto &param : input.named_parameters) {
-		if (seen_parameters.find(param.first) != seen_parameters.end()) {
-			throw BinderException("Duplicate parameter name: " + param.first);
+		auto param_name = CompatIdentifierName(param.first);
+		if (seen_parameters.find(param_name) != seen_parameters.end()) {
+			throw BinderException("Duplicate parameter name: " + param_name);
 		}
-		seen_parameters.insert(param.first);
+		seen_parameters.insert(param_name);
 	}
 
 	// Check for columns parameter
@@ -1021,7 +1023,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		// Struct type - use struct fields as columns
 		auto &children = StructType::GetChildTypes(merged_type);
 		for (auto &child : children) {
-			names.push_back(child.first);
+			names.push_back(CompatIdentifierName(child.first));
 			return_types.push_back(child.second);
 		}
 	} else {

@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -19,7 +20,7 @@ unique_ptr<TableRef> YAMLReader::ReadYAMLReplacement(ClientContext &context, Rep
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = CompatMakeIdentifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);
