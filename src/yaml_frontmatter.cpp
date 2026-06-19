@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_extension.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -134,11 +135,12 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 
 	// Parse named parameters
 	for (auto &kv : input.named_parameters) {
-		if (kv.first == "as_yaml_objects") {
+		auto kv_name = CompatIdentifierName(kv.first);
+		if (kv_name == "as_yaml_objects") {
 			result->options.as_yaml_objects = BooleanValue::Get(kv.second);
-		} else if (kv.first == "content") {
+		} else if (kv_name == "content") {
 			result->options.include_content = BooleanValue::Get(kv.second);
-		} else if (kv.first == "filename") {
+		} else if (kv_name == "filename") {
 			result->options.include_filename = BooleanValue::Get(kv.second);
 		}
 	}
@@ -246,7 +248,7 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 	auto &local_state = data_p.local_state->Cast<YAMLFrontmatterLocalState>();
 
 	if (local_state.current_file >= bind_data.file_paths.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -333,7 +335,7 @@ static void YAMLFrontmatterFunction(ClientContext &context, TableFunctionInput &
 		}
 	}
 
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {

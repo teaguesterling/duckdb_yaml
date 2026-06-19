@@ -1,4 +1,5 @@
 #include "yaml_extraction_functions.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -146,7 +147,7 @@ static void YAMLTypeUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
 	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
@@ -158,29 +159,27 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 
-			    string type_str;
 			    if (!node) {
-				    // Nonexistent path - return SQL NULL
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
 				    return string_t();
-			    } else {
-				    switch (node.Type()) {
-				    case YAML::NodeType::Null:
-					    type_str = "null";
-					    break;
-				    case YAML::NodeType::Scalar:
-					    type_str = "scalar";
-					    break;
-				    case YAML::NodeType::Sequence:
-					    type_str = "array";
-					    break;
-				    case YAML::NodeType::Map:
-					    type_str = "object";
-					    break;
-				    default:
-					    type_str = "undefined";
-					    break;
-				    }
+			    }
+			    string type_str;
+			    switch (node.Type()) {
+			    case YAML::NodeType::Null:
+				    type_str = "null";
+				    break;
+			    case YAML::NodeType::Scalar:
+				    type_str = "scalar";
+				    break;
+			    case YAML::NodeType::Sequence:
+				    type_str = "array";
+				    break;
+			    case YAML::NodeType::Map:
+				    type_str = "object";
+				    break;
+			    default:
+				    type_str = "undefined";
+				    break;
 			    }
 
 			    return StringVector::AddString(result, type_str.c_str(), type_str.length());
@@ -195,7 +194,7 @@ static void YAMLTypeBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 //===--------------------------------------------------------------------===//
 
 static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
 	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
@@ -207,10 +206,8 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 
-			    // Convert extracted node back to YAML
 			    if (!node) {
-				    // Nonexistent path - return SQL NULL
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
 				    return string_t();
 			    }
 
@@ -229,7 +226,7 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
 	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
@@ -243,14 +240,12 @@ static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, V
 			    auto node = ExtractFromYAML(root, path_components);
 
 			    if (!node) {
-				    // Nonexistent path - return SQL NULL
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
 				    return string_t();
 			    }
 
 			    if (node.IsNull()) {
-				    // YAML null value - return SQL NULL (same behavior as JSON)
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // YAML null → SQL NULL (matches JSON behavior)
 				    return string_t();
 			    }
 
@@ -627,7 +622,7 @@ static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vect
 
 // Extract scalar value only, returns NULL for non-scalars (arrays, objects)
 static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
+	CompatBinaryExecuteWithNulls<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(),
 	    [&](string_t yaml_str, string_t path_str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (yaml_str.GetSize() == 0) {
@@ -640,21 +635,18 @@ static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 
-			    // Return NULL for missing path
 			    if (!node || !node.IsDefined()) {
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // Missing path → SQL NULL
 				    return string_t();
 			    }
 
-			    // Return NULL for non-scalar values (arrays, objects)
 			    if (!node.IsScalar()) {
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // Non-scalar → SQL NULL
 				    return string_t();
 			    }
 
-			    // Return NULL for YAML null values
 			    if (node.IsNull()) {
-				    mask.SetInvalid(idx);
+				    mask.SetInvalid(idx); // YAML null → SQL NULL
 				    return string_t();
 			    }
 
@@ -674,7 +666,7 @@ static void YAMLValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 template <class FUNCTION_INFO>
 static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 	for (const auto &name : names) {
-		fun.name = name;
+		fun.name = CompatMakeIdentifier(name);
 		functions.push_back(fun);
 	}
 }

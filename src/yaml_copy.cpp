@@ -1,4 +1,5 @@
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
@@ -256,8 +257,8 @@ void RegisterYAMLCopyFunctions(ExtensionLoader &loader) {
 	// Register copy_format_yaml function for COPY TO post-processing
 	auto copy_format_yaml_fun =
 	    ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
-	copy_format_yaml_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	copy_format_yaml_fun.varargs = LogicalType::ANY; // Allow variable number of arguments
+	CompatSetScalarNullHandling(copy_format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
+	CompatSetScalarVarArgs(copy_format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
 	loader.RegisterFunction(copy_format_yaml_fun);
 }
 

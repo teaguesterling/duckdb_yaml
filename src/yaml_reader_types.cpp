@@ -1,6 +1,7 @@
 #include "yaml_reader.hpp"
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -195,7 +196,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 		for (auto it = node.begin(); it != node.end(); ++it) {
 			std::string key = it->first.Scalar();
 			LogicalType value_type = DetectYAMLType(it->second);
-			struct_children.push_back(make_pair(key, value_type));
+			struct_children.push_back(make_pair(CompatMakeIdentifier(key), value_type));
 		}
 		// Empty maps create STRUCT() with no children, which DuckDB cannot cast
 		// Return YAML type for empty maps to preserve them as opaque values (issue #33)
@@ -445,8 +446,9 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 		// Create struct values
 		child_list_t<Value> struct_values;
 		for (auto &entry : struct_children) {
-			if (node[entry.first]) {
-				struct_values.push_back(make_pair(entry.first, YAMLNodeToValue(node[entry.first], entry.second)));
+			auto entry_name = CompatIdentifierName(entry.first);
+			if (node[entry_name]) {
+				struct_values.push_back(make_pair(entry.first, YAMLNodeToValue(node[entry_name], entry.second)));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
 			}

@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -170,10 +171,11 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// Check for duplicate parameters
 	std::unordered_set<std::string> seen_parameters;
 	for (auto &param : input.named_parameters) {
-		if (seen_parameters.find(param.first) != seen_parameters.end()) {
-			throw BinderException("Duplicate parameter name: " + param.first);
+		auto param_name = CompatIdentifierName(param.first);
+		if (seen_parameters.find(param_name) != seen_parameters.end()) {
+			throw BinderException("Duplicate parameter name: " + param_name);
 		}
-		seen_parameters.insert(param.first);
+		seen_parameters.insert(param_name);
 	}
 
 	// Check for columns parameter
@@ -634,10 +636,11 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 	// Check for duplicate parameters
 	std::unordered_set<std::string> seen_parameters;
 	for (auto &param : input.named_parameters) {
-		if (seen_parameters.find(param.first) != seen_parameters.end()) {
-			throw BinderException("Duplicate parameter name: " + param.first);
+		auto param_name = CompatIdentifierName(param.first);
+		if (seen_parameters.find(param_name) != seen_parameters.end()) {
+			throw BinderException("Duplicate parameter name: " + param_name);
 		}
-		seen_parameters.insert(param.first);
+		seen_parameters.insert(param_name);
 	}
 
 	// Check for columns parameter
@@ -779,7 +782,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 	// Handle LIST mode - return all documents as a single row with STRUCT[] column
 	if (bind_data.options.multi_document_mode == MultiDocumentMode::LIST) {
 		if (bind_data.list_mode_done) {
-			output.SetCardinality(0);
+			CompatSetOutputCardinality(output, 0);
 			return;
 		}
 
@@ -803,13 +806,13 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 		output.SetValue(0, 0, list_value);
 
 		bind_data.list_mode_done = true;
-		output.SetCardinality(1);
+		CompatSetOutputCardinality(output, 1);
 		return;
 	}
 
 	// If we've processed all rows, we're done
 	if (bind_data.current_doc >= bind_data.yaml_docs.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -825,7 +828,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 	    (bind_data.names[0] == "yaml" && bind_data.types[0].id() == LogicalTypeId::STRUCT &&
 	     StructType::GetChildTypes(bind_data.types[0]).empty())) {
 		// Just return empty result for dummy columns with no data
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		bind_data.current_doc = bind_data.yaml_docs.size(); // Mark as completed
 		return;
 	}
@@ -895,7 +898,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 	bind_data.current_doc += count;
 
 	// Set the cardinality
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -903,7 +906,7 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 
 	// If we've processed all rows, we're done
 	if (bind_data.current_row >= bind_data.yaml_docs.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -931,7 +934,7 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 	bind_data.current_row += count;
 
 	// Set the cardinality
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1020,7 +1023,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		// Struct type - use struct fields as columns
 		auto &children = StructType::GetChildTypes(merged_type);
 		for (auto &child : children) {
-			names.push_back(child.first);
+			names.push_back(CompatIdentifierName(child.first));
 			return_types.push_back(child.second);
 		}
 	} else {
@@ -1045,7 +1048,7 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 
 	// If we've processed all rows, we're done
 	if (local_state.current_row >= bind_data.yaml_docs.size()) {
-		output.SetCardinality(0);
+		CompatSetOutputCardinality(output, 0);
 		return;
 	}
 
@@ -1080,7 +1083,7 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 	}
 
 	local_state.current_row += count;
-	output.SetCardinality(count);
+	CompatSetOutputCardinality(output, count);
 }
 
 } // namespace duckdb
