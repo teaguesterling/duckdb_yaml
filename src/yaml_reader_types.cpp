@@ -14,11 +14,15 @@
 namespace duckdb {
 
 // YAML Type Conversions
-// Helper function to detect YAML type
-LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+// Helper function to detect YAML type.
+// Budget-carrying worker: bounds recursion depth and total node expansion so
+// deeply-nested or alias-bombed input fails with a clean error instead of a
+// stack overflow / exponential blow-up (GHSA-h5hw-g5m6-vmjj).
+static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTraversalBudget &budget) {
 	if (!node) {
 		return LogicalType::VARCHAR;
 	}
+	yaml_utils::YAMLBudgetScope scope(budget);
 
 	switch (node.Type()) {
 	case YAML::NodeType::Scalar: {
@@ -114,7 +118,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 					if (double_val == std::floor(double_val) && double_val >= std::numeric_limits<int64_t>::min() &&
 					    double_val <= std::numeric_limits<int64_t>::max()) {
 						// It's a whole number, use integer type
-						return DetectYAMLType(YAML::Node(std::to_string(static_cast<int64_t>(double_val))));
+						return DetectYAMLTypeImpl(YAML::Node(std::to_string(static_cast<int64_t>(double_val))), budget);
 					}
 					return LogicalType::DOUBLE;
 				}
@@ -134,7 +138,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 		bool first_element = true;
 
 		for (size_t idx = 0; idx < node.size(); idx++) {
-			LogicalType element_type = DetectYAMLType(node[idx]);
+			LogicalType element_type = DetectYAMLTypeImpl(node[idx], budget);
 
 			if (first_element) {
 				common_type = element_type;
@@ -142,14 +146,14 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 			} else if (common_type.id() == element_type.id()) {
 				// If both are structs, merge their fields to handle optional fields
 				if (common_type.id() == LogicalTypeId::STRUCT) {
-					common_type = MergeStructTypes(common_type, element_type);
+					common_type = YAMLReader::MergeStructTypes(common_type, element_type);
 				}
 				// If both are lists, recursively merge the child types
 				else if (common_type.id() == LogicalTypeId::LIST) {
 					auto common_child = ListType::GetChildType(common_type);
 					auto element_child = ListType::GetChildType(element_type);
 					if (common_child.id() == LogicalTypeId::STRUCT && element_child.id() == LogicalTypeId::STRUCT) {
-						common_type = LogicalType::LIST(MergeStructTypes(common_child, element_child));
+						common_type = LogicalType::LIST(YAMLReader::MergeStructTypes(common_child, element_child));
 					}
 				}
 				continue; // Keep checking
@@ -195,7 +199,7 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 		child_list_t<LogicalType> struct_children;
 		for (auto it = node.begin(); it != node.end(); ++it) {
 			std::string key = it->first.Scalar();
-			LogicalType value_type = DetectYAMLType(it->second);
+			LogicalType value_type = DetectYAMLTypeImpl(it->second, budget);
 			struct_children.push_back(make_pair(CompatMakeIdentifier(key), value_type));
 		}
 		// Empty maps create STRUCT() with no children, which DuckDB cannot cast
@@ -209,6 +213,11 @@ LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
 	default:
 		return LogicalType::VARCHAR;
 	}
+}
+
+LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+	yaml_utils::YAMLTraversalBudget budget;
+	return DetectYAMLTypeImpl(node, budget);
 }
 
 // Helper function to detect YAML type across multiple documents with jagged schema support
@@ -249,11 +258,15 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 	return merged_type;
 }
 
-// Helper function to convert YAML node to DuckDB value
-Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type) {
+// Helper function to convert YAML node to DuckDB value.
+// Budget-carrying worker (see DetectYAMLTypeImpl) — bounds recursion depth and
+// total node expansion so alias-bombed / deeply-nested input fails cleanly.
+static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &target_type,
+                                 yaml_utils::YAMLTraversalBudget &budget) {
 	if (!node) {
 		return Value(target_type); // NULL value
 	}
+	yaml_utils::YAMLBudgetScope scope(budget);
 
 	// Handle JSON type conversion - applies to all node types
 	if ((target_type.HasAlias() && target_type.GetAlias() == "json") || target_type.ToString() == "JSON") {
@@ -430,7 +443,7 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 		// Create list of values - recursively convert each element
 		vector<Value> values;
 		for (size_t idx = 0; idx < node.size(); idx++) {
-			values.push_back(YAMLNodeToValue(node[idx], child_type));
+			values.push_back(YAMLNodeToValueImpl(node[idx], child_type, budget));
 		}
 
 		return Value::LIST(values);
@@ -448,7 +461,7 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 		for (auto &entry : struct_children) {
 			auto entry_name = CompatIdentifierName(entry.first);
 			if (node[entry_name]) {
-				struct_values.push_back(make_pair(entry.first, YAMLNodeToValue(node[entry_name], entry.second)));
+				struct_values.push_back(make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, budget)));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
 			}
@@ -459,6 +472,11 @@ Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &tar
 	default:
 		return Value(target_type); // NULL for unknown type
 	}
+}
+
+Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type) {
+	yaml_utils::YAMLTraversalBudget budget;
+	return YAMLNodeToValueImpl(node, target_type, budget);
 }
 
 } // namespace duckdb

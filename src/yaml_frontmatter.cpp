@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_utils.hpp"
 #include "duckdb_compat.hpp"
 #include "yaml_extension.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -109,6 +110,10 @@ static string ReadFileContent(ClientContext &context, const string &file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = handle->GetFileSize();
+
+	// Enforce the input-size cap here too — the frontmatter reader previously
+	// read the whole file with no limit (GHSA-h5hw-g5m6-vmjj, finding #3).
+	yaml_utils::CheckInputSize(file_size, "read_yaml_frontmatter");
 
 	string content;
 	content.resize(file_size);

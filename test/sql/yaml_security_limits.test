@@ -1,0 +1,122 @@
+# name: test/sql/yaml_security_limits.test
+# description: DoS hardening - bound YAML nesting depth and alias/anchor expansion (GHSA-h5hw-g5m6-vmjj)
+# group: [yaml]
+
+require yaml
+
+# ============================================================================
+# Limits are exposed to SQL and have sane (positive) defaults
+# ============================================================================
+
+query III
+SELECT yaml_get_max_expansion_nodes() > 0,
+       yaml_get_max_nesting_depth() > 0,
+       yaml_get_max_input_size() > 0;
+----
+true	true	true
+
+# ============================================================================
+# Positive: ordinary and moderately-deep documents still parse (no false
+# rejections). Legitimate anchors/aliases are NOT rejected.
+# ============================================================================
+
+query I
+SELECT yaml_to_json('a: 1
+b: [1, 2, 3]
+c: {x: 1, y: 2}');
+----
+{"a":1,"b":[1,2,3],"c":{"x":1,"y":2}}
+
+# 20 levels of nesting parses fine under the default depth cap
+query I
+SELECT yaml_to_json(yaml(repeat('[', 20) || 'z' || repeat(']', 20))) IS NOT NULL;
+----
+true
+
+# A legitimate (non-exponential) anchor/alias reference is preserved, not rejected
+query I
+SELECT yaml_to_json('shared: &x [1, 2, 3]
+a: *x
+b: *x') IS NOT NULL;
+----
+true
+
+# ============================================================================
+# Nesting-depth guard (our configurable cap, independent of yaml-cpp's own
+# parse-time DepthGuard<500>). Input that parses but nests past the cap yields
+# a clean error, not a crash. Uses yaml(...) so the value reaches the guarded
+# traversal directly (cap=10, input depth=20).
+# ============================================================================
+
+statement ok
+SELECT yaml_set_max_nesting_depth(10);
+
+statement error
+SELECT yaml_to_json(yaml(repeat('[', 20) || 'z' || repeat(']', 20)));
+----
+nesting
+
+# restore the default and confirm the same input parses again
+statement ok
+SELECT yaml_set_max_nesting_depth(1000);
+
+query I
+SELECT yaml_to_json(yaml(repeat('[', 20) || 'z' || repeat(']', 20))) IS NOT NULL;
+----
+true
+
+# ============================================================================
+# Alias/anchor expansion bomb (billion-laughs). A tiny anchor chain whose full
+# re-materialization is ~1.3k node visits - far above the lowered budget but
+# bounded so it cannot exhaust the test runner even if the guard regressed.
+# ============================================================================
+
+statement ok
+SELECT yaml_set_max_expansion_nodes(500);
+
+statement error
+SELECT yaml_to_json(yaml('defs:
+  - &a0 [z, z, z, z]
+  - &a1 [*a0, *a0, *a0, *a0]
+  - &a2 [*a1, *a1, *a1, *a1]
+  - &a3 [*a2, *a2, *a2, *a2]
+  - &a4 [*a3, *a3, *a3, *a3]
+root: *a4'));
+----
+budget
+
+# Restore the production default; a small legitimate document with a repeated
+# alias still converts fine (budget is not tripped by ordinary reuse).
+statement ok
+SELECT yaml_set_max_expansion_nodes(50000000);
+
+query I
+SELECT yaml_to_json('shared: &x [1, 2, 3]
+a: *x
+b: *x
+c: *x') IS NOT NULL;
+----
+true
+
+# ============================================================================
+# Input-size cap on the scalar functions (previously only file readers were
+# capped; scalar string input was not - finding #3).
+# ============================================================================
+
+statement ok
+SELECT yaml_set_max_input_size(64);
+
+statement error
+SELECT from_yaml(repeat('a: 1
+', 100), {'a': 0});
+----
+maximum allowed size
+
+# restore
+statement ok
+SELECT yaml_set_max_input_size(16777216);
+
+query I
+SELECT from_yaml('a: 1', {'a': 0}) IS NOT NULL;
+----
+true

@@ -22,12 +22,71 @@ namespace yaml_utils {
 // Initialize default format to FLOW for better compatibility with SQLLogicTest
 YAMLFormat YAMLSettings::default_format = YAMLFormat::FLOW;
 
+// Resource-limit defaults (see yaml_utils.hpp / GHSA-h5hw-g5m6-vmjj)
+idx_t YAMLSettings::max_expansion_nodes = YAML_DEFAULT_MAX_EXPANSION_NODES;
+idx_t YAMLSettings::max_nesting_depth = YAML_DEFAULT_MAX_NESTING_DEPTH;
+idx_t YAMLSettings::max_input_size = YAML_DEFAULT_MAX_INPUT_SIZE;
+
 YAMLFormat YAMLSettings::GetDefaultFormat() {
 	return default_format;
 }
 
 void YAMLSettings::SetDefaultFormat(YAMLFormat format) {
 	default_format = format;
+}
+
+void YAMLSettings::SetMaxExpansionNodes(idx_t value) {
+	max_expansion_nodes = value;
+}
+idx_t YAMLSettings::GetMaxExpansionNodes() {
+	return max_expansion_nodes;
+}
+void YAMLSettings::SetMaxNestingDepth(idx_t value) {
+	max_nesting_depth = value;
+}
+idx_t YAMLSettings::GetMaxNestingDepth() {
+	return max_nesting_depth;
+}
+void YAMLSettings::SetMaxInputSize(idx_t value) {
+	max_input_size = value;
+}
+idx_t YAMLSettings::GetMaxInputSize() {
+	return max_input_size;
+}
+
+//===--------------------------------------------------------------------===//
+// Traversal budget / input-size guard (GHSA-h5hw-g5m6-vmjj)
+//===--------------------------------------------------------------------===//
+
+YAMLBudgetScope::YAMLBudgetScope(YAMLTraversalBudget &budget_p) : budget(budget_p) {
+	// Count this node visit first. The counter is cumulative and is never
+	// decremented, so exponential re-materialization of shared alias nodes is
+	// bounded regardless of depth.
+	if (++budget.nodes > budget.max_nodes) {
+		throw InvalidInputException(
+		    "YAML expansion exceeded the maximum node budget (%llu); the input may contain an alias/anchor "
+		    "expansion bomb. Raise the limit with yaml_set_max_expansion_nodes(N) if this is a legitimate document.",
+		    (unsigned long long)budget.max_nodes);
+	}
+	if (++budget.depth > budget.max_depth) {
+		throw InvalidInputException(
+		    "YAML nesting exceeded the maximum depth (%llu). Raise the limit with yaml_set_max_nesting_depth(N) if "
+		    "this is a legitimate document.",
+		    (unsigned long long)budget.max_depth);
+	}
+}
+
+YAMLBudgetScope::~YAMLBudgetScope() {
+	--budget.depth;
+}
+
+void CheckInputSize(idx_t size, const char *context) {
+	idx_t limit = YAMLSettings::GetMaxInputSize();
+	if (size > limit) {
+		throw InvalidInputException("YAML input to %s (%llu bytes) exceeds the maximum allowed size (%llu bytes). "
+		                            "Raise the limit with yaml_set_max_input_size(N).",
+		                            context, (unsigned long long)size, (unsigned long long)limit);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -71,7 +130,9 @@ void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format, idx_t indent) {
 	}
 }
 
-void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style) {
+static void EmitNodeWithStringStyleImpl(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style,
+                                        YAMLTraversalBudget &budget) {
+	YAMLBudgetScope scope(budget);
 	switch (node.Type()) {
 	case YAML::NodeType::Scalar: {
 		const auto &scalar = node.Scalar();
@@ -86,7 +147,7 @@ void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStr
 	case YAML::NodeType::Sequence: {
 		out << YAML::BeginSeq;
 		for (const auto &child : node) {
-			EmitNodeWithStringStyle(out, child, resolved_style);
+			EmitNodeWithStringStyleImpl(out, child, resolved_style, budget);
 		}
 		out << YAML::EndSeq;
 		break;
@@ -98,7 +159,7 @@ void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStr
 			// Keys always use default emission (never literal)
 			out << pair.first;
 			out << YAML::Value;
-			EmitNodeWithStringStyle(out, pair.second, resolved_style);
+			EmitNodeWithStringStyleImpl(out, pair.second, resolved_style, budget);
 		}
 		out << YAML::EndMap;
 		break;
@@ -108,6 +169,11 @@ void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStr
 		out << node;
 		break;
 	}
+}
+
+void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style) {
+	YAMLTraversalBudget budget;
+	EmitNodeWithStringStyleImpl(out, node, resolved_style, budget);
 }
 
 std::string EmitYAML(const YAML::Node &node, YAMLFormat format, YAMLStringStyle string_style, idx_t indent) {
@@ -198,10 +264,11 @@ static bool TryDetectDateOrTimestamp(const std::string &value, std::string &json
 	return false;
 }
 
-std::string YAMLNodeToJSON(const YAML::Node &node) {
+static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudget &budget) {
 	if (!node) {
 		return "null";
 	}
+	YAMLBudgetScope scope(budget);
 
 	switch (node.Type()) {
 	case YAML::NodeType::Null:
@@ -322,7 +389,7 @@ std::string YAMLNodeToJSON(const YAML::Node &node) {
 			if (seq_idx > 0) {
 				result += ",";
 			}
-			result += YAMLNodeToJSON(node[seq_idx]);
+			result += YAMLNodeToJSONImpl(node[seq_idx], budget);
 		}
 		result += "]";
 		return result;
@@ -338,7 +405,7 @@ std::string YAMLNodeToJSON(const YAML::Node &node) {
 
 			// Key must be a string in JSON
 			const auto key = it.first.Scalar();
-			result += "\"" + key + "\":" + YAMLNodeToJSON(it.second);
+			result += "\"" + key + "\":" + YAMLNodeToJSONImpl(it.second, budget);
 		}
 		result += "}";
 		return result;
@@ -348,11 +415,17 @@ std::string YAMLNodeToJSON(const YAML::Node &node) {
 	}
 }
 
+std::string YAMLNodeToJSON(const YAML::Node &node) {
+	YAMLTraversalBudget budget;
+	return YAMLNodeToJSONImpl(node, budget);
+}
+
 //===--------------------------------------------------------------------===//
 // DuckDB Value to YAML Conversion
 //===--------------------------------------------------------------------===//
 
-void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
+static void EmitValueToYAMLImpl(YAML::Emitter &out, const Value &value, YAMLTraversalBudget &budget) {
+	YAMLBudgetScope scope(budget);
 	try {
 		// Handle NULL values within data structures (emit YAML null '~')
 		// Note: Top-level NULL inputs are handled at the function level following SQL semantics
@@ -453,7 +526,7 @@ void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
 				out << YAML::BeginSeq;
 				const auto &list_val = ListValue::GetChildren(value);
 				for (const auto &element : list_val) {
-					EmitValueToYAML(out, element);
+					EmitValueToYAMLImpl(out, element, budget);
 				}
 				out << YAML::EndSeq;
 			} catch (...) {
@@ -476,7 +549,7 @@ void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
 				for (idx_t field_idx = 0; field_idx < struct_vals.size(); field_idx++) {
 					out << YAML::Key << CompatIdentifierName(struct_names[field_idx].first);
 					out << YAML::Value;
-					EmitValueToYAML(out, struct_vals[field_idx]);
+					EmitValueToYAMLImpl(out, struct_vals[field_idx], budget);
 				}
 				out << YAML::EndMap;
 			} catch (...) {
@@ -500,8 +573,14 @@ void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
 	}
 }
 
+void EmitValueToYAML(YAML::Emitter &out, const Value &value) {
+	YAMLTraversalBudget budget;
+	EmitValueToYAMLImpl(out, value, budget);
+}
+
 // Convert DuckDB Value to YAML::Node (respects emitter configuration)
-YAML::Node ValueToYAMLNode(const Value &value) {
+static YAML::Node ValueToYAMLNodeImpl(const Value &value, YAMLTraversalBudget &budget) {
+	YAMLBudgetScope scope(budget);
 	if (value.IsNull()) {
 		return YAML::Node(YAML::NodeType::Null);
 	}
@@ -536,7 +615,7 @@ YAML::Node ValueToYAMLNode(const Value &value) {
 		YAML::Node list_node(YAML::NodeType::Sequence);
 		const auto &list_vals = ListValue::GetChildren(value);
 		for (const auto &element : list_vals) {
-			list_node.push_back(ValueToYAMLNode(element)); // Recursive
+			list_node.push_back(ValueToYAMLNodeImpl(element, budget)); // Recursive
 		}
 		return list_node;
 	}
@@ -547,13 +626,18 @@ YAML::Node ValueToYAMLNode(const Value &value) {
 
 		for (idx_t field_idx = 0; field_idx < struct_vals.size() && field_idx < struct_names.size(); field_idx++) {
 			const string key = CompatIdentifierName(struct_names[field_idx].first);
-			map_node[key] = ValueToYAMLNode(struct_vals[field_idx]); // Recursive
+			map_node[key] = ValueToYAMLNodeImpl(struct_vals[field_idx], budget); // Recursive
 		}
 		return map_node;
 	}
 	default:
 		return YAML::Node(value.ToString());
 	}
+}
+
+YAML::Node ValueToYAMLNode(const Value &value) {
+	YAMLTraversalBudget budget;
+	return ValueToYAMLNodeImpl(value, budget);
 }
 
 std::string ValueToYAMLString(const Value &value, YAMLFormat format, YAMLStringStyle string_style, idx_t indent) {
