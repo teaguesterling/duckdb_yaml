@@ -89,6 +89,32 @@ void CheckInputSize(idx_t size, const char *context) {
 	}
 }
 
+static void CheckExpansionBudgetImpl(const YAML::Node &node, YAMLTraversalBudget &budget) {
+	if (!node) {
+		return;
+	}
+	YAMLBudgetScope scope(budget);
+	switch (node.Type()) {
+	case YAML::NodeType::Sequence:
+		for (idx_t i = 0; i < node.size(); i++) {
+			CheckExpansionBudgetImpl(node[i], budget);
+		}
+		break;
+	case YAML::NodeType::Map:
+		for (auto it = node.begin(); it != node.end(); ++it) {
+			CheckExpansionBudgetImpl(it->second, budget);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void CheckExpansionBudget(const YAML::Node &node) {
+	YAMLTraversalBudget budget;
+	CheckExpansionBudgetImpl(node, budget);
+}
+
 //===--------------------------------------------------------------------===//
 // YAML Parsing and Emission
 //===--------------------------------------------------------------------===//

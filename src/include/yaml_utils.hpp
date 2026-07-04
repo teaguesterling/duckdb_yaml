@@ -111,6 +111,13 @@ private:
 // only for the error message (which function rejected the input).
 void CheckInputSize(idx_t size, const char *context);
 
+// Walk a parsed node, counting every visit (re-materializing shared alias
+// nodes without de-duplication) and throwing if the configured expansion or
+// depth budget is exceeded. Use at the entry of functions that traverse the
+// whole node tree with their own recursion (e.g. structure/contains/merge)
+// so an alias/anchor bomb is rejected before the expensive work runs.
+void CheckExpansionBudget(const YAML::Node &node);
+
 //===--------------------------------------------------------------------===//
 // YAML Parsing and Emission
 //===--------------------------------------------------------------------===//

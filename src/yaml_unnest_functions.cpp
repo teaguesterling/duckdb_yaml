@@ -72,6 +72,13 @@ static vector<string> ParseYAMLPath(const string &path) {
 		components.push_back(current_component);
 	}
 
+	// Bound path depth: ExtractFromYAML recurses once per component
+	// (GHSA-h5hw-g5m6-vmjj).
+	if (components.size() > yaml_utils::YAMLSettings::GetMaxNestingDepth()) {
+		throw InvalidInputException("YAML path nesting exceeds the maximum depth (%llu)",
+		                            (unsigned long long)yaml_utils::YAMLSettings::GetMaxNestingDepth());
+	}
+
 	return components;
 }
 

@@ -56,6 +56,13 @@ SELECT yaml_to_json(yaml(repeat('[', 20) || 'z' || repeat(']', 20)));
 ----
 nesting
 
+# The extraction/unnest path navigator recurses once per path component, so an
+# over-long attacker-supplied path is bounded too.
+statement error
+SELECT yaml_extract('a: 1', '$' || repeat('.a', 15));
+----
+nesting
+
 # restore the default and confirm the same input parses again
 statement ok
 SELECT yaml_set_max_nesting_depth(1000);
@@ -82,6 +89,41 @@ SELECT yaml_to_json(yaml('defs:
   - &a3 [*a2, *a2, *a2, *a2]
   - &a4 [*a3, *a3, *a3, *a3]
 root: *a4'));
+----
+budget
+
+# The same budget guards the other functions that walk the whole node tree
+# with their own recursion (yaml_structure / yaml_contains / yaml_merge_patch).
+statement error
+SELECT yaml_structure('defs:
+  - &a0 [z, z, z, z]
+  - &a1 [*a0, *a0, *a0, *a0]
+  - &a2 [*a1, *a1, *a1, *a1]
+  - &a3 [*a2, *a2, *a2, *a2]
+  - &a4 [*a3, *a3, *a3, *a3]
+root: *a4');
+----
+budget
+
+statement error
+SELECT yaml_contains('defs:
+  - &a0 [z, z, z, z]
+  - &a1 [*a0, *a0, *a0, *a0]
+  - &a2 [*a1, *a1, *a1, *a1]
+  - &a3 [*a2, *a2, *a2, *a2]
+  - &a4 [*a3, *a3, *a3, *a3]
+root: *a4', 'x: 1');
+----
+budget
+
+statement error
+SELECT yaml_merge_patch('defs:
+  - &a0 [z, z, z, z]
+  - &a1 [*a0, *a0, *a0, *a0]
+  - &a2 [*a1, *a1, *a1, *a1]
+  - &a3 [*a2, *a2, *a2, *a2]
+  - &a4 [*a3, *a3, *a3, *a3]
+root: *a4', 'x: 1');
 ----
 budget
 
