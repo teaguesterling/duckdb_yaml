@@ -35,12 +35,20 @@ jobs:
       ci_tools_version: v1.5-variegata
       extension_name: yaml
 
+  # Code-quality (clang-format) stays on the @main ci-tools target — the repo's
+  # original, established config. Both targets install the same clang-format-11,
+  # but they differ in scope: @main delegates to duckdb's git-diff-scoped
+  # format-check (validates only uncommitted changes), whereas v1.5-variegata
+  # runs `format.py --all`, which flags many PRE-EXISTING repo files (e.g.
+  # duckdb_compat.hpp and maintainer-written code that predate this PR). Adopting
+  # --all would require a repo-wide reformat that is out of scope for this DoS
+  # fix; keeping @main preserves the status quo rather than weakening anything.
   code-quality-check:
     name: Code Quality Check
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
       duckdb_version: v1.5.4
-      ci_tools_version: v1.5-variegata
+      ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
 
