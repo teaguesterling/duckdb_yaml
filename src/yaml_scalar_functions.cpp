@@ -370,8 +370,11 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 // legitimately large/deep documents or lower them (e.g. in tests).
 
 // Build a setter scalar function that stores a positive limit and returns it.
+// NOTE: `name` stays `const char *` deliberately: duckdb main's ScalarFunction takes a
+// duckdb::Identifier (implicit only from string literals / const char*), while v1.5-variegata
+// takes a std::string. A string literal converts implicitly to both; std::string does not.
 template <void (*SETTER)(idx_t), idx_t (*GETTER)()>
-static ScalarFunction MakeLimitSetter(const string &name) {
+static ScalarFunction MakeLimitSetter(const char *name) {
 	return ScalarFunction(name, {LogicalType::BIGINT}, LogicalType::BIGINT,
 	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
 		                      UnaryExecutor::Execute<int64_t, int64_t>(
@@ -386,8 +389,9 @@ static ScalarFunction MakeLimitSetter(const string &name) {
 }
 
 // Build a getter scalar function (no arguments) returning the current limit.
+// See MakeLimitSetter for why `name` is `const char *`.
 template <idx_t (*GETTER)()>
-static ScalarFunction MakeLimitGetter(const string &name) {
+static ScalarFunction MakeLimitGetter(const char *name) {
 	return ScalarFunction(name, {}, LogicalType::BIGINT,
 	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
 		                      result.SetVectorType(VectorType::CONSTANT_VECTOR);
