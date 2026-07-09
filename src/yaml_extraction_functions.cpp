@@ -1,6 +1,7 @@
 #include "yaml_extraction_functions.hpp"
 #include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
+#include "yaml_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -67,6 +68,14 @@ static vector<string> ParseYAMLPath(const string &path) {
 
 	if (!current_component.empty()) {
 		components.push_back(current_component);
+	}
+
+	// Bound path depth: ExtractFromYAML recurses once per component, so an
+	// attacker-supplied path with a huge number of components would otherwise
+	// drive unbounded recursion (GHSA-h5hw-g5m6-vmjj).
+	if (components.size() > yaml_utils::YAMLSettings::GetMaxNestingDepth()) {
+		throw InvalidInputException("YAML path nesting exceeds the maximum depth (%llu)",
+		                            (unsigned long long)yaml_utils::YAMLSettings::GetMaxNestingDepth());
 	}
 
 	return components;
@@ -454,7 +463,9 @@ static void YAMLStructureFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 
 		try {
+			yaml_utils::CheckInputSize(yaml_str.GetSize(), "yaml_structure");
 			YAML::Node root = YAML::Load(yaml_str.GetString());
+			yaml_utils::CheckExpansionBudget(root);
 			string structure = BuildYAMLStructure(root);
 			return StringVector::AddString(result, structure);
 		} catch (const std::exception &e) {
@@ -543,9 +554,15 @@ static void YAMLContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	BinaryExecutor::Execute<string_t, string_t, bool>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t haystack_str, string_t needle_str) -> bool {
 		    try {
+			    yaml_utils::CheckInputSize(haystack_str.GetSize(), "yaml_contains");
+			    yaml_utils::CheckInputSize(needle_str.GetSize(), "yaml_contains");
 			    YAML::Node haystack = YAML::Load(haystack_str.GetString());
 			    YAML::Node needle = YAML::Load(needle_str.GetString());
+			    // Bound expansion before the (unbounded) recursive containment walk.
+			    yaml_utils::CheckExpansionBudget(haystack);
 			    return YAMLNodeContains(haystack, needle);
+		    } catch (const InvalidInputException &) {
+			    throw;
 		    } catch (...) {
 			    return false;
 		    }
@@ -598,8 +615,14 @@ static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vect
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t target_str, string_t patch_str) -> string_t {
 		    try {
+			    yaml_utils::CheckInputSize(target_str.GetSize(), "yaml_merge_patch");
+			    yaml_utils::CheckInputSize(patch_str.GetSize(), "yaml_merge_patch");
 			    YAML::Node target = YAML::Load(target_str.GetString());
 			    YAML::Node patch = YAML::Load(patch_str.GetString());
+			    // YAMLMergePatch clones/merges the full trees; bound expansion first
+			    // so an alias/anchor bomb is rejected before YAML::Clone runs.
+			    yaml_utils::CheckExpansionBudget(target);
+			    yaml_utils::CheckExpansionBudget(patch);
 			    YAML::Node merged = YAMLMergePatch(target, patch);
 
 			    // Emit result as YAML

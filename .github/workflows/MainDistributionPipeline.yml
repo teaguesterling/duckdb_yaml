@@ -12,6 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Forward-compat canary: intentionally tracks duckdb `main`; expected to go
+  # red on upstream API drift and is NOT a merge blocker.
   duckdb-next-build:
     name: Build extension binaries
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
@@ -19,22 +21,42 @@ jobs:
       duckdb_version: main
       ci_tools_version: main
       extension_name: yaml
+      # Windows stays excluded: the v1.5.4 stable leg hangs in yaml_copy_to.test
+      # (Windows-only COPY TO deadlock, no local repro, ~60min/CI cycle). Windows
+      # was never shipped historically; re-excluding restores that status quo
+      # rather than hiding a regression (same source passes non-Windows).
       exclude_archs: 'windows_amd64;windows_amd64_mingw'
 
+  # Shippable build. The submodules are pinned at the v1.5-variegata branch tip
+  # (see .gitmodules), but the extension is BUILT against the v1.5.4 release tag
+  # so the produced binary is a proper release (loadable by released DuckDB),
+  # not a `-dev` build. This is the leg the community-extensions manylinux
+  # (linux_amd64 / linux_arm64 docker) binaries are cut from.
   duckdb-stable-build:
     name: Build extension binaries
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5.3
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
-      duckdb_version: v1.5.3
-      ci_tools_version: v1.5.3
+      duckdb_version: v1.5.4
+      ci_tools_version: v1.5-variegata
       extension_name: yaml
+      # See note on duckdb-next-build: yaml_copy_to.test hangs on the Windows
+      # stable leg (build compiles 556/556; the failure is a runtime COPY TO
+      # deadlock, not the historical /std:c++17 fmt C7525 compile error).
       exclude_archs: 'windows_amd64;windows_amd64_mingw'
 
+  # Code-quality (clang-format) stays on the @main ci-tools target — the repo's
+  # original, established config. Both targets install the same clang-format-11,
+  # but they differ in scope: @main delegates to duckdb's git-diff-scoped
+  # format-check (validates only uncommitted changes), whereas v1.5-variegata
+  # runs `format.py --all`, which flags many PRE-EXISTING repo files (e.g.
+  # duckdb_compat.hpp and maintainer-written code that predate this PR). Adopting
+  # --all would require a repo-wide reformat that is out of scope for this DoS
+  # fix; keeping @main preserves the status quo rather than weakening anything.
   code-quality-check:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
-      duckdb_version: v1.5.3
+      duckdb_version: v1.5.4
       ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
@@ -45,9 +67,9 @@ jobs:
   # Two layers (see test/wasm/):
   #   1. static symbol check (hard gate) — no duckdb-wasm runtime needed.
   #   2. live load+query in duckdb-wasm (informational / continue-on-error) —
-  #      expected-red until official duckdb-wasm ships v1.5.3 (the only public
-  #      v1.5.3 engine, haybarn, is built v1.5.4-dev with a newer emscripten,
-  #      so a v1.5.3 extension hits a duckdb/emscripten ABI skew on LOAD).
+  #      expected-red until an official duckdb-wasm ships a matching v1.5.4
+  #      build (a version/emscripten skew between the engine and the extension
+  #      surfaces as an ABI mismatch on LOAD).
   wasm-load-test:
     name: WASM load test
     needs: [duckdb-stable-build]
@@ -60,19 +82,19 @@ jobs:
       - name: Download WASM artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: yaml-v1.5.3-extension-wasm_*
+          pattern: yaml-v1.5.4-extension-wasm_*
           path: wasm-artifacts
       - name: Static symbol check (yaml-cpp must be linked, not unresolved)
         run: bash test/wasm/run_wasm_checks.sh wasm-artifacts
-      - name: Live load test in duckdb-wasm (informational until official v1.5.3)
+      - name: Live load test in duckdb-wasm (informational until engine matches)
         continue-on-error: true
         timeout-minutes: 10
         working-directory: test/wasm
         run: |
           set -uo pipefail
           timeout 300 npm install --no-save
-          mkdir -p repo/v1.5.3/wasm_eh
-          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.3-extension-wasm_eh/yaml.duckdb_extension.wasm" \
-             repo/v1.5.3/wasm_eh/
+          mkdir -p repo/v1.5.4/wasm_eh
+          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.4-extension-wasm_eh/yaml.duckdb_extension.wasm" \
+             repo/v1.5.4/wasm_eh/
           timeout 240 node load_test.cjs --repo repo --name yaml --platform eh \
             --query "SELECT yaml_valid('a: 1') AS ok" --expect '"ok":true'

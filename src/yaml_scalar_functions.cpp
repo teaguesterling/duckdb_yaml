@@ -70,6 +70,7 @@ static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (yaml_str.GetSize() == 0) {
 			return string_t();
 		}
+		yaml_utils::CheckInputSize(yaml_str.GetSize(), "yaml_to_json");
 
 		try {
 			// Parse as multi-document YAML
@@ -296,6 +297,7 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	    "yaml", {LogicalType::VARCHAR}, yaml_type, [](DataChunk &args, ExpressionState &state, Vector &result) {
 		    UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 			    string input_str = input.GetString();
+			    yaml_utils::CheckInputSize(input_str.size(), "yaml");
 			    // Validate that it's valid YAML by parsing it
 			    try {
 				    YAML::Load(input_str);
@@ -357,6 +359,59 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 	auto yaml_get_default_style_fun =
 	    ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
 	loader.RegisterFunction(yaml_get_default_style_fun);
+
+	RegisterLimitFunctions(loader);
+}
+
+//===--------------------------------------------------------------------===//
+// Resource-limit configuration functions (GHSA-h5hw-g5m6-vmjj)
+//===--------------------------------------------------------------------===//
+// Expose the DoS-hardening limits to SQL so operators can raise them for
+// legitimately large/deep documents or lower them (e.g. in tests).
+
+// Build a setter scalar function that stores a positive limit and returns it.
+// NOTE: `name` stays `const char *` deliberately: duckdb main's ScalarFunction takes a
+// duckdb::Identifier (implicit only from string literals / const char*), while v1.5-variegata
+// takes a std::string. A string literal converts implicitly to both; std::string does not.
+template <void (*SETTER)(idx_t), idx_t (*GETTER)()>
+static ScalarFunction MakeLimitSetter(const char *name) {
+	return ScalarFunction(name, {LogicalType::BIGINT}, LogicalType::BIGINT,
+	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
+		                      UnaryExecutor::Execute<int64_t, int64_t>(
+		                          args.data[0], result, args.size(), [&](int64_t value) -> int64_t {
+			                          if (value < 1) {
+				                          throw InvalidInputException("YAML limit must be a positive value");
+			                          }
+			                          SETTER(static_cast<idx_t>(value));
+			                          return static_cast<int64_t>(GETTER());
+		                          });
+	                      });
+}
+
+// Build a getter scalar function (no arguments) returning the current limit.
+// See MakeLimitSetter for why `name` is `const char *`.
+template <idx_t (*GETTER)()>
+static ScalarFunction MakeLimitGetter(const char *name) {
+	return ScalarFunction(name, {}, LogicalType::BIGINT,
+	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
+		                      result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		                      auto data = ConstantVector::GetData<int64_t>(result);
+		                      data[0] = static_cast<int64_t>(GETTER());
+	                      });
+}
+
+void YAMLFunctions::RegisterLimitFunctions(ExtensionLoader &loader) {
+	using yaml_utils::YAMLSettings;
+	loader.RegisterFunction(MakeLimitSetter<YAMLSettings::SetMaxExpansionNodes, YAMLSettings::GetMaxExpansionNodes>(
+	    "yaml_set_max_expansion_nodes"));
+	loader.RegisterFunction(
+	    MakeLimitGetter<YAMLSettings::GetMaxExpansionNodes>("yaml_get_max_expansion_nodes"));
+	loader.RegisterFunction(
+	    MakeLimitSetter<YAMLSettings::SetMaxNestingDepth, YAMLSettings::GetMaxNestingDepth>("yaml_set_max_nesting_depth"));
+	loader.RegisterFunction(MakeLimitGetter<YAMLSettings::GetMaxNestingDepth>("yaml_get_max_nesting_depth"));
+	loader.RegisterFunction(
+	    MakeLimitSetter<YAMLSettings::SetMaxInputSize, YAMLSettings::GetMaxInputSize>("yaml_set_max_input_size"));
+	loader.RegisterFunction(MakeLimitGetter<YAMLSettings::GetMaxInputSize>("yaml_get_max_input_size"));
 }
 
 //===--------------------------------------------------------------------===//
@@ -429,6 +484,7 @@ static void FromYAMLFunction(DataChunk &args, ExpressionState &state, Vector &re
 		try {
 			// Get YAML string and parse it
 			std::string yaml_str = yaml_value.ToString();
+			yaml_utils::CheckInputSize(yaml_str.size(), "from_yaml");
 			YAML::Node node = YAML::Load(yaml_str);
 
 			// Convert to the target type using existing conversion function
