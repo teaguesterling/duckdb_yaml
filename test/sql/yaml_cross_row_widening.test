@@ -1,0 +1,31 @@
+# name: test/sql/yaml_cross_row_widening.test
+# description: Cross-row numeric type widening in read_yaml (#42)
+# group: [sql]
+
+require yaml
+
+# A field whose integer width differs across records widens to a common numeric type
+# (TINYINT 5 + SMALLINT 5000 -> SMALLINT) instead of collapsing to the YAML type. This matches
+# the within-node sequence widening; previously the multi-row case fell back to yaml.
+query I
+SELECT typeof(count) FROM read_yaml('test/yaml/cross_row_widening.yaml') LIMIT 1;
+----
+SMALLINT
+
+# integer + double across records -> DOUBLE.
+query I
+SELECT typeof(ratio) FROM read_yaml('test/yaml/cross_row_widening.yaml') LIMIT 1;
+----
+DOUBLE
+
+# The widened column is a real number, usable in numeric ops (not a string).
+query I
+SELECT sum(count) FROM read_yaml('test/yaml/cross_row_widening.yaml');
+----
+5005
+
+# Genuinely incompatible types (number + string) still fall back to yaml to preserve data.
+query I
+SELECT typeof(mixed) FROM read_yaml('test/yaml/cross_row_widening.yaml') LIMIT 1;
+----
+yaml
