@@ -1,0 +1,33 @@
+# name: test/sql/yaml_to_json_key_escape.test
+# description: yaml_to_json escapes map keys, not just values (#42)
+# group: [sql]
+
+require yaml
+
+# json_valid lives in the json extension (yaml_to_json returns LogicalType::JSON()).
+require json
+
+# Baseline: a normal map is valid JSON.
+query I
+SELECT json_valid(yaml_to_json('{a: 1, b: 2}')::VARCHAR);
+----
+true
+
+# A map key containing a double-quote must be escaped -> still valid JSON.
+# Pre-fix the key was inserted raw, yielding {"a"b":1} (invalid).
+query I
+SELECT json_valid(yaml_to_json('{''a"b'': 1}')::VARCHAR);
+----
+true
+
+# A key containing a backslash -> valid JSON.
+query I
+SELECT json_valid(yaml_to_json('{''c\d'': 2}')::VARCHAR);
+----
+true
+
+# The escaped key round-trips: extracting by the real key name returns the value.
+query I
+SELECT yaml_to_json('{''a"b'': 42}')->>'a"b';
+----
+42
