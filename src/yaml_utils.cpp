@@ -290,6 +290,52 @@ static bool TryDetectDateOrTimestamp(const std::string &value, std::string &json
 	return false;
 }
 
+// JSON-escape a string per RFC 8259 and wrap it in quotes: the named short escapes plus
+// \u00XX for any control character (< 0x20). Used for BOTH string scalar values and map keys.
+// Keys were previously inserted raw, so a key containing " or \ (e.g. `a"b: 1`) produced
+// invalid JSON from a function declared to return LogicalType::JSON() (issue #42).
+static std::string EscapeJSONString(const std::string &value) {
+	std::string result = "\"";
+	for (char ch : value) {
+		switch (ch) {
+		case '\"':
+			result += "\\\"";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		case '\b':
+			result += "\\b";
+			break;
+		case '\f':
+			result += "\\f";
+			break;
+		case '\n':
+			result += "\\n";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		default: {
+			constexpr unsigned char MIN_PRINTABLE_CHAR = 32;
+			constexpr idx_t UNICODE_BUFFER_SIZE = 8;
+			if (static_cast<unsigned char>(ch) < MIN_PRINTABLE_CHAR) {
+				char buf[UNICODE_BUFFER_SIZE];
+				snprintf(buf, sizeof(buf), "\\u%04x", ch);
+				result += buf;
+			} else {
+				result += ch;
+			}
+		}
+		}
+	}
+	result += "\"";
+	return result;
+}
+
 static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudget &budget) {
 	if (!node) {
 		return "null";
@@ -368,46 +414,8 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 			return json_value;
 		}
 
-		// If all else fails, treat as string and escape JSON special characters
-		std::string result = "\"";
-		for (char ch : value) {
-			switch (ch) {
-			case '\"':
-				result += "\\\"";
-				break;
-			case '\\':
-				result += "\\\\";
-				break;
-			case '\b':
-				result += "\\b";
-				break;
-			case '\f':
-				result += "\\f";
-				break;
-			case '\n':
-				result += "\\n";
-				break;
-			case '\r':
-				result += "\\r";
-				break;
-			case '\t':
-				result += "\\t";
-				break;
-			default: {
-				constexpr unsigned char MIN_PRINTABLE_CHAR = 32;
-				constexpr idx_t UNICODE_BUFFER_SIZE = 8;
-				if (static_cast<unsigned char>(ch) < MIN_PRINTABLE_CHAR) {
-					char buf[UNICODE_BUFFER_SIZE];
-					snprintf(buf, sizeof(buf), "\\u%04x", ch);
-					result += buf;
-				} else {
-					result += ch;
-				}
-			}
-			}
-		}
-		result += "\"";
-		return result;
+		// If all else fails, treat as string and escape JSON special characters.
+		return EscapeJSONString(value);
 	}
 	case YAML::NodeType::Sequence: {
 		std::string result = "[";
@@ -429,9 +437,10 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 			}
 			first = false;
 
-			// Key must be a string in JSON
+			// Key must be a string in JSON — escape it (a key containing " or \ would otherwise
+			// produce invalid JSON; issue #42).
 			const auto key = it.first.Scalar();
-			result += "\"" + key + "\":" + YAMLNodeToJSONImpl(it.second, budget);
+			result += EscapeJSONString(key) + ":" + YAMLNodeToJSONImpl(it.second, budget);
 		}
 		result += "}";
 		return result;
