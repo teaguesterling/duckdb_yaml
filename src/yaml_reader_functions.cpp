@@ -47,7 +47,7 @@ static MultiDocumentMode ParseMultiDocumentMode(const Value &value) {
 // widening in yaml_reader_types.cpp so the multi-row read_yaml case is consistent with it.
 // Genuinely incompatible types (e.g. number vs string) still fall back to YAML to preserve data.
 // (issue #42: cross-row numeric type degradation)
-static LogicalType WidenConflictingScalarTypes(const LogicalType &a, const LogicalType &b) {
+LogicalType YAMLReader::WidenConflictingScalarTypes(const LogicalType &a, const LogicalType &b) {
 	if (a.IsNumeric() && b.IsNumeric()) {
 		if (a.id() == LogicalTypeId::DOUBLE || b.id() == LogicalTypeId::DOUBLE || a.id() == LogicalTypeId::FLOAT ||
 		    b.id() == LogicalTypeId::FLOAT) {

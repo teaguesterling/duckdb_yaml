@@ -250,8 +250,14 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 				merged_type = node_type;
 			}
 		} else if (merged_type.id() != node_type.id()) {
-			// Different types, fall back to VARCHAR
-			merged_type = LogicalType::VARCHAR;
+			// Different scalar types across nodes - widen compatible numerics (TINYINT + SMALLINT
+			// -> SMALLINT, INT + DOUBLE -> DOUBLE); keep the VARCHAR fallback for genuinely
+			// incompatible pairs (issue #42).
+			if (merged_type.IsNumeric() && node_type.IsNumeric()) {
+				merged_type = YAMLReader::WidenConflictingScalarTypes(merged_type, node_type);
+			} else {
+				merged_type = LogicalType::VARCHAR;
+			}
 		}
 	}
 
