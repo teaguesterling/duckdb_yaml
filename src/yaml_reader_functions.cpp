@@ -41,6 +41,33 @@ static MultiDocumentMode ParseMultiDocumentMode(const Value &value) {
 // For example, if document1 has {user: {profile: {name: "John"}}} and
 // document2 has {user: {profile: {name: "Jane", age: 42}}},
 // we need to make sure the final schema includes both name and age in the profile struct
+// When two records give a field different scalar types, widen to a common type instead of
+// dropping to the YAML/VARCHAR fallback. Numeric types promote along the ladder
+// (DOUBLE > HUGEINT > BIGINT > INTEGER > SMALLINT > TINYINT), matching the within-node sequence
+// widening in yaml_reader_types.cpp so the multi-row read_yaml case is consistent with it.
+// Genuinely incompatible types (e.g. number vs string) still fall back to YAML to preserve data.
+// (issue #42: cross-row numeric type degradation)
+LogicalType YAMLReader::WidenConflictingScalarTypes(const LogicalType &a, const LogicalType &b) {
+	if (a.IsNumeric() && b.IsNumeric()) {
+		if (a.id() == LogicalTypeId::DOUBLE || b.id() == LogicalTypeId::DOUBLE || a.id() == LogicalTypeId::FLOAT ||
+		    b.id() == LogicalTypeId::FLOAT) {
+			return LogicalType::DOUBLE;
+		}
+		if (a.id() == LogicalTypeId::HUGEINT || b.id() == LogicalTypeId::HUGEINT) {
+			return LogicalType::HUGEINT;
+		}
+		if (a.id() == LogicalTypeId::BIGINT || b.id() == LogicalTypeId::BIGINT) {
+			return LogicalType::BIGINT;
+		}
+		if (a.id() == LogicalTypeId::INTEGER || b.id() == LogicalTypeId::INTEGER) {
+			return LogicalType::INTEGER;
+		}
+		// Any remaining pair of differing small integer types (incl. mixed signedness) fits in SMALLINT.
+		return LogicalType::SMALLINT;
+	}
+	return YAMLTypes::YAMLType();
+}
+
 LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const LogicalType &type2) {
 	if (type1.id() != LogicalTypeId::STRUCT || type2.id() != LogicalTypeId::STRUCT) {
 		// Type conflict (e.g., STRUCT vs scalar) - fall back to YAML to preserve data
@@ -82,12 +109,15 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 					if (merged_child.id() == LogicalTypeId::STRUCT && child2_child.id() == LogicalTypeId::STRUCT) {
 						merged_children[i].second = LogicalType::LIST(MergeStructTypes(merged_child, child2_child));
 					} else if (merged_child.id() != child2_child.id()) {
-						// Different child types - fall back to YAML list
-						merged_children[i].second = LogicalType::LIST(YAMLTypes::YAMLType());
+						// Different list child scalar types - widen instead of collapsing to YAML (issue #42).
+						merged_children[i].second =
+						    LogicalType::LIST(WidenConflictingScalarTypes(merged_child, child2_child));
 					}
 				} else if (merged_children[i].second.id() != child2.second.id()) {
-					// Different types within struct fields - fall back to YAML to preserve data
-					merged_children[i].second = YAMLTypes::YAMLType();
+					// Different scalar types for a field across records - widen (e.g. TINYINT +
+					// SMALLINT -> SMALLINT) instead of collapsing to YAML (issue #42).
+					merged_children[i].second =
+					    WidenConflictingScalarTypes(merged_children[i].second, child2.second);
 				}
 				found = true;
 				break;
@@ -541,8 +571,10 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 					// Merge the two struct definitions recursively to preserve all fields
 					detected_types[key] = MergeStructTypes(detected_types[key], value_type);
 				} else if (detected_types[key].id() != value_type.id()) {
-					// Type conflict - fall back to YAML type to preserve data
-					detected_types[key] = YAMLTypes::YAMLType();
+					// Different scalar types for a column across records - widen compatible numerics
+					// (e.g. TINYINT + SMALLINT -> SMALLINT, INT + DOUBLE -> DOUBLE) instead of
+					// collapsing to YAML, matching within-node sequence widening (issue #42).
+					detected_types[key] = WidenConflictingScalarTypes(detected_types[key], value_type);
 				}
 			}
 		}

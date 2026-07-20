@@ -200,7 +200,12 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 					           value_type.id() == LogicalTypeId::STRUCT) {
 						merged_types[key] = YAMLReader::MergeStructTypes(existing->second, value_type);
 					} else if (existing->second.id() != value_type.id()) {
-						merged_types[key] = LogicalType::VARCHAR;
+						// Widen compatible numerics across frontmatter docs; VARCHAR otherwise (issue #42).
+						if (existing->second.IsNumeric() && value_type.IsNumeric()) {
+							merged_types[key] = YAMLReader::WidenConflictingScalarTypes(existing->second, value_type);
+						} else {
+							merged_types[key] = LogicalType::VARCHAR;
+						}
 					}
 				}
 			} catch (...) {

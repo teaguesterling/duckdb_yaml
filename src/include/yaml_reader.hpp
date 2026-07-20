@@ -317,6 +317,16 @@ public:
 	static LogicalType MergeStructTypes(const LogicalType &type1, const LogicalType &type2);
 
 	/**
+	 * @brief Widen two differing scalar field types to a common type (issue #42).
+	 *
+	 * Numeric types promote along DOUBLE > HUGEINT > BIGINT > INTEGER > SMALLINT so that e.g.
+	 * TINYINT + SMALLINT -> SMALLINT and INT + DOUBLE -> DOUBLE, matching the within-node
+	 * sequence widening. Genuinely incompatible pairs (number vs string) return the YAML type.
+	 * Callers that want a VARCHAR fallback instead should guard on IsNumeric() before calling.
+	 */
+	static LogicalType WidenConflictingScalarTypes(const LogicalType &type1, const LogicalType &type2);
+
+	/**
 	 * @brief Bind the columns parameter for explicit type specification
 	 *
 	 * @param context Client context
