@@ -21,11 +21,10 @@ jobs:
       duckdb_version: main
       ci_tools_version: main
       extension_name: yaml
-      # Windows stays excluded: the v1.5.4 stable leg hangs in yaml_copy_to.test
-      # (Windows-only COPY TO deadlock, no local repro, ~60min/CI cycle). Windows
-      # was never shipped historically; re-excluding restores that status quo
-      # rather than hiding a regression (same source passes non-Windows).
-      exclude_archs: 'windows_amd64;windows_amd64_mingw'
+      # windows_amd64 (MSVC) validated against duckdb main + shipped for v1.5.4; enabled
+      # here for canary coverage too. windows_amd64_mingw stays excluded on this leg only
+      # (validated on the v1.5.4 stable leg, not yet against duckdb main).
+      exclude_archs: 'windows_amd64_mingw'
 
   # Shippable build. The submodules are pinned at the v1.5-variegata branch tip
   # (see .gitmodules), but the extension is BUILT against the v1.5.4 release tag
@@ -39,10 +38,12 @@ jobs:
       duckdb_version: v1.5.4
       ci_tools_version: v1.5-variegata
       extension_name: yaml
-      # See note on duckdb-next-build: yaml_copy_to.test hangs on the Windows
-      # stable leg (build compiles 556/556; the failure is a runtime COPY TO
-      # deadlock, not the historical /std:c++17 fmt C7525 compile error).
-      exclude_archs: 'windows_amd64;windows_amd64_mingw'
+      # Windows fully enabled: both windows_amd64 (MSVC) and windows_amd64_mingw build
+      # and pass the full suite on this v1.5.4 leg (real ~24-min / ~31-min CI runs incl.
+      # yaml_copy_to.test — the earlier "COPY TO deadlock" did not reproduce and is treated
+      # as an intermittent flake; the historical /std:c++17 fmt C7525 compile error is stale
+      # too). windows_amd64 ships in the community build (v1.7.0); mingw is validated here.
+      exclude_archs: ''
 
   # Code-quality (clang-format) stays on the @main ci-tools target — the repo's
   # original, established config. Both targets install the same clang-format-11,
