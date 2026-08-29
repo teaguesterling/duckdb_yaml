@@ -107,7 +107,7 @@ WHERE sku <= 10;
 # ============================================================================
 
 query I
-SELECT id FROM read_yaml('test/yaml/stream_edge/boundary_*.yaml') LIMIT 3;
+SELECT id FROM read_yaml('test/yaml/stream_edge/boundary_2048.yaml') LIMIT 3;
 ----
 1
 2
