@@ -203,6 +203,9 @@ void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStr
 }
 
 std::string EmitYAML(const YAML::Node &node, YAMLFormat format, YAMLStringStyle string_style, idx_t indent) {
+	if (node.IsNull()) {
+		return "~";
+	}
 	YAML::Emitter out;
 	ConfigureEmitter(out, format, indent);
 	auto resolved = ResolveStringStyle(string_style, format);

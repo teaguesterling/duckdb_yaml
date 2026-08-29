@@ -215,9 +215,13 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 			    auto path_components = ParseYAMLPath(path_str.GetString());
 			    auto node = ExtractFromYAML(root, path_components);
 
-			    if (!node) {
+			    if (!node.IsDefined()) {
 				    mask.SetInvalid(idx); // Nonexistent path → SQL NULL
 				    return string_t();
+			    }
+
+			    if (node.IsNull()) {
+				    return StringVector::AddString(result, "~", 1);
 			    }
 
 			    YAML::Emitter out;

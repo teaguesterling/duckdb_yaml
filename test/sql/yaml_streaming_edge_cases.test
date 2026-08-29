@@ -1,0 +1,114 @@
+# name: test/sql/yaml_streaming_edge_cases.test
+# description: Edge cases for streaming YAML parser including empty files, chunk boundaries, size limits, and corrupt files
+# group: [yaml_reader]
+
+require yaml
+
+# ============================================================================
+# Test 1: Empty and comment-only files mixed in a multi-file glob
+# ============================================================================
+
+query II
+SELECT id, name FROM read_yaml('test/yaml/stream_mixed/*.yaml') ORDER BY id;
+----
+1	first
+2	second
+3	third
+4	fourth
+
+# ============================================================================
+# Test 2: Multi-chunk vector boundaries across variable-length files
+# (2048 rows + 1 row + 2049 rows + 0 rows + 4096 rows = 8194 rows total)
+# ============================================================================
+
+query IIII
+SELECT count(*), min(id), max(id), sum(id)::BIGINT
+FROM read_yaml('test/yaml/stream_edge/boundary_*.yaml');
+----
+8194	1	8194	33574915
+
+# Verify exact row selection from the 2nd vector chunk
+query II
+SELECT id, val FROM read_yaml('test/yaml/stream_edge/boundary_*.yaml') WHERE id = 2049;
+----
+2049	val_2049
+
+# Verify exact row selection from the 4th vector chunk
+query II
+SELECT id, val FROM read_yaml('test/yaml/stream_edge/boundary_*.yaml') WHERE id = 4098;
+----
+4098	val_4098
+
+# ============================================================================
+# Test 3: maximum_object_size thresholding at streaming time
+# ============================================================================
+
+# With ignore_errors=true, the oversized file is skipped and small files are read
+query I
+SELECT count(*) FROM read_yaml('test/yaml/stream_size/*.yaml', maximum_object_size=500, ignore_errors=true);
+----
+2
+
+# With ignore_errors=false, reading an oversized file raises an error
+statement error
+SELECT count(*) FROM read_yaml('test/yaml/stream_size/*.yaml', maximum_object_size=500, ignore_errors=false);
+----
+exceeds maximum allowed size
+
+# ============================================================================
+# Test 4: Corrupted file handling in multi-file streams
+# ============================================================================
+
+# With ignore_errors=true, corrupt file is skipped and valid files are scanned
+query II
+SELECT id, status FROM read_yaml('test/yaml/stream_corrupt/*.yaml', ignore_errors=true) ORDER BY id;
+----
+10	ok
+20	ok
+30	ok
+40	ok
+
+# With ignore_errors=false, corrupt file raises an error
+statement error
+SELECT * FROM read_yaml('test/yaml/stream_corrupt/*.yaml', ignore_errors=false);
+----
+Error
+
+# ============================================================================
+# Test 5: Sampling options do NOT truncate stream scan
+# ============================================================================
+
+# Sample size 5 and 1 sample file only affects schema inference; all 3000 rows are emitted
+query I
+SELECT count(*) FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml', sample_size=5, maximum_sample_files=1);
+----
+3000
+
+# ============================================================================
+# Test 6: Deeply nested records path across multi-chunk stream (>2048 rows)
+# ============================================================================
+
+query III
+SELECT count(*), min(sku), max(sku)
+FROM read_yaml('test/yaml/stream_nested_records.yaml', records='store.departments.items');
+----
+3000	1	3000
+
+# Aggregation over streamed records path
+query I
+SELECT round(sum(price), 2)
+FROM read_yaml('test/yaml/stream_nested_records.yaml', records='store.departments.items')
+WHERE sku <= 10;
+----
+82.5
+
+# ============================================================================
+# Test 7: Early termination with LIMIT
+# ============================================================================
+
+query I
+SELECT id FROM read_yaml('test/yaml/stream_edge/boundary_*.yaml') LIMIT 3;
+----
+1
+2
+3

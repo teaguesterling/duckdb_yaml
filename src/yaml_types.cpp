@@ -114,6 +114,9 @@ static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		try {
 			// Parse as multi-document YAML
 			const auto docs = yaml_utils::ParseYAML(yaml_str.GetString(), true);
+			if (docs.empty()) {
+				return yaml_str;
+			}
 
 			// Format using inline (flow) style for display purposes
 			std::string formatted_yaml = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::FLOW);

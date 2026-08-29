@@ -1,0 +1,105 @@
+# name: test/sql/yaml_streaming_concurrency.test
+# description: Concurrency, multi-threading, and re-scan tests for streaming YAML table functions
+# group: [yaml_reader]
+
+require yaml
+
+# Set up multi-threading with 4 worker threads
+statement ok
+PRAGMA threads=4;
+
+# Test 1: Parallel scan of 12 files (3000 rows total)
+query I
+SELECT count(*) FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml');
+----
+3000
+
+# Test 2: Parallel aggregations
+query III
+SELECT min(id), max(id), sum(id)::BIGINT FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml');
+----
+1	3000	4501500
+
+# Test 3: Aggregations grouped by file_num
+query I
+SELECT count(DISTINCT file_num) FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml');
+----
+12
+
+# Test 4: Batch order and row extraction under parallel execution
+query I
+SELECT id FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml') ORDER BY id LIMIT 5;
+----
+1
+2
+3
+4
+5
+
+# Test 5: Self join under parallelism (verifies bind_data is not mutated during scan)
+query I
+SELECT count(*) FROM
+  read_yaml('test/yaml/stream_concurrency/file_*.yaml') a
+  JOIN read_yaml('test/yaml/stream_concurrency/file_*.yaml') b
+  ON a.id = b.id;
+----
+3000
+
+# Test 6: Repeated scan inside CTE
+query I
+WITH data AS (
+  SELECT * FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml')
+)
+SELECT (SELECT count(*) FROM data) + (SELECT count(*) FROM data);
+----
+6000
+
+# Test 7: UNION ALL across parallel table functions
+query I
+SELECT count(*) FROM (
+  SELECT * FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml')
+  UNION ALL
+  SELECT * FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml')
+);
+----
+6000
+
+# Test 8: Correlated subquery re-scanning
+query II
+SELECT a.id, (SELECT count(*) FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml') b WHERE b.id <= a.id)
+FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml') a
+WHERE a.id <= 5
+ORDER BY a.id;
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+# Test 9: Scaling up to 8 threads
+statement ok
+PRAGMA threads=8;
+
+query III
+SELECT count(*), min(id), max(id) FROM read_yaml('test/yaml/stream_concurrency/file_*.yaml');
+----
+3000	1	3000
+
+# Test 10: read_yaml_objects parallel scan across files
+query I
+SELECT count(*) FROM read_yaml_objects('test/yaml/stream_concurrency/file_*.yaml');
+----
+12
+
+# Test 11: read_yaml_objects self join under multi-threading
+query I
+SELECT count(*) FROM
+  read_yaml_objects('test/yaml/stream_concurrency/file_*.yaml') a,
+  read_yaml_objects('test/yaml/stream_concurrency/file_*.yaml') b;
+----
+144
+
+# Reset threads to 1
+statement ok
+PRAGMA threads=1;

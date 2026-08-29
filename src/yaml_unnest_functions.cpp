@@ -366,13 +366,17 @@ static unique_ptr<FunctionData> YAMLEachBind(ClientContext &context, TableFuncti
 			for (auto it = node.begin(); it != node.end(); ++it) {
 				string key = it->first.Scalar();
 
-				YAML::Emitter out;
-				out.SetIndent(2);
-				out.SetMapFormat(YAML::Flow);
-				out.SetSeqFormat(YAML::Flow);
-				out << it->second;
+				if (it->second.IsNull()) {
+					result->entries.push_back({key, "~"});
+				} else {
+					YAML::Emitter out;
+					out.SetIndent(2);
+					out.SetMapFormat(YAML::Flow);
+					out.SetSeqFormat(YAML::Flow);
+					out << it->second;
 
-				result->entries.push_back({key, out.c_str()});
+					result->entries.push_back({key, out.c_str()});
+				}
 			}
 		} catch (const YAML::Exception &e) {
 			throw BinderException("Error parsing YAML: %s", e.what());

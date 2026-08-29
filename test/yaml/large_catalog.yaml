@@ -1,0 +1,169 @@
+info:
+  created: "2024-01-15T10:30:00Z"
+  version: "2.1.0"
+  total_products: 1000
+
+categories:
+  - id: electronics
+    priority: 1
+    name: Electronics
+    description: Electronic devices and gadgets
+  - id: books
+    priority: 2
+    name: Books
+    description: Physical and digital books
+  - id: clothing
+    priority: 3
+    name: Clothing
+    description: Apparel and accessories
+
+products:
+  - id: PROD_001
+    category: electronics
+    featured: true
+    stock: 50
+    name: Wireless Headphones Pro
+    description: "High-quality wireless headphones with noise cancellation and 30-hour battery life."
+    price: 299.99
+    currency: USD
+    dimensions:
+      width: 15.2
+      height: 8.5
+      depth: 18.7
+      weight: 290
+    specifications:
+      battery_life: 30
+      frequency_response: "20Hz-40kHz"
+      impedance: 32
+      wireless_range: 10
+    reviews:
+      - id: REV_001
+        rating: 5
+        reviewer: Sarah M.
+        date: "2024-01-10"
+        title: "Excellent sound quality!"
+        content: "These headphones exceeded my expectations. The noise cancellation is superb."
+      - id: REV_002
+        rating: 4
+        reviewer: John D.
+        date: "2024-01-08"
+        title: "Great value for money"
+        content: "Good quality headphones at a reasonable price point."
+    tags:
+      - wireless
+      - noise-cancelling
+      - premium
+      - electronics
+    availability:
+      in_stock: true
+      stock_count: 50
+      restock_date: "2024-02-01"
+      warehouses:
+        - id: WH_001
+          location: "New York"
+          stock: 25
+        - id: WH_002
+          location: "California"
+          stock: 15
+        - id: WH_003
+          location: "Texas"
+          stock: 10
+  - id: PROD_002
+    category: books
+    featured: false
+    stock: 200
+    name: Advanced Database Systems
+    description: Comprehensive guide to modern database technologies and architectures.
+    price: 89.99
+    currency: USD
+    dimensions:
+      width: 21.0
+      height: 27.5
+      depth: 3.2
+      weight: 1200
+    specifications:
+      pages: 856
+      publisher: Tech Publications
+      edition: 3rd
+      isbn: "978-1234567890"
+      language: English
+    authors:
+      - name: Dr. Jane Smith
+        primary: true
+        affiliation: MIT
+        bio: Professor of Computer Science specializing in database systems
+      - name: Dr. Bob Johnson
+        primary: false
+        affiliation: Stanford
+        bio: Research scientist in distributed systems
+    topics:
+      - topic: SQL
+        weight: 0.3
+      - topic: NoSQL
+        weight: 0.2
+      - topic: Distributed Systems
+        weight: 0.15
+      - topic: Performance Optimization
+        weight: 0.15
+      - topic: Security
+        weight: 0.1
+      - topic: Cloud Databases
+        weight: 0.1
+  - id: PROD_003
+    category: clothing
+    featured: true
+    stock: 75
+    name: Professional Business Jacket
+    description: Premium wool blend business jacket with modern fit.
+    price: 459.99
+    currency: USD
+    dimensions:
+      chest: 102
+      shoulder: 45
+      sleeve: 64
+      length: 74
+    specifications:
+      material: "65% Wool, 30% Polyester, 5% Elastane"
+      care_instructions: Dry clean only
+      country_of_origin: Italy
+      season: All Season
+    sizes:
+      - code: S
+        chest: "96-100"
+        stock: 10
+        name: Small
+      - code: M
+        chest: "100-104"
+        stock: 20
+        name: Medium
+      - code: L
+        chest: "104-108"
+        stock: 25
+        name: Large
+      - code: XL
+        chest: "108-112"
+        stock: 15
+        name: Extra Large
+      - code: XXL
+        chest: "112-116"
+        stock: 5
+        name: Double Extra Large
+    colors:
+      - code: BLK
+        hex: "#000000"
+        stock: 30
+        name: Black
+      - code: NVY
+        hex: "#1B2951"
+        stock: 25
+        name: Navy
+      - code: GRY
+        hex: "#6C757D"
+        stock: 20
+        name: Charcoal Grey
+
+summary:
+  total_items: 3
+  categories_covered: 3
+  average_price: 283.32
+  last_updated: "2024-01-15T14:45:30Z"

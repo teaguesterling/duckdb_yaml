@@ -8,12 +8,14 @@
 
 #pragma once
 
+#include <mutex>
 #include <vector>
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -125,6 +127,25 @@ private:
 	                                                 vector<LogicalType> &return_types, vector<string> &names);
 
 	/**
+	 * @brief Global init function for read_yaml
+	 */
+	static unique_ptr<GlobalTableFunctionState> YAMLReadRowsInit(ClientContext &context,
+	                                                             TableFunctionInitInput &input);
+
+	/**
+	 * @brief Local init function for read_yaml
+	 */
+	static unique_ptr<LocalTableFunctionState> YAMLReadRowsInitLocal(ExecutionContext &context,
+	                                                                 TableFunctionInitInput &input,
+	                                                                 GlobalTableFunctionState *global_state);
+
+	/**
+	 * @brief Batch index partition data function for parallel order preservation
+	 */
+	static OperatorPartitionData YAMLReadGetPartitionData(ClientContext &context,
+	                                                      TableFunctionGetPartitionInput &input);
+
+	/**
 	 * @brief Execution function for read_yaml
 	 *
 	 * @param context Client context
@@ -145,6 +166,19 @@ private:
 	 */
 	static unique_ptr<FunctionData> YAMLReadObjectsBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                    vector<LogicalType> &return_types, vector<string> &names);
+
+	/**
+	 * @brief Global init function for read_yaml_objects
+	 */
+	static unique_ptr<GlobalTableFunctionState> YAMLReadObjectsInit(ClientContext &context,
+	                                                                TableFunctionInitInput &input);
+
+	/**
+	 * @brief Local init function for read_yaml_objects
+	 */
+	static unique_ptr<LocalTableFunctionState> YAMLReadObjectsInitLocal(ExecutionContext &context,
+	                                                                    TableFunctionInitInput &input,
+	                                                                    GlobalTableFunctionState *global_state);
 
 	/**
 	 * @brief Execution function for read_yaml_objects
@@ -375,6 +409,66 @@ public:
 	 * @param output Output chunk to write results to
 	 */
 	static void ParseYAMLFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output);
+};
+
+// Shared, read-only-after-init state plus a mutex-guarded file dispatcher. All per-file
+// cursor state lives in YAMLReadLocalState (below), so each worker thread can process a
+// different file concurrently.
+struct YAMLReadGlobalState : public GlobalTableFunctionState {
+	vector<string> files;
+
+	idx_t MaxThreads() const override {
+		// One worker per file; single-file read stays single-threaded. DuckDB caps this to available threads.
+		return files.empty() ? 1 : files.size();
+	}
+
+	// Hand the next file index to a worker, or INVALID_INDEX once the work list is exhausted.
+	idx_t ClaimNextFile() {
+		std::lock_guard<std::mutex> guard(file_lock);
+		if (next_file_index >= files.size()) {
+			return DConstants::INVALID_INDEX;
+		}
+		return next_file_index++;
+	}
+
+private:
+	std::mutex file_lock;
+	idx_t next_file_index = 0;
+};
+
+// Per-worker cursor over one file at a time. A worker claims a file from the global
+// dispatcher, emits at most ONE file's rows per output chunk (partial chunks at file
+// boundaries are expected), and tags each chunk with a batch index so DuckDB's
+// order-preserving reassembly restores glob/file order under parallel execution.
+struct YAMLReadLocalState : public LocalTableFunctionState {
+	// Batch index layout: high bits = file index (glob order), low bits = chunk-within-file.
+	static constexpr idx_t FILE_SHIFT = 32;
+
+	idx_t file_index = DConstants::INVALID_INDEX; // file this worker is processing / last processed
+	string current_filename;                      // name of that file
+	idx_t chunk_counter = 0;                      // within-file index for the NEXT produced chunk
+	idx_t last_batch_index = 0;                   // batch index of the most recent chunk
+	bool have_file = false;                       // a file is claimed and being processed
+	bool file_loaded = false;                     // per-file resources are initialized
+
+	// Per-file extracted row nodes / documents (loaded lazily per file)
+	vector<YAML::Node> file_nodes;
+	idx_t current_row_index = 0;
+
+	// FRONTMATTER mode per-file values
+	vector<Value> frontmatter_values;
+
+	// LIST mode per-file flag
+	bool list_mode_done = false;
+
+	// Release all per-file resources (when a file is finished or skipped).
+	void ResetFileResources() {
+		file_nodes.clear();
+		current_row_index = 0;
+		frontmatter_values.clear();
+		list_mode_done = false;
+		file_loaded = false;
+	}
 };
 
 } // namespace duckdb

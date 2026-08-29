@@ -1,0 +1,75 @@
+# name: test/sql/yaml_large_files.test
+# description: Test YAML extension with large files for performance and memory handling
+# group: [yaml_reader]
+
+require yaml
+
+require json
+
+# Test loading large catalog file with read_yaml_objects
+statement ok
+CREATE TABLE large_catalog AS SELECT * FROM read_yaml_objects('test/yaml/large_catalog.yaml');
+
+# Test extracting metadata from large catalog
+query III
+SELECT
+    yaml.info.version,
+    yaml.info.total_products,
+    yaml.info.created
+FROM large_catalog;
+----
+2.1.0	1000	2024-01-15 10:30:00
+
+# Test extracting product names
+query I
+SELECT length(yaml.products[1].name) > 0 FROM large_catalog;
+----
+true
+
+# Test categories extraction
+query I
+SELECT len(yaml.categories) FROM large_catalog;
+----
+3
+
+# Test extracting nested review data
+query I
+SELECT len(yaml.products[1].reviews[1].title) > 0 FROM large_catalog;
+----
+true
+
+# Test extracting warehouse locations
+query I
+SELECT yaml.products[1].availability.warehouses[1].location FROM large_catalog;
+----
+New York
+
+# Test to_json conversion on large document
+query I
+SELECT length(to_json(yaml)) > 500 FROM large_catalog;
+----
+true
+
+# Test unnesting products from large catalog
+query I
+SELECT count(*) FROM (
+  SELECT unnest(yaml.products) as product FROM large_catalog
+);
+----
+3
+
+# Test aggregations over unnested products
+query II
+SELECT product.category, product.price FROM (
+  SELECT unnest(yaml.products) as product FROM large_catalog
+) ORDER BY product.price DESC LIMIT 1;
+----
+clothing	459.99
+
+# Test self join on large object scan
+query I
+SELECT COUNT(*) FROM
+  read_yaml_objects('test/yaml/large_catalog.yaml') a,
+  read_yaml_objects('test/yaml/large_catalog.yaml') b;
+----
+1

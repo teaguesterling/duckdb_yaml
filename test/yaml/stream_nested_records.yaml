@@ -1,0 +1,6005 @@
+store:
+  metadata:
+    version: 1
+  departments:
+    items:
+      - sku: 1
+        price: 1.50
+      - sku: 2
+        price: 3.00
+      - sku: 3
+        price: 4.50
+      - sku: 4
+        price: 6.00
+      - sku: 5
+        price: 7.50
+      - sku: 6
+        price: 9.00
+      - sku: 7
+        price: 10.50
+      - sku: 8
+        price: 12.00
+      - sku: 9
+        price: 13.50
+      - sku: 10
+        price: 15.00
+      - sku: 11
+        price: 16.50
+      - sku: 12
+        price: 18.00
+      - sku: 13
+        price: 19.50
+      - sku: 14
+        price: 21.00
+      - sku: 15
+        price: 22.50
+      - sku: 16
+        price: 24.00
+      - sku: 17
+        price: 25.50
+      - sku: 18
+        price: 27.00
+      - sku: 19
+        price: 28.50
+      - sku: 20
+        price: 30.00
+      - sku: 21
+        price: 31.50
+      - sku: 22
+        price: 33.00
+      - sku: 23
+        price: 34.50
+      - sku: 24
+        price: 36.00
+      - sku: 25
+        price: 37.50
+      - sku: 26
+        price: 39.00
+      - sku: 27
+        price: 40.50
+      - sku: 28
+        price: 42.00
+      - sku: 29
+        price: 43.50
+      - sku: 30
+        price: 45.00
+      - sku: 31
+        price: 46.50
+      - sku: 32
+        price: 48.00
+      - sku: 33
+        price: 49.50
+      - sku: 34
+        price: 51.00
+      - sku: 35
+        price: 52.50
+      - sku: 36
+        price: 54.00
+      - sku: 37
+        price: 55.50
+      - sku: 38
+        price: 57.00
+      - sku: 39
+        price: 58.50
+      - sku: 40
+        price: 60.00
+      - sku: 41
+        price: 61.50
+      - sku: 42
+        price: 63.00
+      - sku: 43
+        price: 64.50
+      - sku: 44
+        price: 66.00
+      - sku: 45
+        price: 67.50
+      - sku: 46
+        price: 69.00
+      - sku: 47
+        price: 70.50
+      - sku: 48
+        price: 72.00
+      - sku: 49
+        price: 73.50
+      - sku: 50
+        price: 75.00
+      - sku: 51
+        price: 76.50
+      - sku: 52
+        price: 78.00
+      - sku: 53
+        price: 79.50
+      - sku: 54
+        price: 81.00
+      - sku: 55
+        price: 82.50
+      - sku: 56
+        price: 84.00
+      - sku: 57
+        price: 85.50
+      - sku: 58
+        price: 87.00
+      - sku: 59
+        price: 88.50
+      - sku: 60
+        price: 90.00
+      - sku: 61
+        price: 91.50
+      - sku: 62
+        price: 93.00
+      - sku: 63
+        price: 94.50
+      - sku: 64
+        price: 96.00
+      - sku: 65
+        price: 97.50
+      - sku: 66
+        price: 99.00
+      - sku: 67
+        price: 100.50
+      - sku: 68
+        price: 102.00
+      - sku: 69
+        price: 103.50
+      - sku: 70
+        price: 105.00
+      - sku: 71
+        price: 106.50
+      - sku: 72
+        price: 108.00
+      - sku: 73
+        price: 109.50
+      - sku: 74
+        price: 111.00
+      - sku: 75
+        price: 112.50
+      - sku: 76
+        price: 114.00
+      - sku: 77
+        price: 115.50
+      - sku: 78
+        price: 117.00
+      - sku: 79
+        price: 118.50
+      - sku: 80
+        price: 120.00
+      - sku: 81
+        price: 121.50
+      - sku: 82
+        price: 123.00
+      - sku: 83
+        price: 124.50
+      - sku: 84
+        price: 126.00
+      - sku: 85
+        price: 127.50
+      - sku: 86
+        price: 129.00
+      - sku: 87
+        price: 130.50
+      - sku: 88
+        price: 132.00
+      - sku: 89
+        price: 133.50
+      - sku: 90
+        price: 135.00
+      - sku: 91
+        price: 136.50
+      - sku: 92
+        price: 138.00
+      - sku: 93
+        price: 139.50
+      - sku: 94
+        price: 141.00
+      - sku: 95
+        price: 142.50
+      - sku: 96
+        price: 144.00
+      - sku: 97
+        price: 145.50
+      - sku: 98
+        price: 147.00
+      - sku: 99
+        price: 148.50
+      - sku: 100
+        price: 150.00
+      - sku: 101
+        price: 151.50
+      - sku: 102
+        price: 153.00
+      - sku: 103
+        price: 154.50
+      - sku: 104
+        price: 156.00
+      - sku: 105
+        price: 157.50
+      - sku: 106
+        price: 159.00
+      - sku: 107
+        price: 160.50
+      - sku: 108
+        price: 162.00
+      - sku: 109
+        price: 163.50
+      - sku: 110
+        price: 165.00
+      - sku: 111
+        price: 166.50
+      - sku: 112
+        price: 168.00
+      - sku: 113
+        price: 169.50
+      - sku: 114
+        price: 171.00
+      - sku: 115
+        price: 172.50
+      - sku: 116
+        price: 174.00
+      - sku: 117
+        price: 175.50
+      - sku: 118
+        price: 177.00
+      - sku: 119
+        price: 178.50
+      - sku: 120
+        price: 180.00
+      - sku: 121
+        price: 181.50
+      - sku: 122
+        price: 183.00
+      - sku: 123
+        price: 184.50
+      - sku: 124
+        price: 186.00
+      - sku: 125
+        price: 187.50
+      - sku: 126
+        price: 189.00
+      - sku: 127
+        price: 190.50
+      - sku: 128
+        price: 192.00
+      - sku: 129
+        price: 193.50
+      - sku: 130
+        price: 195.00
+      - sku: 131
+        price: 196.50
+      - sku: 132
+        price: 198.00
+      - sku: 133
+        price: 199.50
+      - sku: 134
+        price: 201.00
+      - sku: 135
+        price: 202.50
+      - sku: 136
+        price: 204.00
+      - sku: 137
+        price: 205.50
+      - sku: 138
+        price: 207.00
+      - sku: 139
+        price: 208.50
+      - sku: 140
+        price: 210.00
+      - sku: 141
+        price: 211.50
+      - sku: 142
+        price: 213.00
+      - sku: 143
+        price: 214.50
+      - sku: 144
+        price: 216.00
+      - sku: 145
+        price: 217.50
+      - sku: 146
+        price: 219.00
+      - sku: 147
+        price: 220.50
+      - sku: 148
+        price: 222.00
+      - sku: 149
+        price: 223.50
+      - sku: 150
+        price: 225.00
+      - sku: 151
+        price: 226.50
+      - sku: 152
+        price: 228.00
+      - sku: 153
+        price: 229.50
+      - sku: 154
+        price: 231.00
+      - sku: 155
+        price: 232.50
+      - sku: 156
+        price: 234.00
+      - sku: 157
+        price: 235.50
+      - sku: 158
+        price: 237.00
+      - sku: 159
+        price: 238.50
+      - sku: 160
+        price: 240.00
+      - sku: 161
+        price: 241.50
+      - sku: 162
+        price: 243.00
+      - sku: 163
+        price: 244.50
+      - sku: 164
+        price: 246.00
+      - sku: 165
+        price: 247.50
+      - sku: 166
+        price: 249.00
+      - sku: 167
+        price: 250.50
+      - sku: 168
+        price: 252.00
+      - sku: 169
+        price: 253.50
+      - sku: 170
+        price: 255.00
+      - sku: 171
+        price: 256.50
+      - sku: 172
+        price: 258.00
+      - sku: 173
+        price: 259.50
+      - sku: 174
+        price: 261.00
+      - sku: 175
+        price: 262.50
+      - sku: 176
+        price: 264.00
+      - sku: 177
+        price: 265.50
+      - sku: 178
+        price: 267.00
+      - sku: 179
+        price: 268.50
+      - sku: 180
+        price: 270.00
+      - sku: 181
+        price: 271.50
+      - sku: 182
+        price: 273.00
+      - sku: 183
+        price: 274.50
+      - sku: 184
+        price: 276.00
+      - sku: 185
+        price: 277.50
+      - sku: 186
+        price: 279.00
+      - sku: 187
+        price: 280.50
+      - sku: 188
+        price: 282.00
+      - sku: 189
+        price: 283.50
+      - sku: 190
+        price: 285.00
+      - sku: 191
+        price: 286.50
+      - sku: 192
+        price: 288.00
+      - sku: 193
+        price: 289.50
+      - sku: 194
+        price: 291.00
+      - sku: 195
+        price: 292.50
+      - sku: 196
+        price: 294.00
+      - sku: 197
+        price: 295.50
+      - sku: 198
+        price: 297.00
+      - sku: 199
+        price: 298.50
+      - sku: 200
+        price: 300.00
+      - sku: 201
+        price: 301.50
+      - sku: 202
+        price: 303.00
+      - sku: 203
+        price: 304.50
+      - sku: 204
+        price: 306.00
+      - sku: 205
+        price: 307.50
+      - sku: 206
+        price: 309.00
+      - sku: 207
+        price: 310.50
+      - sku: 208
+        price: 312.00
+      - sku: 209
+        price: 313.50
+      - sku: 210
+        price: 315.00
+      - sku: 211
+        price: 316.50
+      - sku: 212
+        price: 318.00
+      - sku: 213
+        price: 319.50
+      - sku: 214
+        price: 321.00
+      - sku: 215
+        price: 322.50
+      - sku: 216
+        price: 324.00
+      - sku: 217
+        price: 325.50
+      - sku: 218
+        price: 327.00
+      - sku: 219
+        price: 328.50
+      - sku: 220
+        price: 330.00
+      - sku: 221
+        price: 331.50
+      - sku: 222
+        price: 333.00
+      - sku: 223
+        price: 334.50
+      - sku: 224
+        price: 336.00
+      - sku: 225
+        price: 337.50
+      - sku: 226
+        price: 339.00
+      - sku: 227
+        price: 340.50
+      - sku: 228
+        price: 342.00
+      - sku: 229
+        price: 343.50
+      - sku: 230
+        price: 345.00
+      - sku: 231
+        price: 346.50
+      - sku: 232
+        price: 348.00
+      - sku: 233
+        price: 349.50
+      - sku: 234
+        price: 351.00
+      - sku: 235
+        price: 352.50
+      - sku: 236
+        price: 354.00
+      - sku: 237
+        price: 355.50
+      - sku: 238
+        price: 357.00
+      - sku: 239
+        price: 358.50
+      - sku: 240
+        price: 360.00
+      - sku: 241
+        price: 361.50
+      - sku: 242
+        price: 363.00
+      - sku: 243
+        price: 364.50
+      - sku: 244
+        price: 366.00
+      - sku: 245
+        price: 367.50
+      - sku: 246
+        price: 369.00
+      - sku: 247
+        price: 370.50
+      - sku: 248
+        price: 372.00
+      - sku: 249
+        price: 373.50
+      - sku: 250
+        price: 375.00
+      - sku: 251
+        price: 376.50
+      - sku: 252
+        price: 378.00
+      - sku: 253
+        price: 379.50
+      - sku: 254
+        price: 381.00
+      - sku: 255
+        price: 382.50
+      - sku: 256
+        price: 384.00
+      - sku: 257
+        price: 385.50
+      - sku: 258
+        price: 387.00
+      - sku: 259
+        price: 388.50
+      - sku: 260
+        price: 390.00
+      - sku: 261
+        price: 391.50
+      - sku: 262
+        price: 393.00
+      - sku: 263
+        price: 394.50
+      - sku: 264
+        price: 396.00
+      - sku: 265
+        price: 397.50
+      - sku: 266
+        price: 399.00
+      - sku: 267
+        price: 400.50
+      - sku: 268
+        price: 402.00
+      - sku: 269
+        price: 403.50
+      - sku: 270
+        price: 405.00
+      - sku: 271
+        price: 406.50
+      - sku: 272
+        price: 408.00
+      - sku: 273
+        price: 409.50
+      - sku: 274
+        price: 411.00
+      - sku: 275
+        price: 412.50
+      - sku: 276
+        price: 414.00
+      - sku: 277
+        price: 415.50
+      - sku: 278
+        price: 417.00
+      - sku: 279
+        price: 418.50
+      - sku: 280
+        price: 420.00
+      - sku: 281
+        price: 421.50
+      - sku: 282
+        price: 423.00
+      - sku: 283
+        price: 424.50
+      - sku: 284
+        price: 426.00
+      - sku: 285
+        price: 427.50
+      - sku: 286
+        price: 429.00
+      - sku: 287
+        price: 430.50
+      - sku: 288
+        price: 432.00
+      - sku: 289
+        price: 433.50
+      - sku: 290
+        price: 435.00
+      - sku: 291
+        price: 436.50
+      - sku: 292
+        price: 438.00
+      - sku: 293
+        price: 439.50
+      - sku: 294
+        price: 441.00
+      - sku: 295
+        price: 442.50
+      - sku: 296
+        price: 444.00
+      - sku: 297
+        price: 445.50
+      - sku: 298
+        price: 447.00
+      - sku: 299
+        price: 448.50
+      - sku: 300
+        price: 450.00
+      - sku: 301
+        price: 451.50
+      - sku: 302
+        price: 453.00
+      - sku: 303
+        price: 454.50
+      - sku: 304
+        price: 456.00
+      - sku: 305
+        price: 457.50
+      - sku: 306
+        price: 459.00
+      - sku: 307
+        price: 460.50
+      - sku: 308
+        price: 462.00
+      - sku: 309
+        price: 463.50
+      - sku: 310
+        price: 465.00
+      - sku: 311
+        price: 466.50
+      - sku: 312
+        price: 468.00
+      - sku: 313
+        price: 469.50
+      - sku: 314
+        price: 471.00
+      - sku: 315
+        price: 472.50
+      - sku: 316
+        price: 474.00
+      - sku: 317
+        price: 475.50
+      - sku: 318
+        price: 477.00
+      - sku: 319
+        price: 478.50
+      - sku: 320
+        price: 480.00
+      - sku: 321
+        price: 481.50
+      - sku: 322
+        price: 483.00
+      - sku: 323
+        price: 484.50
+      - sku: 324
+        price: 486.00
+      - sku: 325
+        price: 487.50
+      - sku: 326
+        price: 489.00
+      - sku: 327
+        price: 490.50
+      - sku: 328
+        price: 492.00
+      - sku: 329
+        price: 493.50
+      - sku: 330
+        price: 495.00
+      - sku: 331
+        price: 496.50
+      - sku: 332
+        price: 498.00
+      - sku: 333
+        price: 499.50
+      - sku: 334
+        price: 501.00
+      - sku: 335
+        price: 502.50
+      - sku: 336
+        price: 504.00
+      - sku: 337
+        price: 505.50
+      - sku: 338
+        price: 507.00
+      - sku: 339
+        price: 508.50
+      - sku: 340
+        price: 510.00
+      - sku: 341
+        price: 511.50
+      - sku: 342
+        price: 513.00
+      - sku: 343
+        price: 514.50
+      - sku: 344
+        price: 516.00
+      - sku: 345
+        price: 517.50
+      - sku: 346
+        price: 519.00
+      - sku: 347
+        price: 520.50
+      - sku: 348
+        price: 522.00
+      - sku: 349
+        price: 523.50
+      - sku: 350
+        price: 525.00
+      - sku: 351
+        price: 526.50
+      - sku: 352
+        price: 528.00
+      - sku: 353
+        price: 529.50
+      - sku: 354
+        price: 531.00
+      - sku: 355
+        price: 532.50
+      - sku: 356
+        price: 534.00
+      - sku: 357
+        price: 535.50
+      - sku: 358
+        price: 537.00
+      - sku: 359
+        price: 538.50
+      - sku: 360
+        price: 540.00
+      - sku: 361
+        price: 541.50
+      - sku: 362
+        price: 543.00
+      - sku: 363
+        price: 544.50
+      - sku: 364
+        price: 546.00
+      - sku: 365
+        price: 547.50
+      - sku: 366
+        price: 549.00
+      - sku: 367
+        price: 550.50
+      - sku: 368
+        price: 552.00
+      - sku: 369
+        price: 553.50
+      - sku: 370
+        price: 555.00
+      - sku: 371
+        price: 556.50
+      - sku: 372
+        price: 558.00
+      - sku: 373
+        price: 559.50
+      - sku: 374
+        price: 561.00
+      - sku: 375
+        price: 562.50
+      - sku: 376
+        price: 564.00
+      - sku: 377
+        price: 565.50
+      - sku: 378
+        price: 567.00
+      - sku: 379
+        price: 568.50
+      - sku: 380
+        price: 570.00
+      - sku: 381
+        price: 571.50
+      - sku: 382
+        price: 573.00
+      - sku: 383
+        price: 574.50
+      - sku: 384
+        price: 576.00
+      - sku: 385
+        price: 577.50
+      - sku: 386
+        price: 579.00
+      - sku: 387
+        price: 580.50
+      - sku: 388
+        price: 582.00
+      - sku: 389
+        price: 583.50
+      - sku: 390
+        price: 585.00
+      - sku: 391
+        price: 586.50
+      - sku: 392
+        price: 588.00
+      - sku: 393
+        price: 589.50
+      - sku: 394
+        price: 591.00
+      - sku: 395
+        price: 592.50
+      - sku: 396
+        price: 594.00
+      - sku: 397
+        price: 595.50
+      - sku: 398
+        price: 597.00
+      - sku: 399
+        price: 598.50
+      - sku: 400
+        price: 600.00
+      - sku: 401
+        price: 601.50
+      - sku: 402
+        price: 603.00
+      - sku: 403
+        price: 604.50
+      - sku: 404
+        price: 606.00
+      - sku: 405
+        price: 607.50
+      - sku: 406
+        price: 609.00
+      - sku: 407
+        price: 610.50
+      - sku: 408
+        price: 612.00
+      - sku: 409
+        price: 613.50
+      - sku: 410
+        price: 615.00
+      - sku: 411
+        price: 616.50
+      - sku: 412
+        price: 618.00
+      - sku: 413
+        price: 619.50
+      - sku: 414
+        price: 621.00
+      - sku: 415
+        price: 622.50
+      - sku: 416
+        price: 624.00
+      - sku: 417
+        price: 625.50
+      - sku: 418
+        price: 627.00
+      - sku: 419
+        price: 628.50
+      - sku: 420
+        price: 630.00
+      - sku: 421
+        price: 631.50
+      - sku: 422
+        price: 633.00
+      - sku: 423
+        price: 634.50
+      - sku: 424
+        price: 636.00
+      - sku: 425
+        price: 637.50
+      - sku: 426
+        price: 639.00
+      - sku: 427
+        price: 640.50
+      - sku: 428
+        price: 642.00
+      - sku: 429
+        price: 643.50
+      - sku: 430
+        price: 645.00
+      - sku: 431
+        price: 646.50
+      - sku: 432
+        price: 648.00
+      - sku: 433
+        price: 649.50
+      - sku: 434
+        price: 651.00
+      - sku: 435
+        price: 652.50
+      - sku: 436
+        price: 654.00
+      - sku: 437
+        price: 655.50
+      - sku: 438
+        price: 657.00
+      - sku: 439
+        price: 658.50
+      - sku: 440
+        price: 660.00
+      - sku: 441
+        price: 661.50
+      - sku: 442
+        price: 663.00
+      - sku: 443
+        price: 664.50
+      - sku: 444
+        price: 666.00
+      - sku: 445
+        price: 667.50
+      - sku: 446
+        price: 669.00
+      - sku: 447
+        price: 670.50
+      - sku: 448
+        price: 672.00
+      - sku: 449
+        price: 673.50
+      - sku: 450
+        price: 675.00
+      - sku: 451
+        price: 676.50
+      - sku: 452
+        price: 678.00
+      - sku: 453
+        price: 679.50
+      - sku: 454
+        price: 681.00
+      - sku: 455
+        price: 682.50
+      - sku: 456
+        price: 684.00
+      - sku: 457
+        price: 685.50
+      - sku: 458
+        price: 687.00
+      - sku: 459
+        price: 688.50
+      - sku: 460
+        price: 690.00
+      - sku: 461
+        price: 691.50
+      - sku: 462
+        price: 693.00
+      - sku: 463
+        price: 694.50
+      - sku: 464
+        price: 696.00
+      - sku: 465
+        price: 697.50
+      - sku: 466
+        price: 699.00
+      - sku: 467
+        price: 700.50
+      - sku: 468
+        price: 702.00
+      - sku: 469
+        price: 703.50
+      - sku: 470
+        price: 705.00
+      - sku: 471
+        price: 706.50
+      - sku: 472
+        price: 708.00
+      - sku: 473
+        price: 709.50
+      - sku: 474
+        price: 711.00
+      - sku: 475
+        price: 712.50
+      - sku: 476
+        price: 714.00
+      - sku: 477
+        price: 715.50
+      - sku: 478
+        price: 717.00
+      - sku: 479
+        price: 718.50
+      - sku: 480
+        price: 720.00
+      - sku: 481
+        price: 721.50
+      - sku: 482
+        price: 723.00
+      - sku: 483
+        price: 724.50
+      - sku: 484
+        price: 726.00
+      - sku: 485
+        price: 727.50
+      - sku: 486
+        price: 729.00
+      - sku: 487
+        price: 730.50
+      - sku: 488
+        price: 732.00
+      - sku: 489
+        price: 733.50
+      - sku: 490
+        price: 735.00
+      - sku: 491
+        price: 736.50
+      - sku: 492
+        price: 738.00
+      - sku: 493
+        price: 739.50
+      - sku: 494
+        price: 741.00
+      - sku: 495
+        price: 742.50
+      - sku: 496
+        price: 744.00
+      - sku: 497
+        price: 745.50
+      - sku: 498
+        price: 747.00
+      - sku: 499
+        price: 748.50
+      - sku: 500
+        price: 750.00
+      - sku: 501
+        price: 751.50
+      - sku: 502
+        price: 753.00
+      - sku: 503
+        price: 754.50
+      - sku: 504
+        price: 756.00
+      - sku: 505
+        price: 757.50
+      - sku: 506
+        price: 759.00
+      - sku: 507
+        price: 760.50
+      - sku: 508
+        price: 762.00
+      - sku: 509
+        price: 763.50
+      - sku: 510
+        price: 765.00
+      - sku: 511
+        price: 766.50
+      - sku: 512
+        price: 768.00
+      - sku: 513
+        price: 769.50
+      - sku: 514
+        price: 771.00
+      - sku: 515
+        price: 772.50
+      - sku: 516
+        price: 774.00
+      - sku: 517
+        price: 775.50
+      - sku: 518
+        price: 777.00
+      - sku: 519
+        price: 778.50
+      - sku: 520
+        price: 780.00
+      - sku: 521
+        price: 781.50
+      - sku: 522
+        price: 783.00
+      - sku: 523
+        price: 784.50
+      - sku: 524
+        price: 786.00
+      - sku: 525
+        price: 787.50
+      - sku: 526
+        price: 789.00
+      - sku: 527
+        price: 790.50
+      - sku: 528
+        price: 792.00
+      - sku: 529
+        price: 793.50
+      - sku: 530
+        price: 795.00
+      - sku: 531
+        price: 796.50
+      - sku: 532
+        price: 798.00
+      - sku: 533
+        price: 799.50
+      - sku: 534
+        price: 801.00
+      - sku: 535
+        price: 802.50
+      - sku: 536
+        price: 804.00
+      - sku: 537
+        price: 805.50
+      - sku: 538
+        price: 807.00
+      - sku: 539
+        price: 808.50
+      - sku: 540
+        price: 810.00
+      - sku: 541
+        price: 811.50
+      - sku: 542
+        price: 813.00
+      - sku: 543
+        price: 814.50
+      - sku: 544
+        price: 816.00
+      - sku: 545
+        price: 817.50
+      - sku: 546
+        price: 819.00
+      - sku: 547
+        price: 820.50
+      - sku: 548
+        price: 822.00
+      - sku: 549
+        price: 823.50
+      - sku: 550
+        price: 825.00
+      - sku: 551
+        price: 826.50
+      - sku: 552
+        price: 828.00
+      - sku: 553
+        price: 829.50
+      - sku: 554
+        price: 831.00
+      - sku: 555
+        price: 832.50
+      - sku: 556
+        price: 834.00
+      - sku: 557
+        price: 835.50
+      - sku: 558
+        price: 837.00
+      - sku: 559
+        price: 838.50
+      - sku: 560
+        price: 840.00
+      - sku: 561
+        price: 841.50
+      - sku: 562
+        price: 843.00
+      - sku: 563
+        price: 844.50
+      - sku: 564
+        price: 846.00
+      - sku: 565
+        price: 847.50
+      - sku: 566
+        price: 849.00
+      - sku: 567
+        price: 850.50
+      - sku: 568
+        price: 852.00
+      - sku: 569
+        price: 853.50
+      - sku: 570
+        price: 855.00
+      - sku: 571
+        price: 856.50
+      - sku: 572
+        price: 858.00
+      - sku: 573
+        price: 859.50
+      - sku: 574
+        price: 861.00
+      - sku: 575
+        price: 862.50
+      - sku: 576
+        price: 864.00
+      - sku: 577
+        price: 865.50
+      - sku: 578
+        price: 867.00
+      - sku: 579
+        price: 868.50
+      - sku: 580
+        price: 870.00
+      - sku: 581
+        price: 871.50
+      - sku: 582
+        price: 873.00
+      - sku: 583
+        price: 874.50
+      - sku: 584
+        price: 876.00
+      - sku: 585
+        price: 877.50
+      - sku: 586
+        price: 879.00
+      - sku: 587
+        price: 880.50
+      - sku: 588
+        price: 882.00
+      - sku: 589
+        price: 883.50
+      - sku: 590
+        price: 885.00
+      - sku: 591
+        price: 886.50
+      - sku: 592
+        price: 888.00
+      - sku: 593
+        price: 889.50
+      - sku: 594
+        price: 891.00
+      - sku: 595
+        price: 892.50
+      - sku: 596
+        price: 894.00
+      - sku: 597
+        price: 895.50
+      - sku: 598
+        price: 897.00
+      - sku: 599
+        price: 898.50
+      - sku: 600
+        price: 900.00
+      - sku: 601
+        price: 901.50
+      - sku: 602
+        price: 903.00
+      - sku: 603
+        price: 904.50
+      - sku: 604
+        price: 906.00
+      - sku: 605
+        price: 907.50
+      - sku: 606
+        price: 909.00
+      - sku: 607
+        price: 910.50
+      - sku: 608
+        price: 912.00
+      - sku: 609
+        price: 913.50
+      - sku: 610
+        price: 915.00
+      - sku: 611
+        price: 916.50
+      - sku: 612
+        price: 918.00
+      - sku: 613
+        price: 919.50
+      - sku: 614
+        price: 921.00
+      - sku: 615
+        price: 922.50
+      - sku: 616
+        price: 924.00
+      - sku: 617
+        price: 925.50
+      - sku: 618
+        price: 927.00
+      - sku: 619
+        price: 928.50
+      - sku: 620
+        price: 930.00
+      - sku: 621
+        price: 931.50
+      - sku: 622
+        price: 933.00
+      - sku: 623
+        price: 934.50
+      - sku: 624
+        price: 936.00
+      - sku: 625
+        price: 937.50
+      - sku: 626
+        price: 939.00
+      - sku: 627
+        price: 940.50
+      - sku: 628
+        price: 942.00
+      - sku: 629
+        price: 943.50
+      - sku: 630
+        price: 945.00
+      - sku: 631
+        price: 946.50
+      - sku: 632
+        price: 948.00
+      - sku: 633
+        price: 949.50
+      - sku: 634
+        price: 951.00
+      - sku: 635
+        price: 952.50
+      - sku: 636
+        price: 954.00
+      - sku: 637
+        price: 955.50
+      - sku: 638
+        price: 957.00
+      - sku: 639
+        price: 958.50
+      - sku: 640
+        price: 960.00
+      - sku: 641
+        price: 961.50
+      - sku: 642
+        price: 963.00
+      - sku: 643
+        price: 964.50
+      - sku: 644
+        price: 966.00
+      - sku: 645
+        price: 967.50
+      - sku: 646
+        price: 969.00
+      - sku: 647
+        price: 970.50
+      - sku: 648
+        price: 972.00
+      - sku: 649
+        price: 973.50
+      - sku: 650
+        price: 975.00
+      - sku: 651
+        price: 976.50
+      - sku: 652
+        price: 978.00
+      - sku: 653
+        price: 979.50
+      - sku: 654
+        price: 981.00
+      - sku: 655
+        price: 982.50
+      - sku: 656
+        price: 984.00
+      - sku: 657
+        price: 985.50
+      - sku: 658
+        price: 987.00
+      - sku: 659
+        price: 988.50
+      - sku: 660
+        price: 990.00
+      - sku: 661
+        price: 991.50
+      - sku: 662
+        price: 993.00
+      - sku: 663
+        price: 994.50
+      - sku: 664
+        price: 996.00
+      - sku: 665
+        price: 997.50
+      - sku: 666
+        price: 999.00
+      - sku: 667
+        price: 1000.50
+      - sku: 668
+        price: 1002.00
+      - sku: 669
+        price: 1003.50
+      - sku: 670
+        price: 1005.00
+      - sku: 671
+        price: 1006.50
+      - sku: 672
+        price: 1008.00
+      - sku: 673
+        price: 1009.50
+      - sku: 674
+        price: 1011.00
+      - sku: 675
+        price: 1012.50
+      - sku: 676
+        price: 1014.00
+      - sku: 677
+        price: 1015.50
+      - sku: 678
+        price: 1017.00
+      - sku: 679
+        price: 1018.50
+      - sku: 680
+        price: 1020.00
+      - sku: 681
+        price: 1021.50
+      - sku: 682
+        price: 1023.00
+      - sku: 683
+        price: 1024.50
+      - sku: 684
+        price: 1026.00
+      - sku: 685
+        price: 1027.50
+      - sku: 686
+        price: 1029.00
+      - sku: 687
+        price: 1030.50
+      - sku: 688
+        price: 1032.00
+      - sku: 689
+        price: 1033.50
+      - sku: 690
+        price: 1035.00
+      - sku: 691
+        price: 1036.50
+      - sku: 692
+        price: 1038.00
+      - sku: 693
+        price: 1039.50
+      - sku: 694
+        price: 1041.00
+      - sku: 695
+        price: 1042.50
+      - sku: 696
+        price: 1044.00
+      - sku: 697
+        price: 1045.50
+      - sku: 698
+        price: 1047.00
+      - sku: 699
+        price: 1048.50
+      - sku: 700
+        price: 1050.00
+      - sku: 701
+        price: 1051.50
+      - sku: 702
+        price: 1053.00
+      - sku: 703
+        price: 1054.50
+      - sku: 704
+        price: 1056.00
+      - sku: 705
+        price: 1057.50
+      - sku: 706
+        price: 1059.00
+      - sku: 707
+        price: 1060.50
+      - sku: 708
+        price: 1062.00
+      - sku: 709
+        price: 1063.50
+      - sku: 710
+        price: 1065.00
+      - sku: 711
+        price: 1066.50
+      - sku: 712
+        price: 1068.00
+      - sku: 713
+        price: 1069.50
+      - sku: 714
+        price: 1071.00
+      - sku: 715
+        price: 1072.50
+      - sku: 716
+        price: 1074.00
+      - sku: 717
+        price: 1075.50
+      - sku: 718
+        price: 1077.00
+      - sku: 719
+        price: 1078.50
+      - sku: 720
+        price: 1080.00
+      - sku: 721
+        price: 1081.50
+      - sku: 722
+        price: 1083.00
+      - sku: 723
+        price: 1084.50
+      - sku: 724
+        price: 1086.00
+      - sku: 725
+        price: 1087.50
+      - sku: 726
+        price: 1089.00
+      - sku: 727
+        price: 1090.50
+      - sku: 728
+        price: 1092.00
+      - sku: 729
+        price: 1093.50
+      - sku: 730
+        price: 1095.00
+      - sku: 731
+        price: 1096.50
+      - sku: 732
+        price: 1098.00
+      - sku: 733
+        price: 1099.50
+      - sku: 734
+        price: 1101.00
+      - sku: 735
+        price: 1102.50
+      - sku: 736
+        price: 1104.00
+      - sku: 737
+        price: 1105.50
+      - sku: 738
+        price: 1107.00
+      - sku: 739
+        price: 1108.50
+      - sku: 740
+        price: 1110.00
+      - sku: 741
+        price: 1111.50
+      - sku: 742
+        price: 1113.00
+      - sku: 743
+        price: 1114.50
+      - sku: 744
+        price: 1116.00
+      - sku: 745
+        price: 1117.50
+      - sku: 746
+        price: 1119.00
+      - sku: 747
+        price: 1120.50
+      - sku: 748
+        price: 1122.00
+      - sku: 749
+        price: 1123.50
+      - sku: 750
+        price: 1125.00
+      - sku: 751
+        price: 1126.50
+      - sku: 752
+        price: 1128.00
+      - sku: 753
+        price: 1129.50
+      - sku: 754
+        price: 1131.00
+      - sku: 755
+        price: 1132.50
+      - sku: 756
+        price: 1134.00
+      - sku: 757
+        price: 1135.50
+      - sku: 758
+        price: 1137.00
+      - sku: 759
+        price: 1138.50
+      - sku: 760
+        price: 1140.00
+      - sku: 761
+        price: 1141.50
+      - sku: 762
+        price: 1143.00
+      - sku: 763
+        price: 1144.50
+      - sku: 764
+        price: 1146.00
+      - sku: 765
+        price: 1147.50
+      - sku: 766
+        price: 1149.00
+      - sku: 767
+        price: 1150.50
+      - sku: 768
+        price: 1152.00
+      - sku: 769
+        price: 1153.50
+      - sku: 770
+        price: 1155.00
+      - sku: 771
+        price: 1156.50
+      - sku: 772
+        price: 1158.00
+      - sku: 773
+        price: 1159.50
+      - sku: 774
+        price: 1161.00
+      - sku: 775
+        price: 1162.50
+      - sku: 776
+        price: 1164.00
+      - sku: 777
+        price: 1165.50
+      - sku: 778
+        price: 1167.00
+      - sku: 779
+        price: 1168.50
+      - sku: 780
+        price: 1170.00
+      - sku: 781
+        price: 1171.50
+      - sku: 782
+        price: 1173.00
+      - sku: 783
+        price: 1174.50
+      - sku: 784
+        price: 1176.00
+      - sku: 785
+        price: 1177.50
+      - sku: 786
+        price: 1179.00
+      - sku: 787
+        price: 1180.50
+      - sku: 788
+        price: 1182.00
+      - sku: 789
+        price: 1183.50
+      - sku: 790
+        price: 1185.00
+      - sku: 791
+        price: 1186.50
+      - sku: 792
+        price: 1188.00
+      - sku: 793
+        price: 1189.50
+      - sku: 794
+        price: 1191.00
+      - sku: 795
+        price: 1192.50
+      - sku: 796
+        price: 1194.00
+      - sku: 797
+        price: 1195.50
+      - sku: 798
+        price: 1197.00
+      - sku: 799
+        price: 1198.50
+      - sku: 800
+        price: 1200.00
+      - sku: 801
+        price: 1201.50
+      - sku: 802
+        price: 1203.00
+      - sku: 803
+        price: 1204.50
+      - sku: 804
+        price: 1206.00
+      - sku: 805
+        price: 1207.50
+      - sku: 806
+        price: 1209.00
+      - sku: 807
+        price: 1210.50
+      - sku: 808
+        price: 1212.00
+      - sku: 809
+        price: 1213.50
+      - sku: 810
+        price: 1215.00
+      - sku: 811
+        price: 1216.50
+      - sku: 812
+        price: 1218.00
+      - sku: 813
+        price: 1219.50
+      - sku: 814
+        price: 1221.00
+      - sku: 815
+        price: 1222.50
+      - sku: 816
+        price: 1224.00
+      - sku: 817
+        price: 1225.50
+      - sku: 818
+        price: 1227.00
+      - sku: 819
+        price: 1228.50
+      - sku: 820
+        price: 1230.00
+      - sku: 821
+        price: 1231.50
+      - sku: 822
+        price: 1233.00
+      - sku: 823
+        price: 1234.50
+      - sku: 824
+        price: 1236.00
+      - sku: 825
+        price: 1237.50
+      - sku: 826
+        price: 1239.00
+      - sku: 827
+        price: 1240.50
+      - sku: 828
+        price: 1242.00
+      - sku: 829
+        price: 1243.50
+      - sku: 830
+        price: 1245.00
+      - sku: 831
+        price: 1246.50
+      - sku: 832
+        price: 1248.00
+      - sku: 833
+        price: 1249.50
+      - sku: 834
+        price: 1251.00
+      - sku: 835
+        price: 1252.50
+      - sku: 836
+        price: 1254.00
+      - sku: 837
+        price: 1255.50
+      - sku: 838
+        price: 1257.00
+      - sku: 839
+        price: 1258.50
+      - sku: 840
+        price: 1260.00
+      - sku: 841
+        price: 1261.50
+      - sku: 842
+        price: 1263.00
+      - sku: 843
+        price: 1264.50
+      - sku: 844
+        price: 1266.00
+      - sku: 845
+        price: 1267.50
+      - sku: 846
+        price: 1269.00
+      - sku: 847
+        price: 1270.50
+      - sku: 848
+        price: 1272.00
+      - sku: 849
+        price: 1273.50
+      - sku: 850
+        price: 1275.00
+      - sku: 851
+        price: 1276.50
+      - sku: 852
+        price: 1278.00
+      - sku: 853
+        price: 1279.50
+      - sku: 854
+        price: 1281.00
+      - sku: 855
+        price: 1282.50
+      - sku: 856
+        price: 1284.00
+      - sku: 857
+        price: 1285.50
+      - sku: 858
+        price: 1287.00
+      - sku: 859
+        price: 1288.50
+      - sku: 860
+        price: 1290.00
+      - sku: 861
+        price: 1291.50
+      - sku: 862
+        price: 1293.00
+      - sku: 863
+        price: 1294.50
+      - sku: 864
+        price: 1296.00
+      - sku: 865
+        price: 1297.50
+      - sku: 866
+        price: 1299.00
+      - sku: 867
+        price: 1300.50
+      - sku: 868
+        price: 1302.00
+      - sku: 869
+        price: 1303.50
+      - sku: 870
+        price: 1305.00
+      - sku: 871
+        price: 1306.50
+      - sku: 872
+        price: 1308.00
+      - sku: 873
+        price: 1309.50
+      - sku: 874
+        price: 1311.00
+      - sku: 875
+        price: 1312.50
+      - sku: 876
+        price: 1314.00
+      - sku: 877
+        price: 1315.50
+      - sku: 878
+        price: 1317.00
+      - sku: 879
+        price: 1318.50
+      - sku: 880
+        price: 1320.00
+      - sku: 881
+        price: 1321.50
+      - sku: 882
+        price: 1323.00
+      - sku: 883
+        price: 1324.50
+      - sku: 884
+        price: 1326.00
+      - sku: 885
+        price: 1327.50
+      - sku: 886
+        price: 1329.00
+      - sku: 887
+        price: 1330.50
+      - sku: 888
+        price: 1332.00
+      - sku: 889
+        price: 1333.50
+      - sku: 890
+        price: 1335.00
+      - sku: 891
+        price: 1336.50
+      - sku: 892
+        price: 1338.00
+      - sku: 893
+        price: 1339.50
+      - sku: 894
+        price: 1341.00
+      - sku: 895
+        price: 1342.50
+      - sku: 896
+        price: 1344.00
+      - sku: 897
+        price: 1345.50
+      - sku: 898
+        price: 1347.00
+      - sku: 899
+        price: 1348.50
+      - sku: 900
+        price: 1350.00
+      - sku: 901
+        price: 1351.50
+      - sku: 902
+        price: 1353.00
+      - sku: 903
+        price: 1354.50
+      - sku: 904
+        price: 1356.00
+      - sku: 905
+        price: 1357.50
+      - sku: 906
+        price: 1359.00
+      - sku: 907
+        price: 1360.50
+      - sku: 908
+        price: 1362.00
+      - sku: 909
+        price: 1363.50
+      - sku: 910
+        price: 1365.00
+      - sku: 911
+        price: 1366.50
+      - sku: 912
+        price: 1368.00
+      - sku: 913
+        price: 1369.50
+      - sku: 914
+        price: 1371.00
+      - sku: 915
+        price: 1372.50
+      - sku: 916
+        price: 1374.00
+      - sku: 917
+        price: 1375.50
+      - sku: 918
+        price: 1377.00
+      - sku: 919
+        price: 1378.50
+      - sku: 920
+        price: 1380.00
+      - sku: 921
+        price: 1381.50
+      - sku: 922
+        price: 1383.00
+      - sku: 923
+        price: 1384.50
+      - sku: 924
+        price: 1386.00
+      - sku: 925
+        price: 1387.50
+      - sku: 926
+        price: 1389.00
+      - sku: 927
+        price: 1390.50
+      - sku: 928
+        price: 1392.00
+      - sku: 929
+        price: 1393.50
+      - sku: 930
+        price: 1395.00
+      - sku: 931
+        price: 1396.50
+      - sku: 932
+        price: 1398.00
+      - sku: 933
+        price: 1399.50
+      - sku: 934
+        price: 1401.00
+      - sku: 935
+        price: 1402.50
+      - sku: 936
+        price: 1404.00
+      - sku: 937
+        price: 1405.50
+      - sku: 938
+        price: 1407.00
+      - sku: 939
+        price: 1408.50
+      - sku: 940
+        price: 1410.00
+      - sku: 941
+        price: 1411.50
+      - sku: 942
+        price: 1413.00
+      - sku: 943
+        price: 1414.50
+      - sku: 944
+        price: 1416.00
+      - sku: 945
+        price: 1417.50
+      - sku: 946
+        price: 1419.00
+      - sku: 947
+        price: 1420.50
+      - sku: 948
+        price: 1422.00
+      - sku: 949
+        price: 1423.50
+      - sku: 950
+        price: 1425.00
+      - sku: 951
+        price: 1426.50
+      - sku: 952
+        price: 1428.00
+      - sku: 953
+        price: 1429.50
+      - sku: 954
+        price: 1431.00
+      - sku: 955
+        price: 1432.50
+      - sku: 956
+        price: 1434.00
+      - sku: 957
+        price: 1435.50
+      - sku: 958
+        price: 1437.00
+      - sku: 959
+        price: 1438.50
+      - sku: 960
+        price: 1440.00
+      - sku: 961
+        price: 1441.50
+      - sku: 962
+        price: 1443.00
+      - sku: 963
+        price: 1444.50
+      - sku: 964
+        price: 1446.00
+      - sku: 965
+        price: 1447.50
+      - sku: 966
+        price: 1449.00
+      - sku: 967
+        price: 1450.50
+      - sku: 968
+        price: 1452.00
+      - sku: 969
+        price: 1453.50
+      - sku: 970
+        price: 1455.00
+      - sku: 971
+        price: 1456.50
+      - sku: 972
+        price: 1458.00
+      - sku: 973
+        price: 1459.50
+      - sku: 974
+        price: 1461.00
+      - sku: 975
+        price: 1462.50
+      - sku: 976
+        price: 1464.00
+      - sku: 977
+        price: 1465.50
+      - sku: 978
+        price: 1467.00
+      - sku: 979
+        price: 1468.50
+      - sku: 980
+        price: 1470.00
+      - sku: 981
+        price: 1471.50
+      - sku: 982
+        price: 1473.00
+      - sku: 983
+        price: 1474.50
+      - sku: 984
+        price: 1476.00
+      - sku: 985
+        price: 1477.50
+      - sku: 986
+        price: 1479.00
+      - sku: 987
+        price: 1480.50
+      - sku: 988
+        price: 1482.00
+      - sku: 989
+        price: 1483.50
+      - sku: 990
+        price: 1485.00
+      - sku: 991
+        price: 1486.50
+      - sku: 992
+        price: 1488.00
+      - sku: 993
+        price: 1489.50
+      - sku: 994
+        price: 1491.00
+      - sku: 995
+        price: 1492.50
+      - sku: 996
+        price: 1494.00
+      - sku: 997
+        price: 1495.50
+      - sku: 998
+        price: 1497.00
+      - sku: 999
+        price: 1498.50
+      - sku: 1000
+        price: 1500.00
+      - sku: 1001
+        price: 1501.50
+      - sku: 1002
+        price: 1503.00
+      - sku: 1003
+        price: 1504.50
+      - sku: 1004
+        price: 1506.00
+      - sku: 1005
+        price: 1507.50
+      - sku: 1006
+        price: 1509.00
+      - sku: 1007
+        price: 1510.50
+      - sku: 1008
+        price: 1512.00
+      - sku: 1009
+        price: 1513.50
+      - sku: 1010
+        price: 1515.00
+      - sku: 1011
+        price: 1516.50
+      - sku: 1012
+        price: 1518.00
+      - sku: 1013
+        price: 1519.50
+      - sku: 1014
+        price: 1521.00
+      - sku: 1015
+        price: 1522.50
+      - sku: 1016
+        price: 1524.00
+      - sku: 1017
+        price: 1525.50
+      - sku: 1018
+        price: 1527.00
+      - sku: 1019
+        price: 1528.50
+      - sku: 1020
+        price: 1530.00
+      - sku: 1021
+        price: 1531.50
+      - sku: 1022
+        price: 1533.00
+      - sku: 1023
+        price: 1534.50
+      - sku: 1024
+        price: 1536.00
+      - sku: 1025
+        price: 1537.50
+      - sku: 1026
+        price: 1539.00
+      - sku: 1027
+        price: 1540.50
+      - sku: 1028
+        price: 1542.00
+      - sku: 1029
+        price: 1543.50
+      - sku: 1030
+        price: 1545.00
+      - sku: 1031
+        price: 1546.50
+      - sku: 1032
+        price: 1548.00
+      - sku: 1033
+        price: 1549.50
+      - sku: 1034
+        price: 1551.00
+      - sku: 1035
+        price: 1552.50
+      - sku: 1036
+        price: 1554.00
+      - sku: 1037
+        price: 1555.50
+      - sku: 1038
+        price: 1557.00
+      - sku: 1039
+        price: 1558.50
+      - sku: 1040
+        price: 1560.00
+      - sku: 1041
+        price: 1561.50
+      - sku: 1042
+        price: 1563.00
+      - sku: 1043
+        price: 1564.50
+      - sku: 1044
+        price: 1566.00
+      - sku: 1045
+        price: 1567.50
+      - sku: 1046
+        price: 1569.00
+      - sku: 1047
+        price: 1570.50
+      - sku: 1048
+        price: 1572.00
+      - sku: 1049
+        price: 1573.50
+      - sku: 1050
+        price: 1575.00
+      - sku: 1051
+        price: 1576.50
+      - sku: 1052
+        price: 1578.00
+      - sku: 1053
+        price: 1579.50
+      - sku: 1054
+        price: 1581.00
+      - sku: 1055
+        price: 1582.50
+      - sku: 1056
+        price: 1584.00
+      - sku: 1057
+        price: 1585.50
+      - sku: 1058
+        price: 1587.00
+      - sku: 1059
+        price: 1588.50
+      - sku: 1060
+        price: 1590.00
+      - sku: 1061
+        price: 1591.50
+      - sku: 1062
+        price: 1593.00
+      - sku: 1063
+        price: 1594.50
+      - sku: 1064
+        price: 1596.00
+      - sku: 1065
+        price: 1597.50
+      - sku: 1066
+        price: 1599.00
+      - sku: 1067
+        price: 1600.50
+      - sku: 1068
+        price: 1602.00
+      - sku: 1069
+        price: 1603.50
+      - sku: 1070
+        price: 1605.00
+      - sku: 1071
+        price: 1606.50
+      - sku: 1072
+        price: 1608.00
+      - sku: 1073
+        price: 1609.50
+      - sku: 1074
+        price: 1611.00
+      - sku: 1075
+        price: 1612.50
+      - sku: 1076
+        price: 1614.00
+      - sku: 1077
+        price: 1615.50
+      - sku: 1078
+        price: 1617.00
+      - sku: 1079
+        price: 1618.50
+      - sku: 1080
+        price: 1620.00
+      - sku: 1081
+        price: 1621.50
+      - sku: 1082
+        price: 1623.00
+      - sku: 1083
+        price: 1624.50
+      - sku: 1084
+        price: 1626.00
+      - sku: 1085
+        price: 1627.50
+      - sku: 1086
+        price: 1629.00
+      - sku: 1087
+        price: 1630.50
+      - sku: 1088
+        price: 1632.00
+      - sku: 1089
+        price: 1633.50
+      - sku: 1090
+        price: 1635.00
+      - sku: 1091
+        price: 1636.50
+      - sku: 1092
+        price: 1638.00
+      - sku: 1093
+        price: 1639.50
+      - sku: 1094
+        price: 1641.00
+      - sku: 1095
+        price: 1642.50
+      - sku: 1096
+        price: 1644.00
+      - sku: 1097
+        price: 1645.50
+      - sku: 1098
+        price: 1647.00
+      - sku: 1099
+        price: 1648.50
+      - sku: 1100
+        price: 1650.00
+      - sku: 1101
+        price: 1651.50
+      - sku: 1102
+        price: 1653.00
+      - sku: 1103
+        price: 1654.50
+      - sku: 1104
+        price: 1656.00
+      - sku: 1105
+        price: 1657.50
+      - sku: 1106
+        price: 1659.00
+      - sku: 1107
+        price: 1660.50
+      - sku: 1108
+        price: 1662.00
+      - sku: 1109
+        price: 1663.50
+      - sku: 1110
+        price: 1665.00
+      - sku: 1111
+        price: 1666.50
+      - sku: 1112
+        price: 1668.00
+      - sku: 1113
+        price: 1669.50
+      - sku: 1114
+        price: 1671.00
+      - sku: 1115
+        price: 1672.50
+      - sku: 1116
+        price: 1674.00
+      - sku: 1117
+        price: 1675.50
+      - sku: 1118
+        price: 1677.00
+      - sku: 1119
+        price: 1678.50
+      - sku: 1120
+        price: 1680.00
+      - sku: 1121
+        price: 1681.50
+      - sku: 1122
+        price: 1683.00
+      - sku: 1123
+        price: 1684.50
+      - sku: 1124
+        price: 1686.00
+      - sku: 1125
+        price: 1687.50
+      - sku: 1126
+        price: 1689.00
+      - sku: 1127
+        price: 1690.50
+      - sku: 1128
+        price: 1692.00
+      - sku: 1129
+        price: 1693.50
+      - sku: 1130
+        price: 1695.00
+      - sku: 1131
+        price: 1696.50
+      - sku: 1132
+        price: 1698.00
+      - sku: 1133
+        price: 1699.50
+      - sku: 1134
+        price: 1701.00
+      - sku: 1135
+        price: 1702.50
+      - sku: 1136
+        price: 1704.00
+      - sku: 1137
+        price: 1705.50
+      - sku: 1138
+        price: 1707.00
+      - sku: 1139
+        price: 1708.50
+      - sku: 1140
+        price: 1710.00
+      - sku: 1141
+        price: 1711.50
+      - sku: 1142
+        price: 1713.00
+      - sku: 1143
+        price: 1714.50
+      - sku: 1144
+        price: 1716.00
+      - sku: 1145
+        price: 1717.50
+      - sku: 1146
+        price: 1719.00
+      - sku: 1147
+        price: 1720.50
+      - sku: 1148
+        price: 1722.00
+      - sku: 1149
+        price: 1723.50
+      - sku: 1150
+        price: 1725.00
+      - sku: 1151
+        price: 1726.50
+      - sku: 1152
+        price: 1728.00
+      - sku: 1153
+        price: 1729.50
+      - sku: 1154
+        price: 1731.00
+      - sku: 1155
+        price: 1732.50
+      - sku: 1156
+        price: 1734.00
+      - sku: 1157
+        price: 1735.50
+      - sku: 1158
+        price: 1737.00
+      - sku: 1159
+        price: 1738.50
+      - sku: 1160
+        price: 1740.00
+      - sku: 1161
+        price: 1741.50
+      - sku: 1162
+        price: 1743.00
+      - sku: 1163
+        price: 1744.50
+      - sku: 1164
+        price: 1746.00
+      - sku: 1165
+        price: 1747.50
+      - sku: 1166
+        price: 1749.00
+      - sku: 1167
+        price: 1750.50
+      - sku: 1168
+        price: 1752.00
+      - sku: 1169
+        price: 1753.50
+      - sku: 1170
+        price: 1755.00
+      - sku: 1171
+        price: 1756.50
+      - sku: 1172
+        price: 1758.00
+      - sku: 1173
+        price: 1759.50
+      - sku: 1174
+        price: 1761.00
+      - sku: 1175
+        price: 1762.50
+      - sku: 1176
+        price: 1764.00
+      - sku: 1177
+        price: 1765.50
+      - sku: 1178
+        price: 1767.00
+      - sku: 1179
+        price: 1768.50
+      - sku: 1180
+        price: 1770.00
+      - sku: 1181
+        price: 1771.50
+      - sku: 1182
+        price: 1773.00
+      - sku: 1183
+        price: 1774.50
+      - sku: 1184
+        price: 1776.00
+      - sku: 1185
+        price: 1777.50
+      - sku: 1186
+        price: 1779.00
+      - sku: 1187
+        price: 1780.50
+      - sku: 1188
+        price: 1782.00
+      - sku: 1189
+        price: 1783.50
+      - sku: 1190
+        price: 1785.00
+      - sku: 1191
+        price: 1786.50
+      - sku: 1192
+        price: 1788.00
+      - sku: 1193
+        price: 1789.50
+      - sku: 1194
+        price: 1791.00
+      - sku: 1195
+        price: 1792.50
+      - sku: 1196
+        price: 1794.00
+      - sku: 1197
+        price: 1795.50
+      - sku: 1198
+        price: 1797.00
+      - sku: 1199
+        price: 1798.50
+      - sku: 1200
+        price: 1800.00
+      - sku: 1201
+        price: 1801.50
+      - sku: 1202
+        price: 1803.00
+      - sku: 1203
+        price: 1804.50
+      - sku: 1204
+        price: 1806.00
+      - sku: 1205
+        price: 1807.50
+      - sku: 1206
+        price: 1809.00
+      - sku: 1207
+        price: 1810.50
+      - sku: 1208
+        price: 1812.00
+      - sku: 1209
+        price: 1813.50
+      - sku: 1210
+        price: 1815.00
+      - sku: 1211
+        price: 1816.50
+      - sku: 1212
+        price: 1818.00
+      - sku: 1213
+        price: 1819.50
+      - sku: 1214
+        price: 1821.00
+      - sku: 1215
+        price: 1822.50
+      - sku: 1216
+        price: 1824.00
+      - sku: 1217
+        price: 1825.50
+      - sku: 1218
+        price: 1827.00
+      - sku: 1219
+        price: 1828.50
+      - sku: 1220
+        price: 1830.00
+      - sku: 1221
+        price: 1831.50
+      - sku: 1222
+        price: 1833.00
+      - sku: 1223
+        price: 1834.50
+      - sku: 1224
+        price: 1836.00
+      - sku: 1225
+        price: 1837.50
+      - sku: 1226
+        price: 1839.00
+      - sku: 1227
+        price: 1840.50
+      - sku: 1228
+        price: 1842.00
+      - sku: 1229
+        price: 1843.50
+      - sku: 1230
+        price: 1845.00
+      - sku: 1231
+        price: 1846.50
+      - sku: 1232
+        price: 1848.00
+      - sku: 1233
+        price: 1849.50
+      - sku: 1234
+        price: 1851.00
+      - sku: 1235
+        price: 1852.50
+      - sku: 1236
+        price: 1854.00
+      - sku: 1237
+        price: 1855.50
+      - sku: 1238
+        price: 1857.00
+      - sku: 1239
+        price: 1858.50
+      - sku: 1240
+        price: 1860.00
+      - sku: 1241
+        price: 1861.50
+      - sku: 1242
+        price: 1863.00
+      - sku: 1243
+        price: 1864.50
+      - sku: 1244
+        price: 1866.00
+      - sku: 1245
+        price: 1867.50
+      - sku: 1246
+        price: 1869.00
+      - sku: 1247
+        price: 1870.50
+      - sku: 1248
+        price: 1872.00
+      - sku: 1249
+        price: 1873.50
+      - sku: 1250
+        price: 1875.00
+      - sku: 1251
+        price: 1876.50
+      - sku: 1252
+        price: 1878.00
+      - sku: 1253
+        price: 1879.50
+      - sku: 1254
+        price: 1881.00
+      - sku: 1255
+        price: 1882.50
+      - sku: 1256
+        price: 1884.00
+      - sku: 1257
+        price: 1885.50
+      - sku: 1258
+        price: 1887.00
+      - sku: 1259
+        price: 1888.50
+      - sku: 1260
+        price: 1890.00
+      - sku: 1261
+        price: 1891.50
+      - sku: 1262
+        price: 1893.00
+      - sku: 1263
+        price: 1894.50
+      - sku: 1264
+        price: 1896.00
+      - sku: 1265
+        price: 1897.50
+      - sku: 1266
+        price: 1899.00
+      - sku: 1267
+        price: 1900.50
+      - sku: 1268
+        price: 1902.00
+      - sku: 1269
+        price: 1903.50
+      - sku: 1270
+        price: 1905.00
+      - sku: 1271
+        price: 1906.50
+      - sku: 1272
+        price: 1908.00
+      - sku: 1273
+        price: 1909.50
+      - sku: 1274
+        price: 1911.00
+      - sku: 1275
+        price: 1912.50
+      - sku: 1276
+        price: 1914.00
+      - sku: 1277
+        price: 1915.50
+      - sku: 1278
+        price: 1917.00
+      - sku: 1279
+        price: 1918.50
+      - sku: 1280
+        price: 1920.00
+      - sku: 1281
+        price: 1921.50
+      - sku: 1282
+        price: 1923.00
+      - sku: 1283
+        price: 1924.50
+      - sku: 1284
+        price: 1926.00
+      - sku: 1285
+        price: 1927.50
+      - sku: 1286
+        price: 1929.00
+      - sku: 1287
+        price: 1930.50
+      - sku: 1288
+        price: 1932.00
+      - sku: 1289
+        price: 1933.50
+      - sku: 1290
+        price: 1935.00
+      - sku: 1291
+        price: 1936.50
+      - sku: 1292
+        price: 1938.00
+      - sku: 1293
+        price: 1939.50
+      - sku: 1294
+        price: 1941.00
+      - sku: 1295
+        price: 1942.50
+      - sku: 1296
+        price: 1944.00
+      - sku: 1297
+        price: 1945.50
+      - sku: 1298
+        price: 1947.00
+      - sku: 1299
+        price: 1948.50
+      - sku: 1300
+        price: 1950.00
+      - sku: 1301
+        price: 1951.50
+      - sku: 1302
+        price: 1953.00
+      - sku: 1303
+        price: 1954.50
+      - sku: 1304
+        price: 1956.00
+      - sku: 1305
+        price: 1957.50
+      - sku: 1306
+        price: 1959.00
+      - sku: 1307
+        price: 1960.50
+      - sku: 1308
+        price: 1962.00
+      - sku: 1309
+        price: 1963.50
+      - sku: 1310
+        price: 1965.00
+      - sku: 1311
+        price: 1966.50
+      - sku: 1312
+        price: 1968.00
+      - sku: 1313
+        price: 1969.50
+      - sku: 1314
+        price: 1971.00
+      - sku: 1315
+        price: 1972.50
+      - sku: 1316
+        price: 1974.00
+      - sku: 1317
+        price: 1975.50
+      - sku: 1318
+        price: 1977.00
+      - sku: 1319
+        price: 1978.50
+      - sku: 1320
+        price: 1980.00
+      - sku: 1321
+        price: 1981.50
+      - sku: 1322
+        price: 1983.00
+      - sku: 1323
+        price: 1984.50
+      - sku: 1324
+        price: 1986.00
+      - sku: 1325
+        price: 1987.50
+      - sku: 1326
+        price: 1989.00
+      - sku: 1327
+        price: 1990.50
+      - sku: 1328
+        price: 1992.00
+      - sku: 1329
+        price: 1993.50
+      - sku: 1330
+        price: 1995.00
+      - sku: 1331
+        price: 1996.50
+      - sku: 1332
+        price: 1998.00
+      - sku: 1333
+        price: 1999.50
+      - sku: 1334
+        price: 2001.00
+      - sku: 1335
+        price: 2002.50
+      - sku: 1336
+        price: 2004.00
+      - sku: 1337
+        price: 2005.50
+      - sku: 1338
+        price: 2007.00
+      - sku: 1339
+        price: 2008.50
+      - sku: 1340
+        price: 2010.00
+      - sku: 1341
+        price: 2011.50
+      - sku: 1342
+        price: 2013.00
+      - sku: 1343
+        price: 2014.50
+      - sku: 1344
+        price: 2016.00
+      - sku: 1345
+        price: 2017.50
+      - sku: 1346
+        price: 2019.00
+      - sku: 1347
+        price: 2020.50
+      - sku: 1348
+        price: 2022.00
+      - sku: 1349
+        price: 2023.50
+      - sku: 1350
+        price: 2025.00
+      - sku: 1351
+        price: 2026.50
+      - sku: 1352
+        price: 2028.00
+      - sku: 1353
+        price: 2029.50
+      - sku: 1354
+        price: 2031.00
+      - sku: 1355
+        price: 2032.50
+      - sku: 1356
+        price: 2034.00
+      - sku: 1357
+        price: 2035.50
+      - sku: 1358
+        price: 2037.00
+      - sku: 1359
+        price: 2038.50
+      - sku: 1360
+        price: 2040.00
+      - sku: 1361
+        price: 2041.50
+      - sku: 1362
+        price: 2043.00
+      - sku: 1363
+        price: 2044.50
+      - sku: 1364
+        price: 2046.00
+      - sku: 1365
+        price: 2047.50
+      - sku: 1366
+        price: 2049.00
+      - sku: 1367
+        price: 2050.50
+      - sku: 1368
+        price: 2052.00
+      - sku: 1369
+        price: 2053.50
+      - sku: 1370
+        price: 2055.00
+      - sku: 1371
+        price: 2056.50
+      - sku: 1372
+        price: 2058.00
+      - sku: 1373
+        price: 2059.50
+      - sku: 1374
+        price: 2061.00
+      - sku: 1375
+        price: 2062.50
+      - sku: 1376
+        price: 2064.00
+      - sku: 1377
+        price: 2065.50
+      - sku: 1378
+        price: 2067.00
+      - sku: 1379
+        price: 2068.50
+      - sku: 1380
+        price: 2070.00
+      - sku: 1381
+        price: 2071.50
+      - sku: 1382
+        price: 2073.00
+      - sku: 1383
+        price: 2074.50
+      - sku: 1384
+        price: 2076.00
+      - sku: 1385
+        price: 2077.50
+      - sku: 1386
+        price: 2079.00
+      - sku: 1387
+        price: 2080.50
+      - sku: 1388
+        price: 2082.00
+      - sku: 1389
+        price: 2083.50
+      - sku: 1390
+        price: 2085.00
+      - sku: 1391
+        price: 2086.50
+      - sku: 1392
+        price: 2088.00
+      - sku: 1393
+        price: 2089.50
+      - sku: 1394
+        price: 2091.00
+      - sku: 1395
+        price: 2092.50
+      - sku: 1396
+        price: 2094.00
+      - sku: 1397
+        price: 2095.50
+      - sku: 1398
+        price: 2097.00
+      - sku: 1399
+        price: 2098.50
+      - sku: 1400
+        price: 2100.00
+      - sku: 1401
+        price: 2101.50
+      - sku: 1402
+        price: 2103.00
+      - sku: 1403
+        price: 2104.50
+      - sku: 1404
+        price: 2106.00
+      - sku: 1405
+        price: 2107.50
+      - sku: 1406
+        price: 2109.00
+      - sku: 1407
+        price: 2110.50
+      - sku: 1408
+        price: 2112.00
+      - sku: 1409
+        price: 2113.50
+      - sku: 1410
+        price: 2115.00
+      - sku: 1411
+        price: 2116.50
+      - sku: 1412
+        price: 2118.00
+      - sku: 1413
+        price: 2119.50
+      - sku: 1414
+        price: 2121.00
+      - sku: 1415
+        price: 2122.50
+      - sku: 1416
+        price: 2124.00
+      - sku: 1417
+        price: 2125.50
+      - sku: 1418
+        price: 2127.00
+      - sku: 1419
+        price: 2128.50
+      - sku: 1420
+        price: 2130.00
+      - sku: 1421
+        price: 2131.50
+      - sku: 1422
+        price: 2133.00
+      - sku: 1423
+        price: 2134.50
+      - sku: 1424
+        price: 2136.00
+      - sku: 1425
+        price: 2137.50
+      - sku: 1426
+        price: 2139.00
+      - sku: 1427
+        price: 2140.50
+      - sku: 1428
+        price: 2142.00
+      - sku: 1429
+        price: 2143.50
+      - sku: 1430
+        price: 2145.00
+      - sku: 1431
+        price: 2146.50
+      - sku: 1432
+        price: 2148.00
+      - sku: 1433
+        price: 2149.50
+      - sku: 1434
+        price: 2151.00
+      - sku: 1435
+        price: 2152.50
+      - sku: 1436
+        price: 2154.00
+      - sku: 1437
+        price: 2155.50
+      - sku: 1438
+        price: 2157.00
+      - sku: 1439
+        price: 2158.50
+      - sku: 1440
+        price: 2160.00
+      - sku: 1441
+        price: 2161.50
+      - sku: 1442
+        price: 2163.00
+      - sku: 1443
+        price: 2164.50
+      - sku: 1444
+        price: 2166.00
+      - sku: 1445
+        price: 2167.50
+      - sku: 1446
+        price: 2169.00
+      - sku: 1447
+        price: 2170.50
+      - sku: 1448
+        price: 2172.00
+      - sku: 1449
+        price: 2173.50
+      - sku: 1450
+        price: 2175.00
+      - sku: 1451
+        price: 2176.50
+      - sku: 1452
+        price: 2178.00
+      - sku: 1453
+        price: 2179.50
+      - sku: 1454
+        price: 2181.00
+      - sku: 1455
+        price: 2182.50
+      - sku: 1456
+        price: 2184.00
+      - sku: 1457
+        price: 2185.50
+      - sku: 1458
+        price: 2187.00
+      - sku: 1459
+        price: 2188.50
+      - sku: 1460
+        price: 2190.00
+      - sku: 1461
+        price: 2191.50
+      - sku: 1462
+        price: 2193.00
+      - sku: 1463
+        price: 2194.50
+      - sku: 1464
+        price: 2196.00
+      - sku: 1465
+        price: 2197.50
+      - sku: 1466
+        price: 2199.00
+      - sku: 1467
+        price: 2200.50
+      - sku: 1468
+        price: 2202.00
+      - sku: 1469
+        price: 2203.50
+      - sku: 1470
+        price: 2205.00
+      - sku: 1471
+        price: 2206.50
+      - sku: 1472
+        price: 2208.00
+      - sku: 1473
+        price: 2209.50
+      - sku: 1474
+        price: 2211.00
+      - sku: 1475
+        price: 2212.50
+      - sku: 1476
+        price: 2214.00
+      - sku: 1477
+        price: 2215.50
+      - sku: 1478
+        price: 2217.00
+      - sku: 1479
+        price: 2218.50
+      - sku: 1480
+        price: 2220.00
+      - sku: 1481
+        price: 2221.50
+      - sku: 1482
+        price: 2223.00
+      - sku: 1483
+        price: 2224.50
+      - sku: 1484
+        price: 2226.00
+      - sku: 1485
+        price: 2227.50
+      - sku: 1486
+        price: 2229.00
+      - sku: 1487
+        price: 2230.50
+      - sku: 1488
+        price: 2232.00
+      - sku: 1489
+        price: 2233.50
+      - sku: 1490
+        price: 2235.00
+      - sku: 1491
+        price: 2236.50
+      - sku: 1492
+        price: 2238.00
+      - sku: 1493
+        price: 2239.50
+      - sku: 1494
+        price: 2241.00
+      - sku: 1495
+        price: 2242.50
+      - sku: 1496
+        price: 2244.00
+      - sku: 1497
+        price: 2245.50
+      - sku: 1498
+        price: 2247.00
+      - sku: 1499
+        price: 2248.50
+      - sku: 1500
+        price: 2250.00
+      - sku: 1501
+        price: 2251.50
+      - sku: 1502
+        price: 2253.00
+      - sku: 1503
+        price: 2254.50
+      - sku: 1504
+        price: 2256.00
+      - sku: 1505
+        price: 2257.50
+      - sku: 1506
+        price: 2259.00
+      - sku: 1507
+        price: 2260.50
+      - sku: 1508
+        price: 2262.00
+      - sku: 1509
+        price: 2263.50
+      - sku: 1510
+        price: 2265.00
+      - sku: 1511
+        price: 2266.50
+      - sku: 1512
+        price: 2268.00
+      - sku: 1513
+        price: 2269.50
+      - sku: 1514
+        price: 2271.00
+      - sku: 1515
+        price: 2272.50
+      - sku: 1516
+        price: 2274.00
+      - sku: 1517
+        price: 2275.50
+      - sku: 1518
+        price: 2277.00
+      - sku: 1519
+        price: 2278.50
+      - sku: 1520
+        price: 2280.00
+      - sku: 1521
+        price: 2281.50
+      - sku: 1522
+        price: 2283.00
+      - sku: 1523
+        price: 2284.50
+      - sku: 1524
+        price: 2286.00
+      - sku: 1525
+        price: 2287.50
+      - sku: 1526
+        price: 2289.00
+      - sku: 1527
+        price: 2290.50
+      - sku: 1528
+        price: 2292.00
+      - sku: 1529
+        price: 2293.50
+      - sku: 1530
+        price: 2295.00
+      - sku: 1531
+        price: 2296.50
+      - sku: 1532
+        price: 2298.00
+      - sku: 1533
+        price: 2299.50
+      - sku: 1534
+        price: 2301.00
+      - sku: 1535
+        price: 2302.50
+      - sku: 1536
+        price: 2304.00
+      - sku: 1537
+        price: 2305.50
+      - sku: 1538
+        price: 2307.00
+      - sku: 1539
+        price: 2308.50
+      - sku: 1540
+        price: 2310.00
+      - sku: 1541
+        price: 2311.50
+      - sku: 1542
+        price: 2313.00
+      - sku: 1543
+        price: 2314.50
+      - sku: 1544
+        price: 2316.00
+      - sku: 1545
+        price: 2317.50
+      - sku: 1546
+        price: 2319.00
+      - sku: 1547
+        price: 2320.50
+      - sku: 1548
+        price: 2322.00
+      - sku: 1549
+        price: 2323.50
+      - sku: 1550
+        price: 2325.00
+      - sku: 1551
+        price: 2326.50
+      - sku: 1552
+        price: 2328.00
+      - sku: 1553
+        price: 2329.50
+      - sku: 1554
+        price: 2331.00
+      - sku: 1555
+        price: 2332.50
+      - sku: 1556
+        price: 2334.00
+      - sku: 1557
+        price: 2335.50
+      - sku: 1558
+        price: 2337.00
+      - sku: 1559
+        price: 2338.50
+      - sku: 1560
+        price: 2340.00
+      - sku: 1561
+        price: 2341.50
+      - sku: 1562
+        price: 2343.00
+      - sku: 1563
+        price: 2344.50
+      - sku: 1564
+        price: 2346.00
+      - sku: 1565
+        price: 2347.50
+      - sku: 1566
+        price: 2349.00
+      - sku: 1567
+        price: 2350.50
+      - sku: 1568
+        price: 2352.00
+      - sku: 1569
+        price: 2353.50
+      - sku: 1570
+        price: 2355.00
+      - sku: 1571
+        price: 2356.50
+      - sku: 1572
+        price: 2358.00
+      - sku: 1573
+        price: 2359.50
+      - sku: 1574
+        price: 2361.00
+      - sku: 1575
+        price: 2362.50
+      - sku: 1576
+        price: 2364.00
+      - sku: 1577
+        price: 2365.50
+      - sku: 1578
+        price: 2367.00
+      - sku: 1579
+        price: 2368.50
+      - sku: 1580
+        price: 2370.00
+      - sku: 1581
+        price: 2371.50
+      - sku: 1582
+        price: 2373.00
+      - sku: 1583
+        price: 2374.50
+      - sku: 1584
+        price: 2376.00
+      - sku: 1585
+        price: 2377.50
+      - sku: 1586
+        price: 2379.00
+      - sku: 1587
+        price: 2380.50
+      - sku: 1588
+        price: 2382.00
+      - sku: 1589
+        price: 2383.50
+      - sku: 1590
+        price: 2385.00
+      - sku: 1591
+        price: 2386.50
+      - sku: 1592
+        price: 2388.00
+      - sku: 1593
+        price: 2389.50
+      - sku: 1594
+        price: 2391.00
+      - sku: 1595
+        price: 2392.50
+      - sku: 1596
+        price: 2394.00
+      - sku: 1597
+        price: 2395.50
+      - sku: 1598
+        price: 2397.00
+      - sku: 1599
+        price: 2398.50
+      - sku: 1600
+        price: 2400.00
+      - sku: 1601
+        price: 2401.50
+      - sku: 1602
+        price: 2403.00
+      - sku: 1603
+        price: 2404.50
+      - sku: 1604
+        price: 2406.00
+      - sku: 1605
+        price: 2407.50
+      - sku: 1606
+        price: 2409.00
+      - sku: 1607
+        price: 2410.50
+      - sku: 1608
+        price: 2412.00
+      - sku: 1609
+        price: 2413.50
+      - sku: 1610
+        price: 2415.00
+      - sku: 1611
+        price: 2416.50
+      - sku: 1612
+        price: 2418.00
+      - sku: 1613
+        price: 2419.50
+      - sku: 1614
+        price: 2421.00
+      - sku: 1615
+        price: 2422.50
+      - sku: 1616
+        price: 2424.00
+      - sku: 1617
+        price: 2425.50
+      - sku: 1618
+        price: 2427.00
+      - sku: 1619
+        price: 2428.50
+      - sku: 1620
+        price: 2430.00
+      - sku: 1621
+        price: 2431.50
+      - sku: 1622
+        price: 2433.00
+      - sku: 1623
+        price: 2434.50
+      - sku: 1624
+        price: 2436.00
+      - sku: 1625
+        price: 2437.50
+      - sku: 1626
+        price: 2439.00
+      - sku: 1627
+        price: 2440.50
+      - sku: 1628
+        price: 2442.00
+      - sku: 1629
+        price: 2443.50
+      - sku: 1630
+        price: 2445.00
+      - sku: 1631
+        price: 2446.50
+      - sku: 1632
+        price: 2448.00
+      - sku: 1633
+        price: 2449.50
+      - sku: 1634
+        price: 2451.00
+      - sku: 1635
+        price: 2452.50
+      - sku: 1636
+        price: 2454.00
+      - sku: 1637
+        price: 2455.50
+      - sku: 1638
+        price: 2457.00
+      - sku: 1639
+        price: 2458.50
+      - sku: 1640
+        price: 2460.00
+      - sku: 1641
+        price: 2461.50
+      - sku: 1642
+        price: 2463.00
+      - sku: 1643
+        price: 2464.50
+      - sku: 1644
+        price: 2466.00
+      - sku: 1645
+        price: 2467.50
+      - sku: 1646
+        price: 2469.00
+      - sku: 1647
+        price: 2470.50
+      - sku: 1648
+        price: 2472.00
+      - sku: 1649
+        price: 2473.50
+      - sku: 1650
+        price: 2475.00
+      - sku: 1651
+        price: 2476.50
+      - sku: 1652
+        price: 2478.00
+      - sku: 1653
+        price: 2479.50
+      - sku: 1654
+        price: 2481.00
+      - sku: 1655
+        price: 2482.50
+      - sku: 1656
+        price: 2484.00
+      - sku: 1657
+        price: 2485.50
+      - sku: 1658
+        price: 2487.00
+      - sku: 1659
+        price: 2488.50
+      - sku: 1660
+        price: 2490.00
+      - sku: 1661
+        price: 2491.50
+      - sku: 1662
+        price: 2493.00
+      - sku: 1663
+        price: 2494.50
+      - sku: 1664
+        price: 2496.00
+      - sku: 1665
+        price: 2497.50
+      - sku: 1666
+        price: 2499.00
+      - sku: 1667
+        price: 2500.50
+      - sku: 1668
+        price: 2502.00
+      - sku: 1669
+        price: 2503.50
+      - sku: 1670
+        price: 2505.00
+      - sku: 1671
+        price: 2506.50
+      - sku: 1672
+        price: 2508.00
+      - sku: 1673
+        price: 2509.50
+      - sku: 1674
+        price: 2511.00
+      - sku: 1675
+        price: 2512.50
+      - sku: 1676
+        price: 2514.00
+      - sku: 1677
+        price: 2515.50
+      - sku: 1678
+        price: 2517.00
+      - sku: 1679
+        price: 2518.50
+      - sku: 1680
+        price: 2520.00
+      - sku: 1681
+        price: 2521.50
+      - sku: 1682
+        price: 2523.00
+      - sku: 1683
+        price: 2524.50
+      - sku: 1684
+        price: 2526.00
+      - sku: 1685
+        price: 2527.50
+      - sku: 1686
+        price: 2529.00
+      - sku: 1687
+        price: 2530.50
+      - sku: 1688
+        price: 2532.00
+      - sku: 1689
+        price: 2533.50
+      - sku: 1690
+        price: 2535.00
+      - sku: 1691
+        price: 2536.50
+      - sku: 1692
+        price: 2538.00
+      - sku: 1693
+        price: 2539.50
+      - sku: 1694
+        price: 2541.00
+      - sku: 1695
+        price: 2542.50
+      - sku: 1696
+        price: 2544.00
+      - sku: 1697
+        price: 2545.50
+      - sku: 1698
+        price: 2547.00
+      - sku: 1699
+        price: 2548.50
+      - sku: 1700
+        price: 2550.00
+      - sku: 1701
+        price: 2551.50
+      - sku: 1702
+        price: 2553.00
+      - sku: 1703
+        price: 2554.50
+      - sku: 1704
+        price: 2556.00
+      - sku: 1705
+        price: 2557.50
+      - sku: 1706
+        price: 2559.00
+      - sku: 1707
+        price: 2560.50
+      - sku: 1708
+        price: 2562.00
+      - sku: 1709
+        price: 2563.50
+      - sku: 1710
+        price: 2565.00
+      - sku: 1711
+        price: 2566.50
+      - sku: 1712
+        price: 2568.00
+      - sku: 1713
+        price: 2569.50
+      - sku: 1714
+        price: 2571.00
+      - sku: 1715
+        price: 2572.50
+      - sku: 1716
+        price: 2574.00
+      - sku: 1717
+        price: 2575.50
+      - sku: 1718
+        price: 2577.00
+      - sku: 1719
+        price: 2578.50
+      - sku: 1720
+        price: 2580.00
+      - sku: 1721
+        price: 2581.50
+      - sku: 1722
+        price: 2583.00
+      - sku: 1723
+        price: 2584.50
+      - sku: 1724
+        price: 2586.00
+      - sku: 1725
+        price: 2587.50
+      - sku: 1726
+        price: 2589.00
+      - sku: 1727
+        price: 2590.50
+      - sku: 1728
+        price: 2592.00
+      - sku: 1729
+        price: 2593.50
+      - sku: 1730
+        price: 2595.00
+      - sku: 1731
+        price: 2596.50
+      - sku: 1732
+        price: 2598.00
+      - sku: 1733
+        price: 2599.50
+      - sku: 1734
+        price: 2601.00
+      - sku: 1735
+        price: 2602.50
+      - sku: 1736
+        price: 2604.00
+      - sku: 1737
+        price: 2605.50
+      - sku: 1738
+        price: 2607.00
+      - sku: 1739
+        price: 2608.50
+      - sku: 1740
+        price: 2610.00
+      - sku: 1741
+        price: 2611.50
+      - sku: 1742
+        price: 2613.00
+      - sku: 1743
+        price: 2614.50
+      - sku: 1744
+        price: 2616.00
+      - sku: 1745
+        price: 2617.50
+      - sku: 1746
+        price: 2619.00
+      - sku: 1747
+        price: 2620.50
+      - sku: 1748
+        price: 2622.00
+      - sku: 1749
+        price: 2623.50
+      - sku: 1750
+        price: 2625.00
+      - sku: 1751
+        price: 2626.50
+      - sku: 1752
+        price: 2628.00
+      - sku: 1753
+        price: 2629.50
+      - sku: 1754
+        price: 2631.00
+      - sku: 1755
+        price: 2632.50
+      - sku: 1756
+        price: 2634.00
+      - sku: 1757
+        price: 2635.50
+      - sku: 1758
+        price: 2637.00
+      - sku: 1759
+        price: 2638.50
+      - sku: 1760
+        price: 2640.00
+      - sku: 1761
+        price: 2641.50
+      - sku: 1762
+        price: 2643.00
+      - sku: 1763
+        price: 2644.50
+      - sku: 1764
+        price: 2646.00
+      - sku: 1765
+        price: 2647.50
+      - sku: 1766
+        price: 2649.00
+      - sku: 1767
+        price: 2650.50
+      - sku: 1768
+        price: 2652.00
+      - sku: 1769
+        price: 2653.50
+      - sku: 1770
+        price: 2655.00
+      - sku: 1771
+        price: 2656.50
+      - sku: 1772
+        price: 2658.00
+      - sku: 1773
+        price: 2659.50
+      - sku: 1774
+        price: 2661.00
+      - sku: 1775
+        price: 2662.50
+      - sku: 1776
+        price: 2664.00
+      - sku: 1777
+        price: 2665.50
+      - sku: 1778
+        price: 2667.00
+      - sku: 1779
+        price: 2668.50
+      - sku: 1780
+        price: 2670.00
+      - sku: 1781
+        price: 2671.50
+      - sku: 1782
+        price: 2673.00
+      - sku: 1783
+        price: 2674.50
+      - sku: 1784
+        price: 2676.00
+      - sku: 1785
+        price: 2677.50
+      - sku: 1786
+        price: 2679.00
+      - sku: 1787
+        price: 2680.50
+      - sku: 1788
+        price: 2682.00
+      - sku: 1789
+        price: 2683.50
+      - sku: 1790
+        price: 2685.00
+      - sku: 1791
+        price: 2686.50
+      - sku: 1792
+        price: 2688.00
+      - sku: 1793
+        price: 2689.50
+      - sku: 1794
+        price: 2691.00
+      - sku: 1795
+        price: 2692.50
+      - sku: 1796
+        price: 2694.00
+      - sku: 1797
+        price: 2695.50
+      - sku: 1798
+        price: 2697.00
+      - sku: 1799
+        price: 2698.50
+      - sku: 1800
+        price: 2700.00
+      - sku: 1801
+        price: 2701.50
+      - sku: 1802
+        price: 2703.00
+      - sku: 1803
+        price: 2704.50
+      - sku: 1804
+        price: 2706.00
+      - sku: 1805
+        price: 2707.50
+      - sku: 1806
+        price: 2709.00
+      - sku: 1807
+        price: 2710.50
+      - sku: 1808
+        price: 2712.00
+      - sku: 1809
+        price: 2713.50
+      - sku: 1810
+        price: 2715.00
+      - sku: 1811
+        price: 2716.50
+      - sku: 1812
+        price: 2718.00
+      - sku: 1813
+        price: 2719.50
+      - sku: 1814
+        price: 2721.00
+      - sku: 1815
+        price: 2722.50
+      - sku: 1816
+        price: 2724.00
+      - sku: 1817
+        price: 2725.50
+      - sku: 1818
+        price: 2727.00
+      - sku: 1819
+        price: 2728.50
+      - sku: 1820
+        price: 2730.00
+      - sku: 1821
+        price: 2731.50
+      - sku: 1822
+        price: 2733.00
+      - sku: 1823
+        price: 2734.50
+      - sku: 1824
+        price: 2736.00
+      - sku: 1825
+        price: 2737.50
+      - sku: 1826
+        price: 2739.00
+      - sku: 1827
+        price: 2740.50
+      - sku: 1828
+        price: 2742.00
+      - sku: 1829
+        price: 2743.50
+      - sku: 1830
+        price: 2745.00
+      - sku: 1831
+        price: 2746.50
+      - sku: 1832
+        price: 2748.00
+      - sku: 1833
+        price: 2749.50
+      - sku: 1834
+        price: 2751.00
+      - sku: 1835
+        price: 2752.50
+      - sku: 1836
+        price: 2754.00
+      - sku: 1837
+        price: 2755.50
+      - sku: 1838
+        price: 2757.00
+      - sku: 1839
+        price: 2758.50
+      - sku: 1840
+        price: 2760.00
+      - sku: 1841
+        price: 2761.50
+      - sku: 1842
+        price: 2763.00
+      - sku: 1843
+        price: 2764.50
+      - sku: 1844
+        price: 2766.00
+      - sku: 1845
+        price: 2767.50
+      - sku: 1846
+        price: 2769.00
+      - sku: 1847
+        price: 2770.50
+      - sku: 1848
+        price: 2772.00
+      - sku: 1849
+        price: 2773.50
+      - sku: 1850
+        price: 2775.00
+      - sku: 1851
+        price: 2776.50
+      - sku: 1852
+        price: 2778.00
+      - sku: 1853
+        price: 2779.50
+      - sku: 1854
+        price: 2781.00
+      - sku: 1855
+        price: 2782.50
+      - sku: 1856
+        price: 2784.00
+      - sku: 1857
+        price: 2785.50
+      - sku: 1858
+        price: 2787.00
+      - sku: 1859
+        price: 2788.50
+      - sku: 1860
+        price: 2790.00
+      - sku: 1861
+        price: 2791.50
+      - sku: 1862
+        price: 2793.00
+      - sku: 1863
+        price: 2794.50
+      - sku: 1864
+        price: 2796.00
+      - sku: 1865
+        price: 2797.50
+      - sku: 1866
+        price: 2799.00
+      - sku: 1867
+        price: 2800.50
+      - sku: 1868
+        price: 2802.00
+      - sku: 1869
+        price: 2803.50
+      - sku: 1870
+        price: 2805.00
+      - sku: 1871
+        price: 2806.50
+      - sku: 1872
+        price: 2808.00
+      - sku: 1873
+        price: 2809.50
+      - sku: 1874
+        price: 2811.00
+      - sku: 1875
+        price: 2812.50
+      - sku: 1876
+        price: 2814.00
+      - sku: 1877
+        price: 2815.50
+      - sku: 1878
+        price: 2817.00
+      - sku: 1879
+        price: 2818.50
+      - sku: 1880
+        price: 2820.00
+      - sku: 1881
+        price: 2821.50
+      - sku: 1882
+        price: 2823.00
+      - sku: 1883
+        price: 2824.50
+      - sku: 1884
+        price: 2826.00
+      - sku: 1885
+        price: 2827.50
+      - sku: 1886
+        price: 2829.00
+      - sku: 1887
+        price: 2830.50
+      - sku: 1888
+        price: 2832.00
+      - sku: 1889
+        price: 2833.50
+      - sku: 1890
+        price: 2835.00
+      - sku: 1891
+        price: 2836.50
+      - sku: 1892
+        price: 2838.00
+      - sku: 1893
+        price: 2839.50
+      - sku: 1894
+        price: 2841.00
+      - sku: 1895
+        price: 2842.50
+      - sku: 1896
+        price: 2844.00
+      - sku: 1897
+        price: 2845.50
+      - sku: 1898
+        price: 2847.00
+      - sku: 1899
+        price: 2848.50
+      - sku: 1900
+        price: 2850.00
+      - sku: 1901
+        price: 2851.50
+      - sku: 1902
+        price: 2853.00
+      - sku: 1903
+        price: 2854.50
+      - sku: 1904
+        price: 2856.00
+      - sku: 1905
+        price: 2857.50
+      - sku: 1906
+        price: 2859.00
+      - sku: 1907
+        price: 2860.50
+      - sku: 1908
+        price: 2862.00
+      - sku: 1909
+        price: 2863.50
+      - sku: 1910
+        price: 2865.00
+      - sku: 1911
+        price: 2866.50
+      - sku: 1912
+        price: 2868.00
+      - sku: 1913
+        price: 2869.50
+      - sku: 1914
+        price: 2871.00
+      - sku: 1915
+        price: 2872.50
+      - sku: 1916
+        price: 2874.00
+      - sku: 1917
+        price: 2875.50
+      - sku: 1918
+        price: 2877.00
+      - sku: 1919
+        price: 2878.50
+      - sku: 1920
+        price: 2880.00
+      - sku: 1921
+        price: 2881.50
+      - sku: 1922
+        price: 2883.00
+      - sku: 1923
+        price: 2884.50
+      - sku: 1924
+        price: 2886.00
+      - sku: 1925
+        price: 2887.50
+      - sku: 1926
+        price: 2889.00
+      - sku: 1927
+        price: 2890.50
+      - sku: 1928
+        price: 2892.00
+      - sku: 1929
+        price: 2893.50
+      - sku: 1930
+        price: 2895.00
+      - sku: 1931
+        price: 2896.50
+      - sku: 1932
+        price: 2898.00
+      - sku: 1933
+        price: 2899.50
+      - sku: 1934
+        price: 2901.00
+      - sku: 1935
+        price: 2902.50
+      - sku: 1936
+        price: 2904.00
+      - sku: 1937
+        price: 2905.50
+      - sku: 1938
+        price: 2907.00
+      - sku: 1939
+        price: 2908.50
+      - sku: 1940
+        price: 2910.00
+      - sku: 1941
+        price: 2911.50
+      - sku: 1942
+        price: 2913.00
+      - sku: 1943
+        price: 2914.50
+      - sku: 1944
+        price: 2916.00
+      - sku: 1945
+        price: 2917.50
+      - sku: 1946
+        price: 2919.00
+      - sku: 1947
+        price: 2920.50
+      - sku: 1948
+        price: 2922.00
+      - sku: 1949
+        price: 2923.50
+      - sku: 1950
+        price: 2925.00
+      - sku: 1951
+        price: 2926.50
+      - sku: 1952
+        price: 2928.00
+      - sku: 1953
+        price: 2929.50
+      - sku: 1954
+        price: 2931.00
+      - sku: 1955
+        price: 2932.50
+      - sku: 1956
+        price: 2934.00
+      - sku: 1957
+        price: 2935.50
+      - sku: 1958
+        price: 2937.00
+      - sku: 1959
+        price: 2938.50
+      - sku: 1960
+        price: 2940.00
+      - sku: 1961
+        price: 2941.50
+      - sku: 1962
+        price: 2943.00
+      - sku: 1963
+        price: 2944.50
+      - sku: 1964
+        price: 2946.00
+      - sku: 1965
+        price: 2947.50
+      - sku: 1966
+        price: 2949.00
+      - sku: 1967
+        price: 2950.50
+      - sku: 1968
+        price: 2952.00
+      - sku: 1969
+        price: 2953.50
+      - sku: 1970
+        price: 2955.00
+      - sku: 1971
+        price: 2956.50
+      - sku: 1972
+        price: 2958.00
+      - sku: 1973
+        price: 2959.50
+      - sku: 1974
+        price: 2961.00
+      - sku: 1975
+        price: 2962.50
+      - sku: 1976
+        price: 2964.00
+      - sku: 1977
+        price: 2965.50
+      - sku: 1978
+        price: 2967.00
+      - sku: 1979
+        price: 2968.50
+      - sku: 1980
+        price: 2970.00
+      - sku: 1981
+        price: 2971.50
+      - sku: 1982
+        price: 2973.00
+      - sku: 1983
+        price: 2974.50
+      - sku: 1984
+        price: 2976.00
+      - sku: 1985
+        price: 2977.50
+      - sku: 1986
+        price: 2979.00
+      - sku: 1987
+        price: 2980.50
+      - sku: 1988
+        price: 2982.00
+      - sku: 1989
+        price: 2983.50
+      - sku: 1990
+        price: 2985.00
+      - sku: 1991
+        price: 2986.50
+      - sku: 1992
+        price: 2988.00
+      - sku: 1993
+        price: 2989.50
+      - sku: 1994
+        price: 2991.00
+      - sku: 1995
+        price: 2992.50
+      - sku: 1996
+        price: 2994.00
+      - sku: 1997
+        price: 2995.50
+      - sku: 1998
+        price: 2997.00
+      - sku: 1999
+        price: 2998.50
+      - sku: 2000
+        price: 3000.00
+      - sku: 2001
+        price: 3001.50
+      - sku: 2002
+        price: 3003.00
+      - sku: 2003
+        price: 3004.50
+      - sku: 2004
+        price: 3006.00
+      - sku: 2005
+        price: 3007.50
+      - sku: 2006
+        price: 3009.00
+      - sku: 2007
+        price: 3010.50
+      - sku: 2008
+        price: 3012.00
+      - sku: 2009
+        price: 3013.50
+      - sku: 2010
+        price: 3015.00
+      - sku: 2011
+        price: 3016.50
+      - sku: 2012
+        price: 3018.00
+      - sku: 2013
+        price: 3019.50
+      - sku: 2014
+        price: 3021.00
+      - sku: 2015
+        price: 3022.50
+      - sku: 2016
+        price: 3024.00
+      - sku: 2017
+        price: 3025.50
+      - sku: 2018
+        price: 3027.00
+      - sku: 2019
+        price: 3028.50
+      - sku: 2020
+        price: 3030.00
+      - sku: 2021
+        price: 3031.50
+      - sku: 2022
+        price: 3033.00
+      - sku: 2023
+        price: 3034.50
+      - sku: 2024
+        price: 3036.00
+      - sku: 2025
+        price: 3037.50
+      - sku: 2026
+        price: 3039.00
+      - sku: 2027
+        price: 3040.50
+      - sku: 2028
+        price: 3042.00
+      - sku: 2029
+        price: 3043.50
+      - sku: 2030
+        price: 3045.00
+      - sku: 2031
+        price: 3046.50
+      - sku: 2032
+        price: 3048.00
+      - sku: 2033
+        price: 3049.50
+      - sku: 2034
+        price: 3051.00
+      - sku: 2035
+        price: 3052.50
+      - sku: 2036
+        price: 3054.00
+      - sku: 2037
+        price: 3055.50
+      - sku: 2038
+        price: 3057.00
+      - sku: 2039
+        price: 3058.50
+      - sku: 2040
+        price: 3060.00
+      - sku: 2041
+        price: 3061.50
+      - sku: 2042
+        price: 3063.00
+      - sku: 2043
+        price: 3064.50
+      - sku: 2044
+        price: 3066.00
+      - sku: 2045
+        price: 3067.50
+      - sku: 2046
+        price: 3069.00
+      - sku: 2047
+        price: 3070.50
+      - sku: 2048
+        price: 3072.00
+      - sku: 2049
+        price: 3073.50
+      - sku: 2050
+        price: 3075.00
+      - sku: 2051
+        price: 3076.50
+      - sku: 2052
+        price: 3078.00
+      - sku: 2053
+        price: 3079.50
+      - sku: 2054
+        price: 3081.00
+      - sku: 2055
+        price: 3082.50
+      - sku: 2056
+        price: 3084.00
+      - sku: 2057
+        price: 3085.50
+      - sku: 2058
+        price: 3087.00
+      - sku: 2059
+        price: 3088.50
+      - sku: 2060
+        price: 3090.00
+      - sku: 2061
+        price: 3091.50
+      - sku: 2062
+        price: 3093.00
+      - sku: 2063
+        price: 3094.50
+      - sku: 2064
+        price: 3096.00
+      - sku: 2065
+        price: 3097.50
+      - sku: 2066
+        price: 3099.00
+      - sku: 2067
+        price: 3100.50
+      - sku: 2068
+        price: 3102.00
+      - sku: 2069
+        price: 3103.50
+      - sku: 2070
+        price: 3105.00
+      - sku: 2071
+        price: 3106.50
+      - sku: 2072
+        price: 3108.00
+      - sku: 2073
+        price: 3109.50
+      - sku: 2074
+        price: 3111.00
+      - sku: 2075
+        price: 3112.50
+      - sku: 2076
+        price: 3114.00
+      - sku: 2077
+        price: 3115.50
+      - sku: 2078
+        price: 3117.00
+      - sku: 2079
+        price: 3118.50
+      - sku: 2080
+        price: 3120.00
+      - sku: 2081
+        price: 3121.50
+      - sku: 2082
+        price: 3123.00
+      - sku: 2083
+        price: 3124.50
+      - sku: 2084
+        price: 3126.00
+      - sku: 2085
+        price: 3127.50
+      - sku: 2086
+        price: 3129.00
+      - sku: 2087
+        price: 3130.50
+      - sku: 2088
+        price: 3132.00
+      - sku: 2089
+        price: 3133.50
+      - sku: 2090
+        price: 3135.00
+      - sku: 2091
+        price: 3136.50
+      - sku: 2092
+        price: 3138.00
+      - sku: 2093
+        price: 3139.50
+      - sku: 2094
+        price: 3141.00
+      - sku: 2095
+        price: 3142.50
+      - sku: 2096
+        price: 3144.00
+      - sku: 2097
+        price: 3145.50
+      - sku: 2098
+        price: 3147.00
+      - sku: 2099
+        price: 3148.50
+      - sku: 2100
+        price: 3150.00
+      - sku: 2101
+        price: 3151.50
+      - sku: 2102
+        price: 3153.00
+      - sku: 2103
+        price: 3154.50
+      - sku: 2104
+        price: 3156.00
+      - sku: 2105
+        price: 3157.50
+      - sku: 2106
+        price: 3159.00
+      - sku: 2107
+        price: 3160.50
+      - sku: 2108
+        price: 3162.00
+      - sku: 2109
+        price: 3163.50
+      - sku: 2110
+        price: 3165.00
+      - sku: 2111
+        price: 3166.50
+      - sku: 2112
+        price: 3168.00
+      - sku: 2113
+        price: 3169.50
+      - sku: 2114
+        price: 3171.00
+      - sku: 2115
+        price: 3172.50
+      - sku: 2116
+        price: 3174.00
+      - sku: 2117
+        price: 3175.50
+      - sku: 2118
+        price: 3177.00
+      - sku: 2119
+        price: 3178.50
+      - sku: 2120
+        price: 3180.00
+      - sku: 2121
+        price: 3181.50
+      - sku: 2122
+        price: 3183.00
+      - sku: 2123
+        price: 3184.50
+      - sku: 2124
+        price: 3186.00
+      - sku: 2125
+        price: 3187.50
+      - sku: 2126
+        price: 3189.00
+      - sku: 2127
+        price: 3190.50
+      - sku: 2128
+        price: 3192.00
+      - sku: 2129
+        price: 3193.50
+      - sku: 2130
+        price: 3195.00
+      - sku: 2131
+        price: 3196.50
+      - sku: 2132
+        price: 3198.00
+      - sku: 2133
+        price: 3199.50
+      - sku: 2134
+        price: 3201.00
+      - sku: 2135
+        price: 3202.50
+      - sku: 2136
+        price: 3204.00
+      - sku: 2137
+        price: 3205.50
+      - sku: 2138
+        price: 3207.00
+      - sku: 2139
+        price: 3208.50
+      - sku: 2140
+        price: 3210.00
+      - sku: 2141
+        price: 3211.50
+      - sku: 2142
+        price: 3213.00
+      - sku: 2143
+        price: 3214.50
+      - sku: 2144
+        price: 3216.00
+      - sku: 2145
+        price: 3217.50
+      - sku: 2146
+        price: 3219.00
+      - sku: 2147
+        price: 3220.50
+      - sku: 2148
+        price: 3222.00
+      - sku: 2149
+        price: 3223.50
+      - sku: 2150
+        price: 3225.00
+      - sku: 2151
+        price: 3226.50
+      - sku: 2152
+        price: 3228.00
+      - sku: 2153
+        price: 3229.50
+      - sku: 2154
+        price: 3231.00
+      - sku: 2155
+        price: 3232.50
+      - sku: 2156
+        price: 3234.00
+      - sku: 2157
+        price: 3235.50
+      - sku: 2158
+        price: 3237.00
+      - sku: 2159
+        price: 3238.50
+      - sku: 2160
+        price: 3240.00
+      - sku: 2161
+        price: 3241.50
+      - sku: 2162
+        price: 3243.00
+      - sku: 2163
+        price: 3244.50
+      - sku: 2164
+        price: 3246.00
+      - sku: 2165
+        price: 3247.50
+      - sku: 2166
+        price: 3249.00
+      - sku: 2167
+        price: 3250.50
+      - sku: 2168
+        price: 3252.00
+      - sku: 2169
+        price: 3253.50
+      - sku: 2170
+        price: 3255.00
+      - sku: 2171
+        price: 3256.50
+      - sku: 2172
+        price: 3258.00
+      - sku: 2173
+        price: 3259.50
+      - sku: 2174
+        price: 3261.00
+      - sku: 2175
+        price: 3262.50
+      - sku: 2176
+        price: 3264.00
+      - sku: 2177
+        price: 3265.50
+      - sku: 2178
+        price: 3267.00
+      - sku: 2179
+        price: 3268.50
+      - sku: 2180
+        price: 3270.00
+      - sku: 2181
+        price: 3271.50
+      - sku: 2182
+        price: 3273.00
+      - sku: 2183
+        price: 3274.50
+      - sku: 2184
+        price: 3276.00
+      - sku: 2185
+        price: 3277.50
+      - sku: 2186
+        price: 3279.00
+      - sku: 2187
+        price: 3280.50
+      - sku: 2188
+        price: 3282.00
+      - sku: 2189
+        price: 3283.50
+      - sku: 2190
+        price: 3285.00
+      - sku: 2191
+        price: 3286.50
+      - sku: 2192
+        price: 3288.00
+      - sku: 2193
+        price: 3289.50
+      - sku: 2194
+        price: 3291.00
+      - sku: 2195
+        price: 3292.50
+      - sku: 2196
+        price: 3294.00
+      - sku: 2197
+        price: 3295.50
+      - sku: 2198
+        price: 3297.00
+      - sku: 2199
+        price: 3298.50
+      - sku: 2200
+        price: 3300.00
+      - sku: 2201
+        price: 3301.50
+      - sku: 2202
+        price: 3303.00
+      - sku: 2203
+        price: 3304.50
+      - sku: 2204
+        price: 3306.00
+      - sku: 2205
+        price: 3307.50
+      - sku: 2206
+        price: 3309.00
+      - sku: 2207
+        price: 3310.50
+      - sku: 2208
+        price: 3312.00
+      - sku: 2209
+        price: 3313.50
+      - sku: 2210
+        price: 3315.00
+      - sku: 2211
+        price: 3316.50
+      - sku: 2212
+        price: 3318.00
+      - sku: 2213
+        price: 3319.50
+      - sku: 2214
+        price: 3321.00
+      - sku: 2215
+        price: 3322.50
+      - sku: 2216
+        price: 3324.00
+      - sku: 2217
+        price: 3325.50
+      - sku: 2218
+        price: 3327.00
+      - sku: 2219
+        price: 3328.50
+      - sku: 2220
+        price: 3330.00
+      - sku: 2221
+        price: 3331.50
+      - sku: 2222
+        price: 3333.00
+      - sku: 2223
+        price: 3334.50
+      - sku: 2224
+        price: 3336.00
+      - sku: 2225
+        price: 3337.50
+      - sku: 2226
+        price: 3339.00
+      - sku: 2227
+        price: 3340.50
+      - sku: 2228
+        price: 3342.00
+      - sku: 2229
+        price: 3343.50
+      - sku: 2230
+        price: 3345.00
+      - sku: 2231
+        price: 3346.50
+      - sku: 2232
+        price: 3348.00
+      - sku: 2233
+        price: 3349.50
+      - sku: 2234
+        price: 3351.00
+      - sku: 2235
+        price: 3352.50
+      - sku: 2236
+        price: 3354.00
+      - sku: 2237
+        price: 3355.50
+      - sku: 2238
+        price: 3357.00
+      - sku: 2239
+        price: 3358.50
+      - sku: 2240
+        price: 3360.00
+      - sku: 2241
+        price: 3361.50
+      - sku: 2242
+        price: 3363.00
+      - sku: 2243
+        price: 3364.50
+      - sku: 2244
+        price: 3366.00
+      - sku: 2245
+        price: 3367.50
+      - sku: 2246
+        price: 3369.00
+      - sku: 2247
+        price: 3370.50
+      - sku: 2248
+        price: 3372.00
+      - sku: 2249
+        price: 3373.50
+      - sku: 2250
+        price: 3375.00
+      - sku: 2251
+        price: 3376.50
+      - sku: 2252
+        price: 3378.00
+      - sku: 2253
+        price: 3379.50
+      - sku: 2254
+        price: 3381.00
+      - sku: 2255
+        price: 3382.50
+      - sku: 2256
+        price: 3384.00
+      - sku: 2257
+        price: 3385.50
+      - sku: 2258
+        price: 3387.00
+      - sku: 2259
+        price: 3388.50
+      - sku: 2260
+        price: 3390.00
+      - sku: 2261
+        price: 3391.50
+      - sku: 2262
+        price: 3393.00
+      - sku: 2263
+        price: 3394.50
+      - sku: 2264
+        price: 3396.00
+      - sku: 2265
+        price: 3397.50
+      - sku: 2266
+        price: 3399.00
+      - sku: 2267
+        price: 3400.50
+      - sku: 2268
+        price: 3402.00
+      - sku: 2269
+        price: 3403.50
+      - sku: 2270
+        price: 3405.00
+      - sku: 2271
+        price: 3406.50
+      - sku: 2272
+        price: 3408.00
+      - sku: 2273
+        price: 3409.50
+      - sku: 2274
+        price: 3411.00
+      - sku: 2275
+        price: 3412.50
+      - sku: 2276
+        price: 3414.00
+      - sku: 2277
+        price: 3415.50
+      - sku: 2278
+        price: 3417.00
+      - sku: 2279
+        price: 3418.50
+      - sku: 2280
+        price: 3420.00
+      - sku: 2281
+        price: 3421.50
+      - sku: 2282
+        price: 3423.00
+      - sku: 2283
+        price: 3424.50
+      - sku: 2284
+        price: 3426.00
+      - sku: 2285
+        price: 3427.50
+      - sku: 2286
+        price: 3429.00
+      - sku: 2287
+        price: 3430.50
+      - sku: 2288
+        price: 3432.00
+      - sku: 2289
+        price: 3433.50
+      - sku: 2290
+        price: 3435.00
+      - sku: 2291
+        price: 3436.50
+      - sku: 2292
+        price: 3438.00
+      - sku: 2293
+        price: 3439.50
+      - sku: 2294
+        price: 3441.00
+      - sku: 2295
+        price: 3442.50
+      - sku: 2296
+        price: 3444.00
+      - sku: 2297
+        price: 3445.50
+      - sku: 2298
+        price: 3447.00
+      - sku: 2299
+        price: 3448.50
+      - sku: 2300
+        price: 3450.00
+      - sku: 2301
+        price: 3451.50
+      - sku: 2302
+        price: 3453.00
+      - sku: 2303
+        price: 3454.50
+      - sku: 2304
+        price: 3456.00
+      - sku: 2305
+        price: 3457.50
+      - sku: 2306
+        price: 3459.00
+      - sku: 2307
+        price: 3460.50
+      - sku: 2308
+        price: 3462.00
+      - sku: 2309
+        price: 3463.50
+      - sku: 2310
+        price: 3465.00
+      - sku: 2311
+        price: 3466.50
+      - sku: 2312
+        price: 3468.00
+      - sku: 2313
+        price: 3469.50
+      - sku: 2314
+        price: 3471.00
+      - sku: 2315
+        price: 3472.50
+      - sku: 2316
+        price: 3474.00
+      - sku: 2317
+        price: 3475.50
+      - sku: 2318
+        price: 3477.00
+      - sku: 2319
+        price: 3478.50
+      - sku: 2320
+        price: 3480.00
+      - sku: 2321
+        price: 3481.50
+      - sku: 2322
+        price: 3483.00
+      - sku: 2323
+        price: 3484.50
+      - sku: 2324
+        price: 3486.00
+      - sku: 2325
+        price: 3487.50
+      - sku: 2326
+        price: 3489.00
+      - sku: 2327
+        price: 3490.50
+      - sku: 2328
+        price: 3492.00
+      - sku: 2329
+        price: 3493.50
+      - sku: 2330
+        price: 3495.00
+      - sku: 2331
+        price: 3496.50
+      - sku: 2332
+        price: 3498.00
+      - sku: 2333
+        price: 3499.50
+      - sku: 2334
+        price: 3501.00
+      - sku: 2335
+        price: 3502.50
+      - sku: 2336
+        price: 3504.00
+      - sku: 2337
+        price: 3505.50
+      - sku: 2338
+        price: 3507.00
+      - sku: 2339
+        price: 3508.50
+      - sku: 2340
+        price: 3510.00
+      - sku: 2341
+        price: 3511.50
+      - sku: 2342
+        price: 3513.00
+      - sku: 2343
+        price: 3514.50
+      - sku: 2344
+        price: 3516.00
+      - sku: 2345
+        price: 3517.50
+      - sku: 2346
+        price: 3519.00
+      - sku: 2347
+        price: 3520.50
+      - sku: 2348
+        price: 3522.00
+      - sku: 2349
+        price: 3523.50
+      - sku: 2350
+        price: 3525.00
+      - sku: 2351
+        price: 3526.50
+      - sku: 2352
+        price: 3528.00
+      - sku: 2353
+        price: 3529.50
+      - sku: 2354
+        price: 3531.00
+      - sku: 2355
+        price: 3532.50
+      - sku: 2356
+        price: 3534.00
+      - sku: 2357
+        price: 3535.50
+      - sku: 2358
+        price: 3537.00
+      - sku: 2359
+        price: 3538.50
+      - sku: 2360
+        price: 3540.00
+      - sku: 2361
+        price: 3541.50
+      - sku: 2362
+        price: 3543.00
+      - sku: 2363
+        price: 3544.50
+      - sku: 2364
+        price: 3546.00
+      - sku: 2365
+        price: 3547.50
+      - sku: 2366
+        price: 3549.00
+      - sku: 2367
+        price: 3550.50
+      - sku: 2368
+        price: 3552.00
+      - sku: 2369
+        price: 3553.50
+      - sku: 2370
+        price: 3555.00
+      - sku: 2371
+        price: 3556.50
+      - sku: 2372
+        price: 3558.00
+      - sku: 2373
+        price: 3559.50
+      - sku: 2374
+        price: 3561.00
+      - sku: 2375
+        price: 3562.50
+      - sku: 2376
+        price: 3564.00
+      - sku: 2377
+        price: 3565.50
+      - sku: 2378
+        price: 3567.00
+      - sku: 2379
+        price: 3568.50
+      - sku: 2380
+        price: 3570.00
+      - sku: 2381
+        price: 3571.50
+      - sku: 2382
+        price: 3573.00
+      - sku: 2383
+        price: 3574.50
+      - sku: 2384
+        price: 3576.00
+      - sku: 2385
+        price: 3577.50
+      - sku: 2386
+        price: 3579.00
+      - sku: 2387
+        price: 3580.50
+      - sku: 2388
+        price: 3582.00
+      - sku: 2389
+        price: 3583.50
+      - sku: 2390
+        price: 3585.00
+      - sku: 2391
+        price: 3586.50
+      - sku: 2392
+        price: 3588.00
+      - sku: 2393
+        price: 3589.50
+      - sku: 2394
+        price: 3591.00
+      - sku: 2395
+        price: 3592.50
+      - sku: 2396
+        price: 3594.00
+      - sku: 2397
+        price: 3595.50
+      - sku: 2398
+        price: 3597.00
+      - sku: 2399
+        price: 3598.50
+      - sku: 2400
+        price: 3600.00
+      - sku: 2401
+        price: 3601.50
+      - sku: 2402
+        price: 3603.00
+      - sku: 2403
+        price: 3604.50
+      - sku: 2404
+        price: 3606.00
+      - sku: 2405
+        price: 3607.50
+      - sku: 2406
+        price: 3609.00
+      - sku: 2407
+        price: 3610.50
+      - sku: 2408
+        price: 3612.00
+      - sku: 2409
+        price: 3613.50
+      - sku: 2410
+        price: 3615.00
+      - sku: 2411
+        price: 3616.50
+      - sku: 2412
+        price: 3618.00
+      - sku: 2413
+        price: 3619.50
+      - sku: 2414
+        price: 3621.00
+      - sku: 2415
+        price: 3622.50
+      - sku: 2416
+        price: 3624.00
+      - sku: 2417
+        price: 3625.50
+      - sku: 2418
+        price: 3627.00
+      - sku: 2419
+        price: 3628.50
+      - sku: 2420
+        price: 3630.00
+      - sku: 2421
+        price: 3631.50
+      - sku: 2422
+        price: 3633.00
+      - sku: 2423
+        price: 3634.50
+      - sku: 2424
+        price: 3636.00
+      - sku: 2425
+        price: 3637.50
+      - sku: 2426
+        price: 3639.00
+      - sku: 2427
+        price: 3640.50
+      - sku: 2428
+        price: 3642.00
+      - sku: 2429
+        price: 3643.50
+      - sku: 2430
+        price: 3645.00
+      - sku: 2431
+        price: 3646.50
+      - sku: 2432
+        price: 3648.00
+      - sku: 2433
+        price: 3649.50
+      - sku: 2434
+        price: 3651.00
+      - sku: 2435
+        price: 3652.50
+      - sku: 2436
+        price: 3654.00
+      - sku: 2437
+        price: 3655.50
+      - sku: 2438
+        price: 3657.00
+      - sku: 2439
+        price: 3658.50
+      - sku: 2440
+        price: 3660.00
+      - sku: 2441
+        price: 3661.50
+      - sku: 2442
+        price: 3663.00
+      - sku: 2443
+        price: 3664.50
+      - sku: 2444
+        price: 3666.00
+      - sku: 2445
+        price: 3667.50
+      - sku: 2446
+        price: 3669.00
+      - sku: 2447
+        price: 3670.50
+      - sku: 2448
+        price: 3672.00
+      - sku: 2449
+        price: 3673.50
+      - sku: 2450
+        price: 3675.00
+      - sku: 2451
+        price: 3676.50
+      - sku: 2452
+        price: 3678.00
+      - sku: 2453
+        price: 3679.50
+      - sku: 2454
+        price: 3681.00
+      - sku: 2455
+        price: 3682.50
+      - sku: 2456
+        price: 3684.00
+      - sku: 2457
+        price: 3685.50
+      - sku: 2458
+        price: 3687.00
+      - sku: 2459
+        price: 3688.50
+      - sku: 2460
+        price: 3690.00
+      - sku: 2461
+        price: 3691.50
+      - sku: 2462
+        price: 3693.00
+      - sku: 2463
+        price: 3694.50
+      - sku: 2464
+        price: 3696.00
+      - sku: 2465
+        price: 3697.50
+      - sku: 2466
+        price: 3699.00
+      - sku: 2467
+        price: 3700.50
+      - sku: 2468
+        price: 3702.00
+      - sku: 2469
+        price: 3703.50
+      - sku: 2470
+        price: 3705.00
+      - sku: 2471
+        price: 3706.50
+      - sku: 2472
+        price: 3708.00
+      - sku: 2473
+        price: 3709.50
+      - sku: 2474
+        price: 3711.00
+      - sku: 2475
+        price: 3712.50
+      - sku: 2476
+        price: 3714.00
+      - sku: 2477
+        price: 3715.50
+      - sku: 2478
+        price: 3717.00
+      - sku: 2479
+        price: 3718.50
+      - sku: 2480
+        price: 3720.00
+      - sku: 2481
+        price: 3721.50
+      - sku: 2482
+        price: 3723.00
+      - sku: 2483
+        price: 3724.50
+      - sku: 2484
+        price: 3726.00
+      - sku: 2485
+        price: 3727.50
+      - sku: 2486
+        price: 3729.00
+      - sku: 2487
+        price: 3730.50
+      - sku: 2488
+        price: 3732.00
+      - sku: 2489
+        price: 3733.50
+      - sku: 2490
+        price: 3735.00
+      - sku: 2491
+        price: 3736.50
+      - sku: 2492
+        price: 3738.00
+      - sku: 2493
+        price: 3739.50
+      - sku: 2494
+        price: 3741.00
+      - sku: 2495
+        price: 3742.50
+      - sku: 2496
+        price: 3744.00
+      - sku: 2497
+        price: 3745.50
+      - sku: 2498
+        price: 3747.00
+      - sku: 2499
+        price: 3748.50
+      - sku: 2500
+        price: 3750.00
+      - sku: 2501
+        price: 3751.50
+      - sku: 2502
+        price: 3753.00
+      - sku: 2503
+        price: 3754.50
+      - sku: 2504
+        price: 3756.00
+      - sku: 2505
+        price: 3757.50
+      - sku: 2506
+        price: 3759.00
+      - sku: 2507
+        price: 3760.50
+      - sku: 2508
+        price: 3762.00
+      - sku: 2509
+        price: 3763.50
+      - sku: 2510
+        price: 3765.00
+      - sku: 2511
+        price: 3766.50
+      - sku: 2512
+        price: 3768.00
+      - sku: 2513
+        price: 3769.50
+      - sku: 2514
+        price: 3771.00
+      - sku: 2515
+        price: 3772.50
+      - sku: 2516
+        price: 3774.00
+      - sku: 2517
+        price: 3775.50
+      - sku: 2518
+        price: 3777.00
+      - sku: 2519
+        price: 3778.50
+      - sku: 2520
+        price: 3780.00
+      - sku: 2521
+        price: 3781.50
+      - sku: 2522
+        price: 3783.00
+      - sku: 2523
+        price: 3784.50
+      - sku: 2524
+        price: 3786.00
+      - sku: 2525
+        price: 3787.50
+      - sku: 2526
+        price: 3789.00
+      - sku: 2527
+        price: 3790.50
+      - sku: 2528
+        price: 3792.00
+      - sku: 2529
+        price: 3793.50
+      - sku: 2530
+        price: 3795.00
+      - sku: 2531
+        price: 3796.50
+      - sku: 2532
+        price: 3798.00
+      - sku: 2533
+        price: 3799.50
+      - sku: 2534
+        price: 3801.00
+      - sku: 2535
+        price: 3802.50
+      - sku: 2536
+        price: 3804.00
+      - sku: 2537
+        price: 3805.50
+      - sku: 2538
+        price: 3807.00
+      - sku: 2539
+        price: 3808.50
+      - sku: 2540
+        price: 3810.00
+      - sku: 2541
+        price: 3811.50
+      - sku: 2542
+        price: 3813.00
+      - sku: 2543
+        price: 3814.50
+      - sku: 2544
+        price: 3816.00
+      - sku: 2545
+        price: 3817.50
+      - sku: 2546
+        price: 3819.00
+      - sku: 2547
+        price: 3820.50
+      - sku: 2548
+        price: 3822.00
+      - sku: 2549
+        price: 3823.50
+      - sku: 2550
+        price: 3825.00
+      - sku: 2551
+        price: 3826.50
+      - sku: 2552
+        price: 3828.00
+      - sku: 2553
+        price: 3829.50
+      - sku: 2554
+        price: 3831.00
+      - sku: 2555
+        price: 3832.50
+      - sku: 2556
+        price: 3834.00
+      - sku: 2557
+        price: 3835.50
+      - sku: 2558
+        price: 3837.00
+      - sku: 2559
+        price: 3838.50
+      - sku: 2560
+        price: 3840.00
+      - sku: 2561
+        price: 3841.50
+      - sku: 2562
+        price: 3843.00
+      - sku: 2563
+        price: 3844.50
+      - sku: 2564
+        price: 3846.00
+      - sku: 2565
+        price: 3847.50
+      - sku: 2566
+        price: 3849.00
+      - sku: 2567
+        price: 3850.50
+      - sku: 2568
+        price: 3852.00
+      - sku: 2569
+        price: 3853.50
+      - sku: 2570
+        price: 3855.00
+      - sku: 2571
+        price: 3856.50
+      - sku: 2572
+        price: 3858.00
+      - sku: 2573
+        price: 3859.50
+      - sku: 2574
+        price: 3861.00
+      - sku: 2575
+        price: 3862.50
+      - sku: 2576
+        price: 3864.00
+      - sku: 2577
+        price: 3865.50
+      - sku: 2578
+        price: 3867.00
+      - sku: 2579
+        price: 3868.50
+      - sku: 2580
+        price: 3870.00
+      - sku: 2581
+        price: 3871.50
+      - sku: 2582
+        price: 3873.00
+      - sku: 2583
+        price: 3874.50
+      - sku: 2584
+        price: 3876.00
+      - sku: 2585
+        price: 3877.50
+      - sku: 2586
+        price: 3879.00
+      - sku: 2587
+        price: 3880.50
+      - sku: 2588
+        price: 3882.00
+      - sku: 2589
+        price: 3883.50
+      - sku: 2590
+        price: 3885.00
+      - sku: 2591
+        price: 3886.50
+      - sku: 2592
+        price: 3888.00
+      - sku: 2593
+        price: 3889.50
+      - sku: 2594
+        price: 3891.00
+      - sku: 2595
+        price: 3892.50
+      - sku: 2596
+        price: 3894.00
+      - sku: 2597
+        price: 3895.50
+      - sku: 2598
+        price: 3897.00
+      - sku: 2599
+        price: 3898.50
+      - sku: 2600
+        price: 3900.00
+      - sku: 2601
+        price: 3901.50
+      - sku: 2602
+        price: 3903.00
+      - sku: 2603
+        price: 3904.50
+      - sku: 2604
+        price: 3906.00
+      - sku: 2605
+        price: 3907.50
+      - sku: 2606
+        price: 3909.00
+      - sku: 2607
+        price: 3910.50
+      - sku: 2608
+        price: 3912.00
+      - sku: 2609
+        price: 3913.50
+      - sku: 2610
+        price: 3915.00
+      - sku: 2611
+        price: 3916.50
+      - sku: 2612
+        price: 3918.00
+      - sku: 2613
+        price: 3919.50
+      - sku: 2614
+        price: 3921.00
+      - sku: 2615
+        price: 3922.50
+      - sku: 2616
+        price: 3924.00
+      - sku: 2617
+        price: 3925.50
+      - sku: 2618
+        price: 3927.00
+      - sku: 2619
+        price: 3928.50
+      - sku: 2620
+        price: 3930.00
+      - sku: 2621
+        price: 3931.50
+      - sku: 2622
+        price: 3933.00
+      - sku: 2623
+        price: 3934.50
+      - sku: 2624
+        price: 3936.00
+      - sku: 2625
+        price: 3937.50
+      - sku: 2626
+        price: 3939.00
+      - sku: 2627
+        price: 3940.50
+      - sku: 2628
+        price: 3942.00
+      - sku: 2629
+        price: 3943.50
+      - sku: 2630
+        price: 3945.00
+      - sku: 2631
+        price: 3946.50
+      - sku: 2632
+        price: 3948.00
+      - sku: 2633
+        price: 3949.50
+      - sku: 2634
+        price: 3951.00
+      - sku: 2635
+        price: 3952.50
+      - sku: 2636
+        price: 3954.00
+      - sku: 2637
+        price: 3955.50
+      - sku: 2638
+        price: 3957.00
+      - sku: 2639
+        price: 3958.50
+      - sku: 2640
+        price: 3960.00
+      - sku: 2641
+        price: 3961.50
+      - sku: 2642
+        price: 3963.00
+      - sku: 2643
+        price: 3964.50
+      - sku: 2644
+        price: 3966.00
+      - sku: 2645
+        price: 3967.50
+      - sku: 2646
+        price: 3969.00
+      - sku: 2647
+        price: 3970.50
+      - sku: 2648
+        price: 3972.00
+      - sku: 2649
+        price: 3973.50
+      - sku: 2650
+        price: 3975.00
+      - sku: 2651
+        price: 3976.50
+      - sku: 2652
+        price: 3978.00
+      - sku: 2653
+        price: 3979.50
+      - sku: 2654
+        price: 3981.00
+      - sku: 2655
+        price: 3982.50
+      - sku: 2656
+        price: 3984.00
+      - sku: 2657
+        price: 3985.50
+      - sku: 2658
+        price: 3987.00
+      - sku: 2659
+        price: 3988.50
+      - sku: 2660
+        price: 3990.00
+      - sku: 2661
+        price: 3991.50
+      - sku: 2662
+        price: 3993.00
+      - sku: 2663
+        price: 3994.50
+      - sku: 2664
+        price: 3996.00
+      - sku: 2665
+        price: 3997.50
+      - sku: 2666
+        price: 3999.00
+      - sku: 2667
+        price: 4000.50
+      - sku: 2668
+        price: 4002.00
+      - sku: 2669
+        price: 4003.50
+      - sku: 2670
+        price: 4005.00
+      - sku: 2671
+        price: 4006.50
+      - sku: 2672
+        price: 4008.00
+      - sku: 2673
+        price: 4009.50
+      - sku: 2674
+        price: 4011.00
+      - sku: 2675
+        price: 4012.50
+      - sku: 2676
+        price: 4014.00
+      - sku: 2677
+        price: 4015.50
+      - sku: 2678
+        price: 4017.00
+      - sku: 2679
+        price: 4018.50
+      - sku: 2680
+        price: 4020.00
+      - sku: 2681
+        price: 4021.50
+      - sku: 2682
+        price: 4023.00
+      - sku: 2683
+        price: 4024.50
+      - sku: 2684
+        price: 4026.00
+      - sku: 2685
+        price: 4027.50
+      - sku: 2686
+        price: 4029.00
+      - sku: 2687
+        price: 4030.50
+      - sku: 2688
+        price: 4032.00
+      - sku: 2689
+        price: 4033.50
+      - sku: 2690
+        price: 4035.00
+      - sku: 2691
+        price: 4036.50
+      - sku: 2692
+        price: 4038.00
+      - sku: 2693
+        price: 4039.50
+      - sku: 2694
+        price: 4041.00
+      - sku: 2695
+        price: 4042.50
+      - sku: 2696
+        price: 4044.00
+      - sku: 2697
+        price: 4045.50
+      - sku: 2698
+        price: 4047.00
+      - sku: 2699
+        price: 4048.50
+      - sku: 2700
+        price: 4050.00
+      - sku: 2701
+        price: 4051.50
+      - sku: 2702
+        price: 4053.00
+      - sku: 2703
+        price: 4054.50
+      - sku: 2704
+        price: 4056.00
+      - sku: 2705
+        price: 4057.50
+      - sku: 2706
+        price: 4059.00
+      - sku: 2707
+        price: 4060.50
+      - sku: 2708
+        price: 4062.00
+      - sku: 2709
+        price: 4063.50
+      - sku: 2710
+        price: 4065.00
+      - sku: 2711
+        price: 4066.50
+      - sku: 2712
+        price: 4068.00
+      - sku: 2713
+        price: 4069.50
+      - sku: 2714
+        price: 4071.00
+      - sku: 2715
+        price: 4072.50
+      - sku: 2716
+        price: 4074.00
+      - sku: 2717
+        price: 4075.50
+      - sku: 2718
+        price: 4077.00
+      - sku: 2719
+        price: 4078.50
+      - sku: 2720
+        price: 4080.00
+      - sku: 2721
+        price: 4081.50
+      - sku: 2722
+        price: 4083.00
+      - sku: 2723
+        price: 4084.50
+      - sku: 2724
+        price: 4086.00
+      - sku: 2725
+        price: 4087.50
+      - sku: 2726
+        price: 4089.00
+      - sku: 2727
+        price: 4090.50
+      - sku: 2728
+        price: 4092.00
+      - sku: 2729
+        price: 4093.50
+      - sku: 2730
+        price: 4095.00
+      - sku: 2731
+        price: 4096.50
+      - sku: 2732
+        price: 4098.00
+      - sku: 2733
+        price: 4099.50
+      - sku: 2734
+        price: 4101.00
+      - sku: 2735
+        price: 4102.50
+      - sku: 2736
+        price: 4104.00
+      - sku: 2737
+        price: 4105.50
+      - sku: 2738
+        price: 4107.00
+      - sku: 2739
+        price: 4108.50
+      - sku: 2740
+        price: 4110.00
+      - sku: 2741
+        price: 4111.50
+      - sku: 2742
+        price: 4113.00
+      - sku: 2743
+        price: 4114.50
+      - sku: 2744
+        price: 4116.00
+      - sku: 2745
+        price: 4117.50
+      - sku: 2746
+        price: 4119.00
+      - sku: 2747
+        price: 4120.50
+      - sku: 2748
+        price: 4122.00
+      - sku: 2749
+        price: 4123.50
+      - sku: 2750
+        price: 4125.00
+      - sku: 2751
+        price: 4126.50
+      - sku: 2752
+        price: 4128.00
+      - sku: 2753
+        price: 4129.50
+      - sku: 2754
+        price: 4131.00
+      - sku: 2755
+        price: 4132.50
+      - sku: 2756
+        price: 4134.00
+      - sku: 2757
+        price: 4135.50
+      - sku: 2758
+        price: 4137.00
+      - sku: 2759
+        price: 4138.50
+      - sku: 2760
+        price: 4140.00
+      - sku: 2761
+        price: 4141.50
+      - sku: 2762
+        price: 4143.00
+      - sku: 2763
+        price: 4144.50
+      - sku: 2764
+        price: 4146.00
+      - sku: 2765
+        price: 4147.50
+      - sku: 2766
+        price: 4149.00
+      - sku: 2767
+        price: 4150.50
+      - sku: 2768
+        price: 4152.00
+      - sku: 2769
+        price: 4153.50
+      - sku: 2770
+        price: 4155.00
+      - sku: 2771
+        price: 4156.50
+      - sku: 2772
+        price: 4158.00
+      - sku: 2773
+        price: 4159.50
+      - sku: 2774
+        price: 4161.00
+      - sku: 2775
+        price: 4162.50
+      - sku: 2776
+        price: 4164.00
+      - sku: 2777
+        price: 4165.50
+      - sku: 2778
+        price: 4167.00
+      - sku: 2779
+        price: 4168.50
+      - sku: 2780
+        price: 4170.00
+      - sku: 2781
+        price: 4171.50
+      - sku: 2782
+        price: 4173.00
+      - sku: 2783
+        price: 4174.50
+      - sku: 2784
+        price: 4176.00
+      - sku: 2785
+        price: 4177.50
+      - sku: 2786
+        price: 4179.00
+      - sku: 2787
+        price: 4180.50
+      - sku: 2788
+        price: 4182.00
+      - sku: 2789
+        price: 4183.50
+      - sku: 2790
+        price: 4185.00
+      - sku: 2791
+        price: 4186.50
+      - sku: 2792
+        price: 4188.00
+      - sku: 2793
+        price: 4189.50
+      - sku: 2794
+        price: 4191.00
+      - sku: 2795
+        price: 4192.50
+      - sku: 2796
+        price: 4194.00
+      - sku: 2797
+        price: 4195.50
+      - sku: 2798
+        price: 4197.00
+      - sku: 2799
+        price: 4198.50
+      - sku: 2800
+        price: 4200.00
+      - sku: 2801
+        price: 4201.50
+      - sku: 2802
+        price: 4203.00
+      - sku: 2803
+        price: 4204.50
+      - sku: 2804
+        price: 4206.00
+      - sku: 2805
+        price: 4207.50
+      - sku: 2806
+        price: 4209.00
+      - sku: 2807
+        price: 4210.50
+      - sku: 2808
+        price: 4212.00
+      - sku: 2809
+        price: 4213.50
+      - sku: 2810
+        price: 4215.00
+      - sku: 2811
+        price: 4216.50
+      - sku: 2812
+        price: 4218.00
+      - sku: 2813
+        price: 4219.50
+      - sku: 2814
+        price: 4221.00
+      - sku: 2815
+        price: 4222.50
+      - sku: 2816
+        price: 4224.00
+      - sku: 2817
+        price: 4225.50
+      - sku: 2818
+        price: 4227.00
+      - sku: 2819
+        price: 4228.50
+      - sku: 2820
+        price: 4230.00
+      - sku: 2821
+        price: 4231.50
+      - sku: 2822
+        price: 4233.00
+      - sku: 2823
+        price: 4234.50
+      - sku: 2824
+        price: 4236.00
+      - sku: 2825
+        price: 4237.50
+      - sku: 2826
+        price: 4239.00
+      - sku: 2827
+        price: 4240.50
+      - sku: 2828
+        price: 4242.00
+      - sku: 2829
+        price: 4243.50
+      - sku: 2830
+        price: 4245.00
+      - sku: 2831
+        price: 4246.50
+      - sku: 2832
+        price: 4248.00
+      - sku: 2833
+        price: 4249.50
+      - sku: 2834
+        price: 4251.00
+      - sku: 2835
+        price: 4252.50
+      - sku: 2836
+        price: 4254.00
+      - sku: 2837
+        price: 4255.50
+      - sku: 2838
+        price: 4257.00
+      - sku: 2839
+        price: 4258.50
+      - sku: 2840
+        price: 4260.00
+      - sku: 2841
+        price: 4261.50
+      - sku: 2842
+        price: 4263.00
+      - sku: 2843
+        price: 4264.50
+      - sku: 2844
+        price: 4266.00
+      - sku: 2845
+        price: 4267.50
+      - sku: 2846
+        price: 4269.00
+      - sku: 2847
+        price: 4270.50
+      - sku: 2848
+        price: 4272.00
+      - sku: 2849
+        price: 4273.50
+      - sku: 2850
+        price: 4275.00
+      - sku: 2851
+        price: 4276.50
+      - sku: 2852
+        price: 4278.00
+      - sku: 2853
+        price: 4279.50
+      - sku: 2854
+        price: 4281.00
+      - sku: 2855
+        price: 4282.50
+      - sku: 2856
+        price: 4284.00
+      - sku: 2857
+        price: 4285.50
+      - sku: 2858
+        price: 4287.00
+      - sku: 2859
+        price: 4288.50
+      - sku: 2860
+        price: 4290.00
+      - sku: 2861
+        price: 4291.50
+      - sku: 2862
+        price: 4293.00
+      - sku: 2863
+        price: 4294.50
+      - sku: 2864
+        price: 4296.00
+      - sku: 2865
+        price: 4297.50
+      - sku: 2866
+        price: 4299.00
+      - sku: 2867
+        price: 4300.50
+      - sku: 2868
+        price: 4302.00
+      - sku: 2869
+        price: 4303.50
+      - sku: 2870
+        price: 4305.00
+      - sku: 2871
+        price: 4306.50
+      - sku: 2872
+        price: 4308.00
+      - sku: 2873
+        price: 4309.50
+      - sku: 2874
+        price: 4311.00
+      - sku: 2875
+        price: 4312.50
+      - sku: 2876
+        price: 4314.00
+      - sku: 2877
+        price: 4315.50
+      - sku: 2878
+        price: 4317.00
+      - sku: 2879
+        price: 4318.50
+      - sku: 2880
+        price: 4320.00
+      - sku: 2881
+        price: 4321.50
+      - sku: 2882
+        price: 4323.00
+      - sku: 2883
+        price: 4324.50
+      - sku: 2884
+        price: 4326.00
+      - sku: 2885
+        price: 4327.50
+      - sku: 2886
+        price: 4329.00
+      - sku: 2887
+        price: 4330.50
+      - sku: 2888
+        price: 4332.00
+      - sku: 2889
+        price: 4333.50
+      - sku: 2890
+        price: 4335.00
+      - sku: 2891
+        price: 4336.50
+      - sku: 2892
+        price: 4338.00
+      - sku: 2893
+        price: 4339.50
+      - sku: 2894
+        price: 4341.00
+      - sku: 2895
+        price: 4342.50
+      - sku: 2896
+        price: 4344.00
+      - sku: 2897
+        price: 4345.50
+      - sku: 2898
+        price: 4347.00
+      - sku: 2899
+        price: 4348.50
+      - sku: 2900
+        price: 4350.00
+      - sku: 2901
+        price: 4351.50
+      - sku: 2902
+        price: 4353.00
+      - sku: 2903
+        price: 4354.50
+      - sku: 2904
+        price: 4356.00
+      - sku: 2905
+        price: 4357.50
+      - sku: 2906
+        price: 4359.00
+      - sku: 2907
+        price: 4360.50
+      - sku: 2908
+        price: 4362.00
+      - sku: 2909
+        price: 4363.50
+      - sku: 2910
+        price: 4365.00
+      - sku: 2911
+        price: 4366.50
+      - sku: 2912
+        price: 4368.00
+      - sku: 2913
+        price: 4369.50
+      - sku: 2914
+        price: 4371.00
+      - sku: 2915
+        price: 4372.50
+      - sku: 2916
+        price: 4374.00
+      - sku: 2917
+        price: 4375.50
+      - sku: 2918
+        price: 4377.00
+      - sku: 2919
+        price: 4378.50
+      - sku: 2920
+        price: 4380.00
+      - sku: 2921
+        price: 4381.50
+      - sku: 2922
+        price: 4383.00
+      - sku: 2923
+        price: 4384.50
+      - sku: 2924
+        price: 4386.00
+      - sku: 2925
+        price: 4387.50
+      - sku: 2926
+        price: 4389.00
+      - sku: 2927
+        price: 4390.50
+      - sku: 2928
+        price: 4392.00
+      - sku: 2929
+        price: 4393.50
+      - sku: 2930
+        price: 4395.00
+      - sku: 2931
+        price: 4396.50
+      - sku: 2932
+        price: 4398.00
+      - sku: 2933
+        price: 4399.50
+      - sku: 2934
+        price: 4401.00
+      - sku: 2935
+        price: 4402.50
+      - sku: 2936
+        price: 4404.00
+      - sku: 2937
+        price: 4405.50
+      - sku: 2938
+        price: 4407.00
+      - sku: 2939
+        price: 4408.50
+      - sku: 2940
+        price: 4410.00
+      - sku: 2941
+        price: 4411.50
+      - sku: 2942
+        price: 4413.00
+      - sku: 2943
+        price: 4414.50
+      - sku: 2944
+        price: 4416.00
+      - sku: 2945
+        price: 4417.50
+      - sku: 2946
+        price: 4419.00
+      - sku: 2947
+        price: 4420.50
+      - sku: 2948
+        price: 4422.00
+      - sku: 2949
+        price: 4423.50
+      - sku: 2950
+        price: 4425.00
+      - sku: 2951
+        price: 4426.50
+      - sku: 2952
+        price: 4428.00
+      - sku: 2953
+        price: 4429.50
+      - sku: 2954
+        price: 4431.00
+      - sku: 2955
+        price: 4432.50
+      - sku: 2956
+        price: 4434.00
+      - sku: 2957
+        price: 4435.50
+      - sku: 2958
+        price: 4437.00
+      - sku: 2959
+        price: 4438.50
+      - sku: 2960
+        price: 4440.00
+      - sku: 2961
+        price: 4441.50
+      - sku: 2962
+        price: 4443.00
+      - sku: 2963
+        price: 4444.50
+      - sku: 2964
+        price: 4446.00
+      - sku: 2965
+        price: 4447.50
+      - sku: 2966
+        price: 4449.00
+      - sku: 2967
+        price: 4450.50
+      - sku: 2968
+        price: 4452.00
+      - sku: 2969
+        price: 4453.50
+      - sku: 2970
+        price: 4455.00
+      - sku: 2971
+        price: 4456.50
+      - sku: 2972
+        price: 4458.00
+      - sku: 2973
+        price: 4459.50
+      - sku: 2974
+        price: 4461.00
+      - sku: 2975
+        price: 4462.50
+      - sku: 2976
+        price: 4464.00
+      - sku: 2977
+        price: 4465.50
+      - sku: 2978
+        price: 4467.00
+      - sku: 2979
+        price: 4468.50
+      - sku: 2980
+        price: 4470.00
+      - sku: 2981
+        price: 4471.50
+      - sku: 2982
+        price: 4473.00
+      - sku: 2983
+        price: 4474.50
+      - sku: 2984
+        price: 4476.00
+      - sku: 2985
+        price: 4477.50
+      - sku: 2986
+        price: 4479.00
+      - sku: 2987
+        price: 4480.50
+      - sku: 2988
+        price: 4482.00
+      - sku: 2989
+        price: 4483.50
+      - sku: 2990
+        price: 4485.00
+      - sku: 2991
+        price: 4486.50
+      - sku: 2992
+        price: 4488.00
+      - sku: 2993
+        price: 4489.50
+      - sku: 2994
+        price: 4491.00
+      - sku: 2995
+        price: 4492.50
+      - sku: 2996
+        price: 4494.00
+      - sku: 2997
+        price: 4495.50
+      - sku: 2998
+        price: 4497.00
+      - sku: 2999
+        price: 4498.50
+      - sku: 3000
+        price: 4500.00

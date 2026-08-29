@@ -18,3 +18,5 @@ site/
 !.lq/hooks/
 !.lq/config.toml
 !.lq/commands.toml
+
+.cache/
