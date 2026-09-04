@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 #include "duckdb.hpp"
+#include "duckdb_compat.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -124,7 +125,7 @@ private:
 	 * @return Function data for execution
 	 */
 	static unique_ptr<FunctionData> YAMLReadRowsBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                 vector<LogicalType> &return_types, vector<string> &names);
+	                                                 vector<LogicalType> &return_types, vector<CompatName> &names);
 
 	/**
 	 * @brief Global init function for read_yaml
@@ -165,7 +166,7 @@ private:
 	 * @return Function data for execution
 	 */
 	static unique_ptr<FunctionData> YAMLReadObjectsBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                    vector<LogicalType> &return_types, vector<string> &names);
+	                                                    vector<LogicalType> &return_types, vector<CompatName> &names);
 
 	/**
 	 * @brief Global init function for read_yaml_objects
@@ -388,7 +389,7 @@ public:
 	 * @return Function data for execution
 	 */
 	static unique_ptr<FunctionData> ParseYAMLBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names);
+	                                              vector<LogicalType> &return_types, vector<CompatName> &names);
 
 	/**
 	 * @brief Init function for parse_yaml local state

@@ -1,4 +1,5 @@
 #include "yaml_types.hpp"
+#include "duckdb_compat.hpp"
 #include "yaml_utils.hpp"
 #include "yaml_formatting.hpp"
 #include "yaml-cpp/yaml.h"
@@ -10,9 +11,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 LogicalType YAMLTypes::YAMLType() {
-	auto yaml_type = LogicalType(LogicalTypeId::VARCHAR);
-	yaml_type.SetAlias("yaml");
-	return yaml_type;
+	// CompatWithAlias, not SetAlias: DuckDB v2.0 REMOVED LogicalType::SetAlias in
+	// favour of WithAlias(), which returns a copy rather than mutating a type
+	// whose type-info may be shared. The alias string is lowercase "yaml" and
+	// must stay that way -- IsYAMLType() below and the checks in
+	// yaml_reader_types.cpp compare GetAlias() against "yaml" case-sensitively.
+	return CompatWithAlias(LogicalType(LogicalTypeId::VARCHAR), "yaml");
 }
 
 static bool IsYAMLType(const LogicalType &t) {

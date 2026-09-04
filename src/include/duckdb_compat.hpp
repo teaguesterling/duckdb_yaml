@@ -288,3 +288,189 @@ inline const unique_ptr<FunctionData> &CompatBoundBindInfo(const BoundFunctionEx
 }
 #endif
 } // namespace duckdb
+
+// === DuckDB v2.0 (duckdb `main`) shims (appended) ===
+//
+// These cover the change classes documented in duckdb_markdown's
+// docs/duckdb_v2_migration.md that the sections above do not already handle.
+//
+// FEATURE DETECTION, NOT VERSION NUMBERS, and each change is probed
+// SEPARATELY. A version macro says *when* a thing changed; a probe says whether
+// it changed *here*, which keeps working when a change is backported, reverted,
+// or lands on a branch nobody expected. Tying several changes to one macro
+// silently picks the wrong branch the moment they land in different releases --
+// so these deliberately do NOT reuse DUCKDB_HAS_NEW_VECTOR_HEADERS.
+//
+// <type_traits> is C++11, so it is safe to include unconditionally: this header
+// is compiled at -std=c++11 against the pinned v1.5.x DuckDB (see the note at
+// the top of the file about why the extension must not be forced to C++17).
+
+#include <type_traits>
+
+namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// CompatName / CompatNameStr / CompatMakeName -- bind-signature name type
+//===--------------------------------------------------------------------===//
+//
+// v2.0 changed `table_function_bind_t` and `copy_to_bind_t` to take
+// `vector<Identifier> &names` where v1.5 took `vector<string> &names`.
+//
+// This is a DIFFERENT boundary from CompatIdentifierName / CompatMakeIdentifier
+// above, which exist for the child_list_t (STRUCT field name) key and for
+// expression/function name fields. Both boundaries happen to be driven by the
+// same upstream Identifier type, but they are distinct call sites with distinct
+// lifetimes -- keep them separate rather than merging them.
+//
+// Note the conversion asymmetry that makes this cheap:
+//     Identifier(const char *)        is IMPLICIT  -- literals are identifiers by intent
+//     explicit Identifier(const string &)          -- promoting a runtime string is deliberate
+// so `names.emplace_back("frontmatter")` needs no change on either version; only
+// the signatures move, plus the handful of places a *runtime* string crosses.
+#ifdef DUCKDB_HAS_IDENTIFIER
+using CompatName = Identifier;
+inline string CompatNameStr(const Identifier &name) {
+	return name.GetIdentifierName();
+}
+inline Identifier CompatMakeName(string name) {
+	return Identifier(std::move(name));
+}
+#else
+using CompatName = string;
+inline string CompatNameStr(const string &name) {
+	return name;
+}
+inline string CompatMakeName(string name) {
+	return name;
+}
+#endif
+
+//! Whole-vector conversions for the same boundary. A bind function fills a
+//! `vector<CompatName>` but the bind DATA keeps plain `vector<string>` (it is
+//! compared and sliced with string operations downstream), so the two vectors
+//! have to be converted rather than assigned. No-ops on v1.5.x.
+inline vector<string> CompatNameStrings(const vector<CompatName> &names) {
+	vector<string> result;
+	result.reserve(names.size());
+	for (const auto &name : names) {
+		result.push_back(CompatNameStr(name));
+	}
+	return result;
+}
+inline vector<CompatName> CompatMakeNames(const vector<string> &names) {
+	vector<CompatName> result;
+	result.reserve(names.size());
+	for (const auto &name : names) {
+		result.push_back(CompatMakeName(name));
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// CompatWithAlias -- LogicalType alias
+//===--------------------------------------------------------------------===//
+//
+// v1.5: void SetAlias(string)               -- mutates in place
+// v2.0: LogicalType WithAlias(string) const -- returns a copy, so it never
+//       mutates a type whose type-info is shared with other types.
+//
+// SetAlias is REMOVED on v2.0, not deprecated.
+//
+// Dispatched on a tag rather than with `if constexpr`, so this compiles at
+// C++11 (which is what this extension builds at -- see the header preamble).
+// Tag dispatch has the property that matters here: only the selected overload
+// is instantiated, so the branch naming the absent member is never compiled.
+template <class T, class = void>
+struct CompatHasWithAlias : std::false_type {};
+template <class T>
+struct CompatHasWithAlias<T, decltype(void(std::declval<const T &>().WithAlias(string())))> : std::true_type {};
+
+template <class TYPE>
+inline LogicalType CompatWithAliasImpl(TYPE type, string alias, std::true_type) {
+	return type.WithAlias(std::move(alias));
+}
+template <class TYPE>
+inline LogicalType CompatWithAliasImpl(TYPE type, string alias, std::false_type) {
+	type.SetAlias(std::move(alias));
+	return type;
+}
+// The entry point is deliberately NOT a template: `LogicalType::VARCHAR` and
+// friends are `LogicalTypeId` constants, so a deduced parameter binds TYPE to
+// LogicalTypeId and then fails inside the shim ("request for member 'SetAlias'
+// in 'type', which is of non-class type 'duckdb::LogicalTypeId'"). A concrete
+// LogicalType parameter makes the usual implicit conversion happen at the call
+// site instead. The dispatch below is still a template, so only the selected
+// overload is instantiated and the branch naming the absent member is never
+// compiled.
+inline LogicalType CompatWithAlias(LogicalType type, string alias) {
+	return CompatWithAliasImpl(std::move(type), std::move(alias), CompatHasWithAlias<LogicalType>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatSetCaptureArgumentAliases -- named arguments derived from aliases
+//===--------------------------------------------------------------------===//
+//
+// A SILENT RUNTIME BREAK, not a compile error: v2.0 added
+// FunctionProperties::capture_argument_aliases, DEFAULTING TO FALSE. On v1.5 the
+// binder always recorded a named argument's alias on the bound child expression,
+// so a bind callback could recover `style := 'block'` with child->GetAlias(). On
+// v2.0 that alias comes back EMPTY unless the function opts in, so a function
+// that derives named parameters from argument aliases binds every argument as
+// unnamed and fails at RUNTIME -- with a completely green build and nothing to
+// grep for. (duckdb's own struct_pack/row call SetCaptureArgumentAliases(true)
+// for exactly this reason.)
+//
+// No-op on v1.5.x, where the capture was unconditional.
+template <class T, class = void>
+struct CompatHasSetCaptureArgumentAliases : std::false_type {};
+template <class T>
+struct CompatHasSetCaptureArgumentAliases<T, decltype(void(std::declval<T &>().SetCaptureArgumentAliases(true)))>
+    : std::true_type {};
+
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliasesImpl(FUNC &fun, std::true_type) {
+	fun.SetCaptureArgumentAliases(true);
+}
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliasesImpl(FUNC &, std::false_type) {
+}
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliases(FUNC &fun) {
+	CompatSetCaptureArgumentAliasesImpl(fun, CompatHasSetCaptureArgumentAliases<FUNC>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatFlatDataMutable -- FlatVector write access
+//===--------------------------------------------------------------------===//
+//
+// v1.5: FlatVector::GetData<T>(vec)        returns T*
+// v2.0: FlatVector::GetData<T>(vec)        returns const T*
+//       FlatVector::GetDataMutable<T>(vec) returns T*
+//
+// Writing through the v2.0 read accessor is a compile error, which is the whole
+// point of the split, so the WRITE path has to ask for mutability explicitly.
+// Probing for GetDataMutable (the member that exists only on v2.0) rather than
+// for GetData (which exists on both) is what makes the probe discriminate.
+//
+// ConstantVector::GetData<T> kept its non-const overload, so writes through
+// *it* need no shim.
+template <class T, class = void>
+struct CompatHasFlatGetDataMutable : std::false_type {};
+template <class T>
+struct CompatHasFlatGetDataMutable<T, decltype(void(T::template GetDataMutable<bool>(std::declval<Vector &>())))>
+    : std::true_type {};
+
+template <class VALUE, class FV>
+inline VALUE *CompatFlatDataMutableImpl(Vector &vec, std::true_type) {
+	return FV::template GetDataMutable<VALUE>(vec);
+}
+template <class VALUE, class FV>
+inline VALUE *CompatFlatDataMutableImpl(Vector &vec, std::false_type) {
+	return FV::template GetData<VALUE>(vec);
+}
+template <class VALUE, class FV = FlatVector>
+inline VALUE *CompatFlatDataMutable(Vector &vec) {
+	return CompatFlatDataMutableImpl<VALUE, FV>(vec, CompatHasFlatGetDataMutable<FV>());
+}
+
+} // namespace duckdb

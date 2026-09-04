@@ -290,6 +290,14 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	    ScalarFunction("format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLFunction, FormatYAMLBind);
 	CompatSetScalarNullHandling(format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetScalarVarArgs(format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
+	// format_yaml derives its named parameters (style := ..., multiline := ...,
+	// indent := ...) from argument ALIASES, both in FormatYAMLBind and in
+	// FormatYAMLFunction. DuckDB v2.0 stopped capturing those aliases unless the
+	// function opts in (FunctionProperties::capture_argument_aliases defaults to
+	// false), which would make every named argument arrive anonymous and every
+	// format_yaml(x, style := 'block') call throw at bind time -- with a green
+	// build. No-op on the pinned v1.5.x, where capture was unconditional.
+	CompatSetCaptureArgumentAliases(format_yaml_fun);
 	loader.RegisterFunction(format_yaml_fun);
 
 	// Register yaml() constructor function (parses YAML string to YAML type)

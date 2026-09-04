@@ -124,7 +124,7 @@ static string ReadFileContent(ClientContext &context, const string &file_path) {
 
 // Bind function for read_yaml_frontmatter
 static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<CompatName> &names) {
 	auto result = make_uniq<YAMLFrontmatterBindData>();
 
 	// Get file paths from first argument
@@ -216,7 +216,7 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 
 		// Add columns in order
 		for (const auto &col : column_order) {
-			names.push_back(col);
+			names.push_back(CompatMakeName(col));
 			return_types.push_back(merged_types[col]);
 		}
 
@@ -228,10 +228,14 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 	} else {
 		// Single frontmatter column as YAML type
 		names.push_back("frontmatter");
-		// Use VARCHAR with YAML alias
-		LogicalType yaml_type = LogicalType::VARCHAR;
-		yaml_type.SetAlias("YAML");
-		return_types.push_back(yaml_type);
+		// Use VARCHAR with YAML alias.
+		// CompatWithAlias, not SetAlias: v2.0 removed LogicalType::SetAlias.
+		// NOTE: the alias here is uppercase "YAML" while YAMLTypes::YAMLType()
+		// (yaml_types.cpp) uses lowercase "yaml", and every GetAlias() check in
+		// this extension compares case-sensitively against "yaml". Preserved
+		// verbatim by this port so the compat change does not move behaviour;
+		// see the PR description for the casing discrepancy.
+		return_types.push_back(CompatWithAlias(LogicalType::VARCHAR, "YAML"));
 	}
 
 	if (result->options.include_content) {
@@ -240,7 +244,7 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 	}
 
 	// Store schema
-	result->names = names;
+	result->names = CompatNameStrings(names);
 	result->types = return_types;
 
 	return std::move(result);

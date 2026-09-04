@@ -190,11 +190,14 @@ static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 				    keys.push_back(Value(key));
 			    }
 
-			    // Get the list child vector. const_cast on the data pointer: on duckdb
-			    // main FlatVector::GetData<T> returns const T*, on v1.5.x non-const —
-			    // the cast is a no-op on the old API and the right strip on the new one.
+			    // Get the list child vector. CompatFlatDataMutable, not a const_cast:
+			    // on DuckDB v2.0 FlatVector::GetData<T> returns const T* and the
+			    // mutable accessor goes through Vector::BufferMutable(), which
+			    // un-shares a copy-on-write buffer first. Casting away the const
+			    // would compile but write into a buffer that may still be shared
+			    // with another vector. No-op on the pinned v1.5.x.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
+			    auto list_data = CompatFlatDataMutable<string_t>(child_vector);
 
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
@@ -237,9 +240,9 @@ static void YAMLKeysBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 				    keys.push_back(Value(key));
 			    }
 
-			    // const_cast: see comment in YAMLKeysUnaryFunction above.
+			    // CompatFlatDataMutable: see comment in YAMLKeysUnaryFunction above.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
+			    auto list_data = CompatFlatDataMutable<string_t>(child_vector);
 
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
@@ -268,7 +271,7 @@ struct YAMLArrayElementsBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> YAMLArrayElementsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<CompatName> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("yaml_array_elements requires a YAML array parameter");
 	}
@@ -343,7 +346,7 @@ struct YAMLEachBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> YAMLEachBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<CompatName> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("yaml_each requires a YAML object parameter");
 	}
