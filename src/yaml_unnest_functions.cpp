@@ -659,6 +659,10 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	yaml_array_length_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::BIGINT, YAMLArrayLengthUnaryFunction));
 	yaml_array_length_set.AddFunction(
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BIGINT, YAMLArrayLengthBinaryFunction));
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_array_length_set);
 	loader.RegisterFunction(yaml_array_length_set);
 
 	// yaml_keys function
@@ -667,6 +671,7 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({yaml_type}, LogicalType::LIST(LogicalType::VARCHAR), YAMLKeysUnaryFunction));
 	yaml_keys_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
 	                                         YAMLKeysBinaryFunction));
+	CompatSetFallible(yaml_keys_set);
 	loader.RegisterFunction(yaml_keys_set);
 
 	// yaml_array_elements table function
@@ -681,6 +686,7 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	// yaml_build_object function - variadic function
 	auto yaml_build_object_fun = ScalarFunction("yaml_build_object", {}, yaml_type, YAMLBuildObjectFunction);
 	CompatSetScalarVarArgs(yaml_build_object_fun, LogicalType::ANY);
+	CompatSetFallible(yaml_build_object_fun);
 	loader.RegisterFunction(yaml_build_object_fun);
 
 	// yaml_agg aggregate function
@@ -692,6 +698,9 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	                      nullptr, // bind
 	                      nullptr  // destructor
 	    );
+	// The aggregate re-parses and re-emits YAML in its finalize, so it can raise
+	// a runtime error too; BaseAggregateFunction carries the same contract.
+	CompatSetFallible(yaml_agg_fun);
 	loader.RegisterFunction(yaml_agg_fun);
 }
 

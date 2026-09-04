@@ -259,6 +259,10 @@ void RegisterYAMLCopyFunctions(ExtensionLoader &loader) {
 	    ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
 	CompatSetScalarNullHandling(copy_format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetScalarVarArgs(copy_format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(copy_format_yaml_fun);
 	loader.RegisterFunction(copy_format_yaml_fun);
 }
 
