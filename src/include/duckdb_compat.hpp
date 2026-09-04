@@ -382,6 +382,18 @@ inline CompatName CompatMakeName(string name) {
 	return CompatMakeNameImpl(std::move(name), static_cast<const CompatName *>(nullptr));
 }
 
+//! Cross-check the derivation against a SECOND, independent entity. CompatName
+//! comes from TableFunctionBindInput::input_table_names; this asserts that a
+//! bind function written with it is actually assignable to table_function_bind_t.
+//! DuckDB could in principle change those two independently, which is what makes
+//! this load-bearing rather than tautological -- and it turns the next submodule
+//! bump from a cascade of confusing signature errors into one clear message.
+typedef unique_ptr<FunctionData> (*CompatBindSignatureCheck)(ClientContext &, TableFunctionBindInput &,
+                                                             vector<LogicalType> &, vector<CompatName> &);
+static_assert(std::is_convertible<CompatBindSignatureCheck, table_function_bind_t>::value,
+              "CompatName does not match table_function_bind_t's name parameter. The DuckDB submodule has "
+              "moved this boundary: re-derive CompatName from the bind signature rather than patching call sites.");
+
 //! Whole-vector conversions for the same boundary. A bind function fills a
 //! `vector<CompatName>` but the bind DATA keeps plain `vector<string>` (it is
 //! compared and sliced with string operations downstream), so the two vectors
