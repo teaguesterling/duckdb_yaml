@@ -98,14 +98,15 @@ inline void SetValueCasted(ClientContext &context, Vector &vec, idx_t idx, const
 
 template <class INPUT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatUnaryExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count, [fun](INPUT_TYPE in) -> std::optional<RESULT_TYPE> {
-		ValidityMask scratch; // default-constructed → all rows valid
-		RESULT_TYPE val = fun(in, scratch, idx_t(0));
-		if (!scratch.RowIsValid(0)) {
-			return std::nullopt;
-		}
-		return val;
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count,
+	                                                [fun](INPUT_TYPE in) -> std::optional<RESULT_TYPE> {
+		                                                ValidityMask scratch; // default-constructed → all rows valid
+		                                                RESULT_TYPE val = fun(in, scratch, idx_t(0));
+		                                                if (!scratch.RowIsValid(0)) {
+			                                                return std::nullopt;
+		                                                }
+		                                                return val;
+	                                                });
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC>
@@ -206,8 +207,8 @@ inline CompatIdentifierKey CompatMakeIdentifier(string name) {
 #define DUCKDB_SCALAR_BIND_CONTEXT bind_input.GetClientContext()
 #define DUCKDB_SCALAR_BIND_ARGS    bind_input.GetArguments()
 #else
-#define DUCKDB_SCALAR_BIND_PARAMS                                                                                       \
-	duckdb::ClientContext &context, duckdb::ScalarFunction &bound_function,                                             \
+#define DUCKDB_SCALAR_BIND_PARAMS                                                                                      \
+	duckdb::ClientContext &context, duckdb::ScalarFunction &bound_function,                                            \
 	    duckdb::vector<duckdb::unique_ptr<duckdb::Expression>> &arguments
 #define DUCKDB_SCALAR_BIND_CONTEXT context
 #define DUCKDB_SCALAR_BIND_ARGS    arguments
