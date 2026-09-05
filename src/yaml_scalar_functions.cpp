@@ -57,6 +57,10 @@ void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 		                                                                      [&](string_t yaml_str) { return true; });
 	                               });
 
+	// Deliberately NOT marked fallible: both overloads are total. The VARCHAR one
+	// wraps the parse in catch(...) and answers false; the YAML one is a constant
+	// true. Marking a function fallible is only a lost optimisation, but marking
+	// one that cannot throw is still a claim worth not making.
 	loader.RegisterFunction(yaml_valid_varchar);
 	loader.RegisterFunction(yaml_valid_yaml);
 }
@@ -275,10 +279,18 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 
 	// Register yaml_to_json function
 	auto yaml_to_json_fun = ScalarFunction("yaml_to_json", {yaml_type}, LogicalType::JSON(), YAMLToJSONFunction);
+	// Fallible: raises a runtime error on malformed input or an oversized document.
+	// DuckDB v2.0 rethrows an execution error from an unmarked function as an
+	// INTERNAL error ("the function must call SetFallible()"). Enforcement is an
+	// assertion, so a canary leg built without assertions can be green while the
+	// contract is violated. No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_to_json_fun);
 	loader.RegisterFunction(yaml_to_json_fun);
 
 	// Register value_to_yaml function and to_yaml alias (single parameter, returns YAML type)
 	auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
+	// value_to_yaml / to_yaml are deliberately NOT marked: ValueToYAMLFunction
+	// catches std::exception and (...) per row and substitutes "null".
 	loader.RegisterFunction(value_to_yaml_fun);
 
 	// to_yaml alias for consistency with to_json
@@ -290,6 +302,15 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	    ScalarFunction("format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, FormatYAMLFunction, FormatYAMLBind);
 	CompatSetScalarNullHandling(format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetScalarVarArgs(format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
+	// format_yaml derives its named parameters (style := ..., multiline := ...,
+	// indent := ...) from argument ALIASES, both in FormatYAMLBind and in
+	// FormatYAMLFunction. DuckDB v2.0 stopped capturing those aliases unless the
+	// function opts in (FunctionProperties::capture_argument_aliases defaults to
+	// false), which would make every named argument arrive anonymous and every
+	// format_yaml(x, style := 'block') call throw at bind time -- with a green
+	// build. No-op on the pinned v1.5.x, where capture was unconditional.
+	CompatSetCaptureArgumentAliases(format_yaml_fun);
+	CompatSetFallible(format_yaml_fun);
 	loader.RegisterFunction(format_yaml_fun);
 
 	// Register yaml() constructor function (parses YAML string to YAML type)
@@ -308,6 +329,7 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 			    }
 		    });
 	    });
+	CompatSetFallible(yaml_constructor_fun);
 	loader.RegisterFunction(yaml_constructor_fun);
 }
 
@@ -354,10 +376,12 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 	// Register default style management functions
 	auto yaml_set_default_style_fun = ScalarFunction("yaml_set_default_style", {LogicalType::VARCHAR},
 	                                                 LogicalType::VARCHAR, YAMLSetDefaultStyleFunction);
+	CompatSetFallible(yaml_set_default_style_fun); // rejects NULL and unknown styles
 	loader.RegisterFunction(yaml_set_default_style_fun);
 
 	auto yaml_get_default_style_fun =
 	    ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
+	// yaml_get_default_style is total -- a pure read of the current setting.
 	loader.RegisterFunction(yaml_get_default_style_fun);
 
 	RegisterLimitFunctions(loader);
@@ -375,21 +399,26 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 // takes a std::string. A string literal converts implicitly to both; std::string does not.
 template <void (*SETTER)(idx_t), idx_t (*GETTER)()>
 static ScalarFunction MakeLimitSetter(const char *name) {
-	return ScalarFunction(name, {LogicalType::BIGINT}, LogicalType::BIGINT,
-	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
-		                      UnaryExecutor::Execute<int64_t, int64_t>(
-		                          args.data[0], result, args.size(), [&](int64_t value) -> int64_t {
-			                          if (value < 1) {
-				                          throw InvalidInputException("YAML limit must be a positive value");
-			                          }
-			                          SETTER(static_cast<idx_t>(value));
-			                          return static_cast<int64_t>(GETTER());
-		                          });
-	                      });
+	auto fun = ScalarFunction(
+	    name, {LogicalType::BIGINT}, LogicalType::BIGINT, [](DataChunk &args, ExpressionState &state, Vector &result) {
+		    UnaryExecutor::Execute<int64_t, int64_t>(args.data[0], result, args.size(), [&](int64_t value) -> int64_t {
+			    if (value < 1) {
+				    throw InvalidInputException("YAML limit must be a positive value");
+			    }
+			    SETTER(static_cast<idx_t>(value));
+			    return static_cast<int64_t>(GETTER());
+		    });
+	    });
+	// Fallible: rejects non-positive limits at execution time. Marked here, before
+	// the function is handed to the loader, because on DuckDB v2.0 a function is
+	// immutable once it has been added to a set. No-op on the pinned v1.5.x.
+	CompatSetFallible(fun);
+	return fun;
 }
 
 // Build a getter scalar function (no arguments) returning the current limit.
-// See MakeLimitSetter for why `name` is `const char *`.
+// See MakeLimitSetter for why `name` is `const char *`. Not marked fallible:
+// a getter is a pure read and cannot raise.
 template <idx_t (*GETTER)()>
 static ScalarFunction MakeLimitGetter(const char *name) {
 	return ScalarFunction(name, {}, LogicalType::BIGINT,
@@ -504,12 +533,14 @@ void YAMLFunctions::RegisterFromYAMLFunction(ExtensionLoader &loader) {
 	auto from_yaml_fun =
 	    ScalarFunction("from_yaml", {yaml_type, LogicalType::ANY}, LogicalType::ANY, FromYAMLFunction, FromYAMLBind);
 	CompatSetScalarNullHandling(from_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
+	CompatSetFallible(from_yaml_fun);
 	loader.RegisterFunction(from_yaml_fun);
 
 	// Also register version that takes VARCHAR input
 	auto from_yaml_varchar_fun = ScalarFunction("from_yaml", {LogicalType::VARCHAR, LogicalType::ANY}, LogicalType::ANY,
 	                                            FromYAMLFunction, FromYAMLBind);
 	CompatSetScalarNullHandling(from_yaml_varchar_fun, FunctionNullHandling::SPECIAL_HANDLING);
+	CompatSetFallible(from_yaml_varchar_fun);
 	loader.RegisterFunction(from_yaml_varchar_fun);
 }
 

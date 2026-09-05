@@ -98,14 +98,15 @@ inline void SetValueCasted(ClientContext &context, Vector &vec, idx_t idx, const
 
 template <class INPUT_TYPE, class RESULT_TYPE, class FUNC>
 inline void CompatUnaryExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count, [fun](INPUT_TYPE in) -> std::optional<RESULT_TYPE> {
-		ValidityMask scratch; // default-constructed → all rows valid
-		RESULT_TYPE val = fun(in, scratch, idx_t(0));
-		if (!scratch.RowIsValid(0)) {
-			return std::nullopt;
-		}
-		return val;
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(input, result, count,
+	                                                [fun](INPUT_TYPE in) -> std::optional<RESULT_TYPE> {
+		                                                ValidityMask scratch; // default-constructed → all rows valid
+		                                                RESULT_TYPE val = fun(in, scratch, idx_t(0));
+		                                                if (!scratch.RowIsValid(0)) {
+			                                                return std::nullopt;
+		                                                }
+		                                                return val;
+	                                                });
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC>
@@ -149,24 +150,42 @@ inline void CompatBinaryExecuteWithNulls(Vector &left, Vector &right, Vector &re
 
 namespace duckdb {
 
+// Reading is safe to overload unconditionally -- whichever type shows up at the
+// call site picks its overload, and the Identifier one only has to EXIST when
+// the type does.
+inline const string &CompatIdentifierName(const string &name) {
+	return name;
+}
 #ifdef DUCKDB_HAS_IDENTIFIER
 inline const string &CompatIdentifierName(const Identifier &id) {
 	return id.GetIdentifierName();
 }
-inline const string &CompatIdentifierName(const string &name) {
+#endif
+
+// Constructing is where the choice has to be right, and `__has_include` is the
+// WRONG basis for it -- see the long note on CompatName below. identifier.hpp
+// has been backported to the stable v1.5-variegata branch without child_list_t
+// changing its key type, so the header probe would flip this to Identifier on a
+// DuckDB that still wants string. Derive it from the boundary instead: this
+// helper's job is to produce a child_list_t key (STRUCT field names), and
+// TableFunctionRef::alias and FunctionSet::name move with it.
+//
+// No `typename`: child_list_t<LogicalType> is a concrete type here, and
+// `typename` outside a template is only valid from C++20 (this header compiles
+// at C++11).
+using CompatIdentifierKey = child_list_t<LogicalType>::value_type::first_type;
+
+inline string CompatMakeIdentifierImpl(string name, const string *) {
 	return name;
 }
-inline Identifier CompatMakeIdentifier(string name) {
+#ifdef DUCKDB_HAS_IDENTIFIER
+inline Identifier CompatMakeIdentifierImpl(string name, const Identifier *) {
 	return Identifier(std::move(name));
 }
-#else
-inline const string &CompatIdentifierName(const string &name) {
-	return name;
-}
-inline string CompatMakeIdentifier(string name) {
-	return name;
-}
 #endif
+inline CompatIdentifierKey CompatMakeIdentifier(string name) {
+	return CompatMakeIdentifierImpl(std::move(name), static_cast<const CompatIdentifierKey *>(nullptr));
+}
 
 } // namespace duckdb
 
@@ -188,8 +207,8 @@ inline string CompatMakeIdentifier(string name) {
 #define DUCKDB_SCALAR_BIND_CONTEXT bind_input.GetClientContext()
 #define DUCKDB_SCALAR_BIND_ARGS    bind_input.GetArguments()
 #else
-#define DUCKDB_SCALAR_BIND_PARAMS                                                                                       \
-	duckdb::ClientContext &context, duckdb::ScalarFunction &bound_function,                                             \
+#define DUCKDB_SCALAR_BIND_PARAMS                                                                                      \
+	duckdb::ClientContext &context, duckdb::ScalarFunction &bound_function,                                            \
 	    duckdb::vector<duckdb::unique_ptr<duckdb::Expression>> &arguments
 #define DUCKDB_SCALAR_BIND_CONTEXT context
 #define DUCKDB_SCALAR_BIND_ARGS    arguments
@@ -287,4 +306,308 @@ inline const unique_ptr<FunctionData> &CompatBoundBindInfo(const BoundFunctionEx
 	return e.bind_info;
 }
 #endif
+} // namespace duckdb
+
+// === DuckDB v2.0 (duckdb `main`) shims (appended) ===
+//
+// These cover the change classes documented in duckdb_markdown's
+// docs/duckdb_v2_migration.md that the sections above do not already handle.
+//
+// FEATURE DETECTION, NOT VERSION NUMBERS, and each change is probed
+// SEPARATELY. A version macro says *when* a thing changed; a probe says whether
+// it changed *here*, which keeps working when a change is backported, reverted,
+// or lands on a branch nobody expected. Tying several changes to one macro
+// silently picks the wrong branch the moment they land in different releases --
+// so these deliberately do NOT reuse DUCKDB_HAS_NEW_VECTOR_HEADERS.
+//
+// <type_traits> is C++11, so it is safe to include unconditionally: this header
+// is compiled at -std=c++11 against the pinned v1.5.x DuckDB (see the note at
+// the top of the file about why the extension must not be forced to C++17).
+
+#include <type_traits>
+#include <utility>
+#include "duckdb/function/table_function.hpp"
+
+namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// CompatName / CompatNameStr / CompatMakeName -- bind-signature name type
+//===--------------------------------------------------------------------===//
+//
+// v2.0 changed `table_function_bind_t` and `copy_to_bind_t` to take
+// `vector<Identifier> &names` where v1.5 took `vector<string> &names`.
+//
+// DO NOT SELECT THIS TYPE WITH `__has_include("duckdb/common/identifier.hpp")`.
+// That is the obvious probe and it is a TIME BOMB. identifier.hpp has already
+// been BACKPORTED to the stable v1.5-variegata branch WITHOUT changing the bind
+// signature, so on three real heads:
+//
+//   v1.5-variegata @ b155d6f63c (our pin)   no identifier.hpp   bind: vector<string>
+//   v1.5-variegata @ branch tip             HAS identifier.hpp  bind: vector<string>
+//   main (v2.0)                             HAS identifier.hpp  bind: vector<Identifier>
+//
+// the header probe agrees with reality only because our pin predates the
+// backport. The next submodule bump would flip CompatName to Identifier on a
+// DuckDB that still wants strings, and every bind signature in the extension
+// would stop compiling at once.
+//
+// So derive the type from the boundary itself. TableFunctionBindInput's
+// `input_table_names` has the same element type as the bind out-parameter on
+// both lines (table_function.hpp:110 / :289 on the pin; :123 / :319 on main),
+// which makes this exact by construction rather than by correlation.
+using CompatName =
+    std::remove_reference<decltype(std::declval<TableFunctionBindInput &>().input_table_names)>::type::value_type;
+
+// The Identifier overloads below are still gated on the header, because the
+// TYPE has to exist before it can be named. That gate decides only whether an
+// overload can be declared -- never which type CompatName is.
+inline string CompatNameStr(const string &name) {
+	return name;
+}
+inline string CompatMakeNameImpl(string name, const string *) {
+	return name;
+}
+#ifdef DUCKDB_HAS_IDENTIFIER
+inline string CompatNameStr(const Identifier &name) {
+	return name.GetIdentifierName();
+}
+inline Identifier CompatMakeNameImpl(string name, const Identifier *) {
+	return Identifier(std::move(name));
+}
+#endif
+//! Promote a RUNTIME string to whatever the bind signature wants. Literals need
+//! no helper: Identifier(const char *) is implicit by design, precisely so that
+//! only deliberate runtime promotions have to be spelled out.
+inline CompatName CompatMakeName(string name) {
+	return CompatMakeNameImpl(std::move(name), static_cast<const CompatName *>(nullptr));
+}
+
+//! Cross-check the derivation against a SECOND, independent entity. CompatName
+//! comes from TableFunctionBindInput::input_table_names; this asserts that a
+//! bind function written with it is actually assignable to table_function_bind_t.
+//! DuckDB could in principle change those two independently, which is what makes
+//! this load-bearing rather than tautological -- and it turns the next submodule
+//! bump from a cascade of confusing signature errors into one clear message.
+typedef unique_ptr<FunctionData> (*CompatBindSignatureCheck)(ClientContext &, TableFunctionBindInput &,
+                                                             vector<LogicalType> &, vector<CompatName> &);
+static_assert(std::is_convertible<CompatBindSignatureCheck, table_function_bind_t>::value,
+              "CompatName does not match table_function_bind_t's name parameter. The DuckDB submodule has "
+              "moved this boundary: re-derive CompatName from the bind signature rather than patching call sites.");
+
+//! Whole-vector conversions for the same boundary. A bind function fills a
+//! `vector<CompatName>` but the bind DATA keeps plain `vector<string>` (it is
+//! compared and sliced with string operations downstream), so the two vectors
+//! have to be converted rather than assigned. No-ops on v1.5.x.
+inline vector<string> CompatNameStrings(const vector<CompatName> &names) {
+	vector<string> result;
+	result.reserve(names.size());
+	for (const auto &name : names) {
+		result.push_back(CompatNameStr(name));
+	}
+	return result;
+}
+inline vector<CompatName> CompatMakeNames(const vector<string> &names) {
+	vector<CompatName> result;
+	result.reserve(names.size());
+	for (const auto &name : names) {
+		result.push_back(CompatMakeName(name));
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// CompatWithAlias -- LogicalType alias
+//===--------------------------------------------------------------------===//
+//
+// v1.5: void SetAlias(string)               -- mutates in place
+// v2.0: LogicalType WithAlias(string) const -- returns a copy, so it never
+//       mutates a type whose type-info is shared with other types.
+//
+// SetAlias is REMOVED on v2.0, not deprecated.
+//
+// Dispatched on a tag rather than with `if constexpr`, so this compiles at
+// C++11 (which is what this extension builds at -- see the header preamble).
+// Tag dispatch has the property that matters here: only the selected overload
+// is instantiated, so the branch naming the absent member is never compiled.
+template <class T, class = void>
+struct CompatHasWithAlias : std::false_type {};
+template <class T>
+struct CompatHasWithAlias<T, decltype(void(std::declval<const T &>().WithAlias(string())))> : std::true_type {};
+
+template <class TYPE>
+inline LogicalType CompatWithAliasImpl(TYPE type, string alias, std::true_type) {
+	return type.WithAlias(std::move(alias));
+}
+template <class TYPE>
+inline LogicalType CompatWithAliasImpl(TYPE type, string alias, std::false_type) {
+	type.SetAlias(std::move(alias));
+	return type;
+}
+// The entry point is deliberately NOT a template: `LogicalType::VARCHAR` and
+// friends are `LogicalTypeId` constants, so a deduced parameter binds TYPE to
+// LogicalTypeId and then fails inside the shim ("request for member 'SetAlias'
+// in 'type', which is of non-class type 'duckdb::LogicalTypeId'"). A concrete
+// LogicalType parameter makes the usual implicit conversion happen at the call
+// site instead. The dispatch below is still a template, so only the selected
+// overload is instantiated and the branch naming the absent member is never
+// compiled.
+inline LogicalType CompatWithAlias(LogicalType type, string alias) {
+	return CompatWithAliasImpl(std::move(type), std::move(alias), CompatHasWithAlias<LogicalType>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatSetCaptureArgumentAliases -- named arguments derived from aliases
+//===--------------------------------------------------------------------===//
+//
+// A SILENT RUNTIME BREAK, not a compile error: v2.0 added
+// FunctionProperties::capture_argument_aliases, DEFAULTING TO FALSE. On v1.5 the
+// binder always recorded a named argument's alias on the bound child expression,
+// so a bind callback could recover `style := 'block'` with child->GetAlias(). On
+// v2.0 that alias comes back EMPTY unless the function opts in, so a function
+// that derives named parameters from argument aliases binds every argument as
+// unnamed and fails at RUNTIME -- with a completely green build and nothing to
+// grep for. (duckdb's own struct_pack/row call SetCaptureArgumentAliases(true)
+// for exactly this reason.)
+//
+// No-op on v1.5.x, where the capture was unconditional.
+template <class T, class = void>
+struct CompatHasSetCaptureArgumentAliases : std::false_type {};
+template <class T>
+struct CompatHasSetCaptureArgumentAliases<T, decltype(void(std::declval<T &>().SetCaptureArgumentAliases(true)))>
+    : std::true_type {};
+
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliasesImpl(FUNC &fun, std::true_type) {
+	fun.SetCaptureArgumentAliases(true);
+}
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliasesImpl(FUNC &, std::false_type) {
+}
+template <class FUNC>
+inline void CompatSetCaptureArgumentAliases(FUNC &fun) {
+	CompatSetCaptureArgumentAliasesImpl(fun, CompatHasSetCaptureArgumentAliases<FUNC>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatSetFallible -- functions that can throw at execution time
+//===--------------------------------------------------------------------===//
+//
+// A SILENT RUNTIME BREAK. v2.0 requires a scalar function that can throw during
+// execution to say so; throwing from one that has not becomes
+//
+//   INTERNAL Error: Scalar function "f" threw an execution error, but the
+//   function is not marked as fallible - the function must call SetFallible().
+//
+// There is no compile error and nothing in the DuckDB API to grep for -- the
+// thing to grep is your own `throw` statements inside execution bodies, plus
+// the transitive callers of throwing helpers. Enforcement is an assertion, so
+// a canary leg built without assertions can be green while the contract is
+// violated; do not read a green arch as proof.
+//
+// IMPORTANT: this is NOT a v2.0-only concept and the shim is NOT a no-op on
+// v1.5.x. BaseScalarFunction::SetFallible() exists on the pinned v1.5.4 too
+// (function.hpp), and `errors` feeds Expression::CanThrow(), which gates
+// conjunct reordering, filter pushdown and dictionary caching. v2.0 only added
+// ENFORCEMENT of a contract that already existed. So mark PRECISELY: declaring
+// a function fallible when it cannot throw is itself an optimizer-visible
+// change on the version this extension ships.
+//
+// The shim exists only for the FunctionSet case. A plain ScalarFunction (or
+// AggregateFunction) has SetFallible() on both lines and could call it
+// directly; a FunctionSet gained a set-level SetFallible() only on v2.0, where
+// its members became immutable shared_ptr<const T> and can no longer be
+// iterated and mutated the way v1.5's vector<T> can.
+template <class T, class = void>
+struct CompatHasSetFallible : std::false_type {};
+template <class T>
+struct CompatHasSetFallible<T, decltype(void(std::declval<T &>().SetFallible()))> : std::true_type {};
+
+//! Direct: a function on either line, or a v2.0 set (which applies it to every overload).
+template <class FUNC>
+inline void CompatSetFallibleImpl(FUNC &fun, std::true_type) {
+	fun.SetFallible();
+}
+//! v1.5 FunctionSet: no set-level setter, but the overloads are still mutable.
+template <class SET>
+inline void CompatSetFallibleImpl(SET &set, std::false_type) {
+	for (auto &fun : set.functions) {
+		fun.SetFallible();
+	}
+}
+template <class FUNC>
+inline void CompatSetFallible(FUNC &fun) {
+	CompatSetFallibleImpl(fun, CompatHasSetFallible<FUNC>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatFlatValidityMutable -- FlatVector validity write access
+//===--------------------------------------------------------------------===//
+//
+// The same const split as CompatFlatDataMutable, applied to the validity mask:
+//   v2.0: FlatVector::Validity(const Vector &)  -> const ValidityMask &  (Buffer())
+//         FlatVector::ValidityMutable(Vector &) ->       ValidityMask &  (BufferMutable())
+// BufferMutable() un-shares a copy-on-write buffer first; Buffer() does not.
+//
+// This one hides better than the data split: the accessor call still COMPILES,
+// silently deducing a const reference, and the diagnostic only appears at the
+// mutation as "passing 'const duckdb::ValidityMask' as 'this' argument discards
+// qualifiers". So grep the MUTATION, not the accessor:
+//   grep -rn 'SetInvalid\|SetValid(\|SetAllInvalid\|SetAllValid' src/
+//
+// (This extension has no direct FlatVector::Validity call site today -- every
+// SetInvalid here is on the ValidityMask the executor hands to a lambda -- but
+// the shim lives here because this header is the shared reference for the
+// duck_block extension family.)
+template <class T, class = void>
+struct CompatHasValidityMutable : std::false_type {};
+template <class T>
+struct CompatHasValidityMutable<T, decltype(void(T::ValidityMutable(std::declval<Vector &>())))> : std::true_type {};
+
+template <class FV>
+inline ValidityMask &CompatFlatValidityMutableImpl(Vector &vec, std::true_type) {
+	return FV::ValidityMutable(vec);
+}
+template <class FV>
+inline ValidityMask &CompatFlatValidityMutableImpl(Vector &vec, std::false_type) {
+	return FV::Validity(vec);
+}
+template <class FV = FlatVector>
+inline ValidityMask &CompatFlatValidityMutable(Vector &vec) {
+	return CompatFlatValidityMutableImpl<FV>(vec, CompatHasValidityMutable<FV>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatFlatDataMutable -- FlatVector write access
+//===--------------------------------------------------------------------===//
+//
+// v1.5: FlatVector::GetData<T>(vec)        returns T*
+// v2.0: FlatVector::GetData<T>(vec)        returns const T*
+//       FlatVector::GetDataMutable<T>(vec) returns T*
+//
+// Writing through the v2.0 read accessor is a compile error, which is the whole
+// point of the split, so the WRITE path has to ask for mutability explicitly.
+// Probing for GetDataMutable (the member that exists only on v2.0) rather than
+// for GetData (which exists on both) is what makes the probe discriminate.
+//
+// ConstantVector::GetData<T> kept its non-const overload, so writes through
+// *it* need no shim.
+template <class T, class = void>
+struct CompatHasFlatGetDataMutable : std::false_type {};
+template <class T>
+struct CompatHasFlatGetDataMutable<T, decltype(void(T::template GetDataMutable<bool>(std::declval<Vector &>())))>
+    : std::true_type {};
+
+template <class VALUE, class FV>
+inline VALUE *CompatFlatDataMutableImpl(Vector &vec, std::true_type) {
+	return FV::template GetDataMutable<VALUE>(vec);
+}
+template <class VALUE, class FV>
+inline VALUE *CompatFlatDataMutableImpl(Vector &vec, std::false_type) {
+	return FV::template GetData<VALUE>(vec);
+}
+template <class VALUE, class FV = FlatVector>
+inline VALUE *CompatFlatDataMutable(Vector &vec) {
+	return CompatFlatDataMutableImpl<VALUE, FV>(vec, CompatHasFlatGetDataMutable<FV>());
+}
+
 } // namespace duckdb

@@ -190,11 +190,14 @@ static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vecto
 				    keys.push_back(Value(key));
 			    }
 
-			    // Get the list child vector. const_cast on the data pointer: on duckdb
-			    // main FlatVector::GetData<T> returns const T*, on v1.5.x non-const —
-			    // the cast is a no-op on the old API and the right strip on the new one.
+			    // Get the list child vector. CompatFlatDataMutable, not a const_cast:
+			    // on DuckDB v2.0 FlatVector::GetData<T> returns const T* and the
+			    // mutable accessor goes through Vector::BufferMutable(), which
+			    // un-shares a copy-on-write buffer first. Casting away the const
+			    // would compile but write into a buffer that may still be shared
+			    // with another vector. No-op on the pinned v1.5.x.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
+			    auto list_data = CompatFlatDataMutable<string_t>(child_vector);
 
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
@@ -237,9 +240,9 @@ static void YAMLKeysBinaryFunction(DataChunk &args, ExpressionState &state, Vect
 				    keys.push_back(Value(key));
 			    }
 
-			    // const_cast: see comment in YAMLKeysUnaryFunction above.
+			    // CompatFlatDataMutable: see comment in YAMLKeysUnaryFunction above.
 			    auto &child_vector = ListVector::GetEntry(result);
-			    auto list_data = const_cast<string_t *>(FlatVector::GetData<string_t>(child_vector));
+			    auto list_data = CompatFlatDataMutable<string_t>(child_vector);
 
 			    list_entry_t entry;
 			    entry.offset = ListVector::GetListSize(result);
@@ -268,7 +271,7 @@ struct YAMLArrayElementsBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> YAMLArrayElementsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<CompatName> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("yaml_array_elements requires a YAML array parameter");
 	}
@@ -343,7 +346,7 @@ struct YAMLEachBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> YAMLEachBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<CompatName> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("yaml_each requires a YAML object parameter");
 	}
@@ -656,6 +659,10 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	yaml_array_length_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::BIGINT, YAMLArrayLengthUnaryFunction));
 	yaml_array_length_set.AddFunction(
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BIGINT, YAMLArrayLengthBinaryFunction));
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_array_length_set);
 	loader.RegisterFunction(yaml_array_length_set);
 
 	// yaml_keys function
@@ -664,6 +671,7 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({yaml_type}, LogicalType::LIST(LogicalType::VARCHAR), YAMLKeysUnaryFunction));
 	yaml_keys_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
 	                                         YAMLKeysBinaryFunction));
+	CompatSetFallible(yaml_keys_set);
 	loader.RegisterFunction(yaml_keys_set);
 
 	// yaml_array_elements table function
@@ -678,6 +686,7 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	// yaml_build_object function - variadic function
 	auto yaml_build_object_fun = ScalarFunction("yaml_build_object", {}, yaml_type, YAMLBuildObjectFunction);
 	CompatSetScalarVarArgs(yaml_build_object_fun, LogicalType::ANY);
+	CompatSetFallible(yaml_build_object_fun);
 	loader.RegisterFunction(yaml_build_object_fun);
 
 	// yaml_agg aggregate function
@@ -689,6 +698,9 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	                      nullptr, // bind
 	                      nullptr  // destructor
 	    );
+	// The aggregate re-parses and re-emits YAML in its finalize, so it can raise
+	// a runtime error too; BaseAggregateFunction carries the same contract.
+	CompatSetFallible(yaml_agg_fun);
 	loader.RegisterFunction(yaml_agg_fun);
 }
 

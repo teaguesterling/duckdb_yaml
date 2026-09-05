@@ -28,10 +28,18 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	string yaml_layout = "";    // Default to empty, will infer from style
 	string yaml_multiline = ""; // Default to empty, will resolve to "auto"
 	string yaml_indent = "";    // Default to empty, will use "2"
-	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"yaml"}}};
+	// Typed off CopyInfo::options rather than spelled out: DuckDB v2.0 rekeyed
+	// that map from case_insensitive_map_t<...> (string keys) to
+	// identifier_map_t<...> (Identifier keys), and the two do not assign to each
+	// other. Deriving the local's type from the member it is moved into keeps the
+	// assignment at the bottom of this function correct on both lines, and keeps
+	// working if the map changes again. The literal keys need no helper --
+	// Identifier(const char *) is implicit by design.
+	decltype(copied_info.options) csv_copy_options {{"file_extension", {"yaml"}}};
 
 	for (const auto &kv : copied_info.options) {
-		const auto &loption = StringUtil::Lower(kv.first);
+		// COPY option keys are identifiers on v2.0, so read the raw name out.
+		const auto loption = StringUtil::Lower(CompatIdentifierName(kv.first));
 		if (loption == "style") {
 			if (kv.second.size() != 1) {
 				ThrowYAMLCopyParameterException(loption);
@@ -259,6 +267,10 @@ void RegisterYAMLCopyFunctions(ExtensionLoader &loader) {
 	    ScalarFunction("copy_format_yaml", {LogicalType::ANY}, LogicalType::VARCHAR, CopyFormatYAMLFunction);
 	CompatSetScalarNullHandling(copy_format_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetScalarVarArgs(copy_format_yaml_fun, LogicalType::ANY); // Allow variable number of arguments
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(copy_format_yaml_fun);
 	loader.RegisterFunction(copy_format_yaml_fun);
 }
 

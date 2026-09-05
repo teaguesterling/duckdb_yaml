@@ -711,6 +711,10 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_type_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeUnaryFunction));
 	yaml_type_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLTypeBinaryFunction));
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_type_set);
 	loader.RegisterFunction(yaml_type_set);
 
 	// yaml_extract function with yaml_extract_path alias
@@ -722,6 +726,11 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
 
 	// Register yaml_extract and yaml_extract_path alias
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_extract_set);
+
 	vector<ScalarFunctionSet> extract_functions;
 	AddAliases({"yaml_extract", "yaml_extract_path"}, yaml_extract_set, extract_functions);
 	for (auto &func : extract_functions) {
@@ -737,6 +746,11 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
 
 	// Register yaml_extract_string, yaml_extract_path_text, and ->> alias
+	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
+	// rethrows an execution error from an unmarked function as an INTERNAL error
+	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
+	CompatSetFallible(yaml_extract_string_set);
+
 	vector<ScalarFunctionSet> extract_string_functions;
 	AddAliases({"yaml_extract_string", "yaml_extract_path_text", "->>"}, yaml_extract_string_set,
 	           extract_string_functions);
@@ -750,12 +764,17 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction));
 	yaml_exists_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLExistsFunction));
+	// yaml_exists is deliberately NOT marked fallible: its whole body is inside
+	// catch (...) { return false; }, so it cannot raise. Marking is not free --
+	// `errors` feeds Expression::CanThrow() on the pinned v1.5 too, gating
+	// conjunct reordering and filter pushdown -- so the claim has to be true.
 	loader.RegisterFunction(yaml_exists_set);
 
 	// yaml_structure function - returns JSON representation of YAML structure
 	ScalarFunctionSet yaml_structure_set("yaml_structure");
 	yaml_structure_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::JSON(), YAMLStructureFunction));
 	yaml_structure_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), YAMLStructureFunction));
+	CompatSetFallible(yaml_structure_set);
 	loader.RegisterFunction(yaml_structure_set);
 
 	// yaml_contains function - check if first YAML contains second YAML
@@ -767,6 +786,7 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({LogicalType::VARCHAR, yaml_type}, LogicalType::BOOLEAN, YAMLContainsFunction));
 	yaml_contains_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
+	CompatSetFallible(yaml_contains_set);
 	loader.RegisterFunction(yaml_contains_set);
 
 	// yaml_merge_patch function - RFC 7386 merge patch
@@ -778,6 +798,7 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({LogicalType::VARCHAR, yaml_type}, yaml_type, YAMLMergePatchFunction));
 	yaml_merge_patch_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLMergePatchFunction));
+	CompatSetFallible(yaml_merge_patch_set);
 	loader.RegisterFunction(yaml_merge_patch_set);
 
 	// yaml_value function - extract scalar value only, NULL for non-scalars
@@ -786,6 +807,7 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLValueFunction));
 	yaml_value_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLValueFunction));
+	CompatSetFallible(yaml_value_set);
 	loader.RegisterFunction(yaml_value_set);
 }
 

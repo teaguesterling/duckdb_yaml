@@ -163,7 +163,7 @@ struct YAMLReadBindData : public TableFunctionData {
 };
 
 unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<CompatName> &names) {
 	// Validate primary input
 	if (input.inputs.empty()) {
 		throw BinderException("read_yaml requires a file path parameter");
@@ -351,7 +351,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 						}
 						result->frontmatter_names.push_back(key);
 						result->frontmatter_types.push_back(type);
-						names.push_back(key);
+						names.push_back(CompatMakeName(key));
 						return_types.push_back(type);
 					}
 				}
@@ -381,9 +381,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			sampled_rows++;
 		}
 		LogicalType list_element_type = DetectJaggedYAMLType(sample_nodes);
-		names.push_back(options.list_column_name);
+		names.push_back(CompatMakeName(options.list_column_name));
 		return_types.push_back(LogicalType::LIST(list_element_type));
-		result->names = names;
+		result->names = CompatNameStrings(names);
 		result->types = return_types;
 		return std::move(result);
 	}
@@ -398,7 +398,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		} else {
 			throw IOException("No valid YAML documents found");
 		}
-		result->names = names;
+		result->names = CompatNameStrings(names);
 		result->types = return_types;
 		return std::move(result);
 	}
@@ -457,7 +457,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 
 	// Build the final schema in document order
 	for (const auto &col : column_order) {
-		names.push_back(col);
+		names.push_back(CompatMakeName(col));
 		return_types.push_back(detected_types[col]);
 	}
 
@@ -472,7 +472,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	}
 
 	// Save schema
-	result->names = names;
+	result->names = CompatNameStrings(names);
 	result->types = return_types;
 
 	return std::move(result);
@@ -513,7 +513,7 @@ OperatorPartitionData YAMLReader::YAMLReadGetPartitionData(ClientContext &contex
 }
 
 unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                         vector<LogicalType> &return_types, vector<string> &names) {
+                                                         vector<LogicalType> &return_types, vector<CompatName> &names) {
 	// Validate primary input
 	if (input.inputs.empty()) {
 		throw BinderException("read_yaml_objects requires a file path parameter");
@@ -621,19 +621,19 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 
 	if (sample_docs.empty()) {
 		if (!options.column_names.empty()) {
-			names = options.column_names;
+			names = CompatMakeNames(options.column_names);
 			return_types = options.column_types;
 		} else {
 			names.emplace_back("yaml");
 			return_types.emplace_back(LogicalType::VARCHAR);
 		}
-		result->names = names;
+		result->names = CompatNameStrings(names);
 		result->types = return_types;
 		return std::move(result);
 	}
 
 	if (!options.column_names.empty()) {
-		names = options.column_names;
+		names = CompatMakeNames(options.column_names);
 		return_types = options.column_types;
 	} else {
 		if (options.auto_detect_types) {
@@ -646,7 +646,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		}
 	}
 
-	result->names = names;
+	result->names = CompatNameStrings(names);
 	result->types = return_types;
 	return std::move(result);
 }
@@ -1070,7 +1070,7 @@ struct ParseYAMLLocalState : public LocalTableFunctionState {
 };
 
 unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<CompatName> &names) {
 	if (input.inputs.empty()) {
 		throw BinderException("parse_yaml requires a YAML string parameter");
 	}
@@ -1121,7 +1121,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		// Empty result - return a single yaml column
 		names.emplace_back("yaml");
 		return_types.emplace_back(LogicalType::VARCHAR);
-		result->names = names;
+		result->names = CompatNameStrings(names);
 		result->types = return_types;
 		return std::move(result);
 	}
@@ -1133,7 +1133,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		// Struct type - use struct fields as columns
 		auto &children = StructType::GetChildTypes(merged_type);
 		for (auto &child : children) {
-			names.push_back(CompatIdentifierName(child.first));
+			names.push_back(CompatMakeName(CompatIdentifierName(child.first)));
 			return_types.push_back(child.second);
 		}
 	} else {
@@ -1142,7 +1142,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		return_types.emplace_back(merged_type);
 	}
 
-	result->names = names;
+	result->names = CompatNameStrings(names);
 	result->types = return_types;
 	return std::move(result);
 }

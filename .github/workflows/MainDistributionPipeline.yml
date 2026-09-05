@@ -15,7 +15,16 @@ jobs:
   # Forward-compat canary: intentionally tracks duckdb `main`; expected to go
   # red on upstream API drift and is NOT a merge blocker.
   duckdb-next-build:
-    name: Build extension binaries
+    name: DuckDB main canary
+    # Gated so it does not show red on every PR. `push` and `pull_request` both
+    # fire on the same commit and a PR's check rollup includes both, so an
+    # ungated canary that tracks upstream API drift makes every PR look broken.
+    # This must be `if:` and NOT `continue-on-error:` — a job that calls a
+    # REUSABLE workflow accepts only a fixed key set, and adding
+    # continue-on-error makes the whole workflow fail to parse (scheduling zero
+    # jobs, including the shippable build). Run it on demand with:
+    #   gh workflow run MainDistributionPipeline.yml --ref <branch>
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       duckdb_version: main
