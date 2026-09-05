@@ -31,3 +31,44 @@ query I
 SELECT yaml_to_json('{''a"b'': 42}')->>'a"b';
 ----
 42
+
+# --- Remaining escape classes in keys (#42) ---
+# Keys share the value path's escaper, so these lock in that a key can never regress to
+# a second, weaker escaper. Each asserts the property that matters (valid JSON) as well
+# as the exact bytes, so a silently-mangled-but-parseable key is still caught.
+
+# A key containing a newline -> \n, valid JSON.
+query II
+SELECT yaml_to_json('{"line1\nline2": 3}')::VARCHAR, json_valid(yaml_to_json('{"line1\nline2": 3}')::VARCHAR);
+----
+{"line1\nline2":3}	true
+
+# A key containing a tab -> \t, valid JSON.
+query II
+SELECT yaml_to_json('{"a\tb": 4}')::VARCHAR, json_valid(yaml_to_json('{"a\tb": 4}')::VARCHAR);
+----
+{"a\tb":4}	true
+
+# A key containing a control character with no short escape -> \u00XX, valid JSON.
+query II
+SELECT yaml_to_json('{"a\x01b": 5}')::VARCHAR, json_valid(yaml_to_json('{"a\x01b": 5}')::VARCHAR);
+----
+{"a\u0001b":5}	true
+
+# Non-ASCII keys are already valid UTF-8 JSON: pass through unescaped, not mangled.
+query II
+SELECT yaml_to_json('{café: 6, "日本": 7}')::VARCHAR, json_valid(yaml_to_json('{café: 6, "日本": 7}')::VARCHAR);
+----
+{"café":6,"日本":7}	true
+
+# A non-ASCII key round-trips through DuckDB's own JSON extraction.
+query I
+SELECT yaml_to_json('{café: 6, "日本": 7}')->>'日本';
+----
+7
+
+# A key made only of escape-worthy characters still produces valid JSON.
+query I
+SELECT json_valid(yaml_to_json('{"\"\\\t": 8}')::VARCHAR);
+----
+true

@@ -609,6 +609,19 @@ The YAML extension includes comprehensive automatic type detection:
 - **NULL**: null, ~, Null, NULL, empty string
 - **VARCHAR**: Default for unrecognized patterns
 
+> **The "Norway problem".** Because the boolean set above includes `no`/`n`/`off`/`y`/`on`,
+> an unquoted country code, initial, or similar token is read as a boolean:
+> `country: NO` becomes `false`, and `answer: y` becomes `true`. This is YAML 1.1
+> behaviour and is what most YAML tooling does, so the extension keeps it rather than
+> silently disagreeing with other readers. Quote the value to keep it a string:
+>
+> ```yaml
+> country: "NO"    # VARCHAR 'NO'
+> country: NO      # BOOLEAN false
+> ```
+>
+> The same applies to `ON`, `OFF`, `Y`, `N`, `T`, `F` in any letter case.
+
 ### Array Handling
 - Homogeneous arrays: `INTEGER[]`, `VARCHAR[]`, etc.
 - Mixed-type arrays: Fall back to `VARCHAR[]`
@@ -620,6 +633,15 @@ The YAML extension includes comprehensive automatic type detection:
 - Streaming support for very large files not yet implemented
 - YAML comments are not preserved
 - Maximum file size limited by memory (default 16MB, configurable)
+- **Duplicate mapping keys are not rejected or normalized.** YAML says keys should be
+  unique but does not require an error, and the underlying parser accepts duplicates. The
+  two paths then differ: `yaml_to_json` emits every occurrence (`{a: 1, a: 2}` becomes
+  `{"a":1,"a":2}` — legal JSON, but consumers disagree on which value wins), while
+  `read_yaml` can only produce one column per name, so the **first** occurrence wins and
+  later ones are dropped without warning. Deduplicate upstream if your input may contain
+  repeated keys.
+- Boolean coercion follows YAML 1.1, so unquoted `NO`, `N`, `OFF`, `Y`, `ON` are booleans
+  — see the ["Norway problem"](#other-types) note above.
 
 ## Advanced YAML Functions
 
