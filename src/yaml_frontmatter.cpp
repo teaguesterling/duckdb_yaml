@@ -51,18 +51,20 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 		start += 2;
 	}
 
-	// Find closing delimiter
-	size_t end_pos = string::npos;
-	size_t search_pos = start;
+	// Find closing delimiter.
+	//
+	// Iterate over line starts rather than over newlines. The previous version only ever
+	// examined the line *following* a newline found at or beyond `start`, so the first line
+	// of the block was never tested. A block closed immediately (`---\n---\n`, i.e. empty
+	// frontmatter) was therefore missed, and the scan ran on to match a `---` in the body --
+	// silently promoting body text to frontmatter and hiding the real body (issue #42).
+	//
+	// A delimiter only counts at column 0: YAML document markers are defined that way, so a
+	// `---` indented inside a block scalar is scalar content and correctly does not close.
+	size_t delim_start = string::npos; // first char of the closing delimiter line
+	size_t line_start = start;
 
-	while (search_pos < content.size()) {
-		// Look for \n--- or \n...
-		size_t newline_pos = content.find('\n', search_pos);
-		if (newline_pos == string::npos) {
-			break;
-		}
-
-		size_t line_start = newline_pos + 1;
+	while (line_start <= content.size()) {
 		if (line_start + 3 <= content.size()) {
 			string potential_delim = content.substr(line_start, 3);
 			if (potential_delim == "---" || potential_delim == "...") {
@@ -70,24 +72,29 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 				if (line_start + 3 >= content.size() || content[line_start + 3] == '\n' ||
 				    content[line_start + 3] == '\r' || content[line_start + 3] == ' ' ||
 				    content[line_start + 3] == '\t') {
-					end_pos = newline_pos;
+					delim_start = line_start;
 					break;
 				}
 			}
 		}
-		search_pos = newline_pos + 1;
+		size_t newline_pos = content.find('\n', line_start);
+		if (newline_pos == string::npos) {
+			break;
+		}
+		line_start = newline_pos + 1;
 	}
 
-	if (end_pos == string::npos) {
+	if (delim_start == string::npos) {
 		// No closing delimiter found - treat entire content as body
 		return {"", content};
 	}
 
-	string frontmatter = content.substr(start, end_pos - start);
+	// The frontmatter runs from `start` up to the newline preceding the delimiter line.
+	// When the delimiter is the first line of the block the frontmatter is empty.
+	string frontmatter = delim_start > start ? content.substr(start, (delim_start - 1) - start) : "";
 
 	// Find start of body (after closing delimiter line)
-	size_t body_start = end_pos + 1; // skip the \n before ---
-	body_start += 3;                 // skip ---
+	size_t body_start = delim_start + 3; // skip ---
 	// Skip rest of delimiter line
 	while (body_start < content.size() && content[body_start] != '\n' && content[body_start] != '\r') {
 		body_start++;
