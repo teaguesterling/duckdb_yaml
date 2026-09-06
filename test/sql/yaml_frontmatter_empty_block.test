@@ -1,0 +1,42 @@
+# name: test/sql/yaml_frontmatter_empty_block.test
+# description: An empty frontmatter block must not swallow body text (#42)
+# group: [sql]
+
+require yaml
+
+# empty_block.md is:
+#   ---
+#   ---
+#   Body line one.
+#   ...(a bare --- line, then more body)
+#
+# The closing delimiter is on the very first line of the block, so the block is empty.
+# ExtractFrontmatter only ever examined lines *following* a newline at or after the
+# opening delimiter, so the first line was never tested as a close delimiter. The scan
+# then ran on and matched the `---` sitting in the body, making "---\nBody line one."
+# the frontmatter and hiding the real body.
+#
+# An empty frontmatter block yields no frontmatter fields, i.e. no rows (same as a file
+# with no frontmatter at all -- see yaml_frontmatter_reader.test case 9).
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter/empty_block.md', as_yaml_objects:=true);
+----
+0
+
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter/empty_block.md', as_yaml_objects:=true, content:=true);
+----
+0
+
+# A normal frontmatter block is unaffected: fields parse and the body is preserved intact.
+query II
+SELECT title, content LIKE '%# My First Blog Post%' FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', content:=true);
+----
+My First Blog Post	true
+
+# A `---` indented inside a block scalar is part of the scalar, not a close delimiter:
+# the delimiter must sit at column 0. fm3.yaml-style block content stays intact.
+query I
+SELECT frontmatter::VARCHAR LIKE '%title:%' FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', as_yaml_objects:=true);
+----
+true

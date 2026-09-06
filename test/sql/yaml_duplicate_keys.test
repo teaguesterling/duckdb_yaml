@@ -1,0 +1,48 @@
+# name: test/sql/yaml_duplicate_keys.test
+# description: Documented behaviour for duplicate YAML mapping keys (#42)
+# group: [sql]
+
+require yaml
+
+require json
+
+# YAML 1.2 says mapping keys should be unique but does not require an error, and yaml-cpp
+# accepts duplicates without complaint. This extension does not normalise them, so the
+# behaviour is characterised here rather than left implicit. The two paths differ, which is
+# what makes writing it down worthwhile:
+#
+#   * yaml_to_json  -- every occurrence is emitted, so the JSON carries a repeated key.
+#   * read_yaml     -- the STRUCT/column schema cannot hold a repeated field, so the first
+#                      occurrence wins and later ones are dropped.
+
+# yaml_to_json preserves every occurrence. RFC 8259 permits repeated names (it only says
+# they SHOULD be unique), so this is still valid JSON -- but consumers may disagree on
+# which value wins, so treat duplicate keys as a data-quality problem upstream.
+query II
+SELECT yaml_to_json('{a: 1, a: 2}')::VARCHAR, json_valid(yaml_to_json('{a: 1, a: 2}')::VARCHAR);
+----
+{"a":1,"a":2}	true
+
+query I
+SELECT yaml_to_json('a: 1
+a: 2')::VARCHAR;
+----
+{"a":1,"a":2}
+
+# read_yaml collapses to one column: the first occurrence wins, the later one is dropped.
+query II
+SELECT a, b FROM read_yaml('test/yaml/duplicate_keys.yaml');
+----
+1	3
+
+# The duplicated key yields exactly one column, not two.
+query I
+SELECT COUNT(*) FROM (SELECT * FROM read_yaml('test/yaml/duplicate_keys.yaml')) t(a, b);
+----
+1
+
+# Duplicate keys never produce a duplicate STRUCT field, which would be a bind error.
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/duplicate_keys.yaml');
+----
+TINYINT
