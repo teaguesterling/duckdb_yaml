@@ -72,7 +72,13 @@ void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 static void YAMLToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t yaml_str) -> string_t {
 		if (yaml_str.GetSize() == 0) {
-			return string_t();
+			// An empty YAML document is JSON `null` -- the same answer the
+			// docs.empty() branch below gives. This function is declared to return
+			// LogicalType::JSON(); a zero-length string is not JSON, and it was the
+			// value behind "Malformed JSON at byte 0 of input: input length is 0"
+			// from whichever json_* call touched the result next (#42). See the
+			// matching note in YAMLToJSONCast.
+			return StringVector::AddString(result, "null", 4);
 		}
 		yaml_utils::CheckInputSize(yaml_str.GetSize(), "yaml_to_json");
 

@@ -3,6 +3,7 @@
 #include "yaml_utils.hpp"
 #include "yaml_formatting.hpp"
 #include "yaml-cpp/yaml.h"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,13 @@ static bool IsYAMLType(const LogicalType &t) {
 static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t yaml_str) -> string_t {
 		if (yaml_str.GetSize() == 0) {
-			return string_t();
+			// An empty YAML document is JSON `null` -- which is what the docs.empty()
+			// branch below already answers. Returning string_t() handed a ZERO-LENGTH
+			// string back from a cast whose TARGET is LogicalType::JSON(), and a
+			// zero-length string is not JSON. Same defect as the swallowed parse
+			// error in VarcharToYAMLCast, by a route validating that cast does not
+			// close: `''::YAML` is a legal, reachable empty YAML value (#42).
+			return StringVector::AddString(result, "null", 4);
 		}
 
 		try {
@@ -88,25 +95,39 @@ static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastPara
 }
 
 static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t str) -> string_t {
-		if (str.GetSize() == 0) {
-			return string_t();
-		}
+	bool success = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	    source, result, count, [&](string_t str, ValidityMask &mask, idx_t idx) -> string_t {
+		    if (str.GetSize() == 0) {
+			    return string_t();
+		    }
 
-		try {
-			// Try to parse as multi-document YAML first
-			auto docs = yaml_utils::ParseYAML(str.GetString(), true);
+		    try {
+			    // Try to parse as multi-document YAML first
+			    auto docs = yaml_utils::ParseYAML(str.GetString(), true);
 
-			// Format as block-style YAML
-			std::string yaml_str = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::BLOCK);
-			return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
-		} catch (...) {
-			// On parsing error, return empty string
-			return string_t();
-		}
-	});
+			    // Format as block-style YAML
+			    std::string yaml_str = yaml_utils::EmitYAMLMultiDoc(docs, yaml_utils::YAMLFormat::BLOCK);
+			    return StringVector::AddString(result, yaml_str.c_str(), yaml_str.length());
+		    } catch (const std::exception &e) {
+			    // ParseYAML() already raises a descriptive InvalidInputException, but this
+			    // used to swallow it and hand back an empty string. Unparseable input then
+			    // became an *empty YAML value* with no error anywhere: `'{unclosed: ['::YAML`
+			    // silently produced '', and yaml_to_json() of that returned an empty string
+			    // typed as JSON -- invalid JSON out of a function declared to return
+			    // LogicalType::JSON(), which only blew up much later and far away as
+			    // "Malformed JSON at byte 0 of input: input length is 0" (issue #42).
+			    //
+			    // Report it as a cast error instead: a plain CAST now raises, and TRY_CAST
+			    // yields NULL, which is what every other DuckDB type does.
+			    HandleCastError::AssignError(e.what(), parameters);
+			    mask.SetInvalid(idx);
+			    success = false;
+			    return string_t();
+		    }
+	    });
 
-	return true;
+	return success;
 }
 
 static bool YAMLToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

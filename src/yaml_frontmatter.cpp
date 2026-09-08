@@ -30,25 +30,75 @@ struct YAMLFrontmatterLocalState : public LocalTableFunctionState {
 	idx_t current_file = 0;
 };
 
+// True if a standalone frontmatter delimiter line begins at `pos`: exactly "---" (or
+// "..." when `allow_document_end`) followed by nothing but spaces/tabs to the end of the
+// line or the end of the input.
+//
+// Both the opening and the closing delimiter go through this so they cannot disagree.
+// They used to: the opening test was a bare `content.substr(0, 3) == "---"` prefix match,
+// so a plain markdown file whose first line was a thematic break (`----`, `-----`) or any
+// `---foo` was treated as opening a frontmatter block. Everything up to the next `---`
+// line was then swallowed as "frontmatter" -- which parses to nothing -- and only the tail
+// was returned as the body, truncating the document with no error (issue #42). The closing
+// test, meanwhile, already required a full-line match, so `----` opened a block that could
+// never be closed by another `----`.
+static bool IsDelimiterLine(const string &content, size_t pos, bool allow_document_end) {
+	if (pos + 3 > content.size()) {
+		return false;
+	}
+	bool is_marker = content.compare(pos, 3, "---") == 0 || (allow_document_end && content.compare(pos, 3, "...") == 0);
+	if (!is_marker) {
+		return false;
+	}
+	for (size_t i = pos + 3; i < content.size(); i++) {
+		const char c = content[i];
+		if (c == '\n' || c == '\r') {
+			return true;
+		}
+		if (c != ' ' && c != '\t') {
+			return false;
+		}
+	}
+	return true; // delimiter runs to the end of the input
+}
+
 // Extract frontmatter from file content
 // Returns a pair of (frontmatter_yaml, body_content)
 // If no frontmatter found, returns empty frontmatter
 static pair<string, string> ExtractFrontmatter(const string &content) {
-	// Frontmatter must start with "---" at the beginning of the file
-	if (content.size() < 3 || content.substr(0, 3) != "---") {
-		return {"", content};
+	// A UTF-8 BOM is common in Windows-authored markdown. Without skipping it the opening
+	// delimiter never matches and the file silently yields no frontmatter at all, even
+	// though it has some (issue #42). MEASURED against the other readers 2026-09-07 rather
+	// than assumed: Jekyll strips it (Utils.merged_file_read_opts prepends "bom|" to any
+	// utf- encoding, so Ruby drops it at read time) and so does gray-matter; but
+	// python-frontmatter does NOT -- its `^-{3,}\s*$` boundary simply fails and a BOM'd file
+	// comes back with no metadata. Stripping is the majority behaviour and the only one that
+	// does not lose data, and it is what duckdb_markdown's SkipBOM already did, so the two
+	// extensions agree about the same file.
+	size_t origin = 0;
+	if (content.size() >= 3 && content.compare(0, 3, "\xEF\xBB\xBF") == 0) {
+		origin = 3;
+	}
+	auto without_frontmatter = [&]() -> pair<string, string> {
+		return {"", origin == 0 ? content : content.substr(origin)};
+	};
+
+	// Frontmatter must open with a "---" line at the very beginning of the file. "..." is a
+	// document *end* marker and never opens a block.
+	if (!IsDelimiterLine(content, origin, /*allow_document_end=*/false)) {
+		return without_frontmatter();
 	}
 
-	// Find the end delimiter (--- or ...)
-	size_t start = 3;
-	// Skip whitespace/newline after opening ---
+	// Move past the opening delimiter line.
+	size_t start = origin + 3;
 	while (start < content.size() && (content[start] == ' ' || content[start] == '\t')) {
+		start++;
+	}
+	if (start < content.size() && content[start] == '\r') {
 		start++;
 	}
 	if (start < content.size() && content[start] == '\n') {
 		start++;
-	} else if (start + 1 < content.size() && content[start] == '\r' && content[start + 1] == '\n') {
-		start += 2;
 	}
 
 	// Find closing delimiter.
@@ -65,17 +115,9 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 	size_t line_start = start;
 
 	while (line_start <= content.size()) {
-		if (line_start + 3 <= content.size()) {
-			string potential_delim = content.substr(line_start, 3);
-			if (potential_delim == "---" || potential_delim == "...") {
-				// Check that it's followed by newline or end of file or whitespace
-				if (line_start + 3 >= content.size() || content[line_start + 3] == '\n' ||
-				    content[line_start + 3] == '\r' || content[line_start + 3] == ' ' ||
-				    content[line_start + 3] == '\t') {
-					delim_start = line_start;
-					break;
-				}
-			}
+		if (IsDelimiterLine(content, line_start, /*allow_document_end=*/true)) {
+			delim_start = line_start;
+			break;
 		}
 		size_t newline_pos = content.find('\n', line_start);
 		if (newline_pos == string::npos) {
@@ -86,12 +128,22 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 
 	if (delim_start == string::npos) {
 		// No closing delimiter found - treat entire content as body
-		return {"", content};
+		return without_frontmatter();
 	}
 
-	// The frontmatter runs from `start` up to the newline preceding the delimiter line.
+	// The frontmatter runs from `start` up to the line break preceding the delimiter line.
+	// Trim that break explicitly rather than assuming a single '\n': under CRLF the byte
+	// before the delimiter is '\n' and the one before that is '\r', which would otherwise
+	// be left dangling on the last frontmatter line.
 	// When the delimiter is the first line of the block the frontmatter is empty.
-	string frontmatter = delim_start > start ? content.substr(start, (delim_start - 1) - start) : "";
+	size_t fm_end = delim_start;
+	if (fm_end > start && content[fm_end - 1] == '\n') {
+		fm_end--;
+	}
+	if (fm_end > start && content[fm_end - 1] == '\r') {
+		fm_end--;
+	}
+	string frontmatter = fm_end > start ? content.substr(start, fm_end - start) : "";
 
 	// Find start of body (after closing delimiter line)
 	size_t body_start = delim_start + 3; // skip ---

@@ -1,0 +1,91 @@
+# name: test/sql/yaml_frontmatter_delimiter.test
+# description: The frontmatter open/close delimiters must be full-line matches, and a BOM must not hide frontmatter (#42)
+# group: [sql]
+
+require yaml
+
+# ---------------------------------------------------------------------------
+# Opening delimiter must be a complete "---" line.
+#
+# The opening test used to be a bare `content.substr(0, 3) == "---"` prefix match while
+# the closing test required a full-line match. A plain markdown file whose first line was
+# a thematic break (`----`) therefore "opened" a frontmatter block; everything up to the
+# next `---` line was swallowed as frontmatter (parsing to nothing) and only the tail came
+# back as the body. The document was silently truncated with no error.
+# ---------------------------------------------------------------------------
+
+# thematic_break.md has no frontmatter at all -- it opens with `----`. It must be skipped
+# entirely, exactly like any other frontmatter-less file. Before the fix this returned one
+# row whose content was just "\nMore text\n": the intro paragraph had been eaten.
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/thematic_break.md', as_yaml_objects:=true, content:=true);
+----
+0
+
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/thematic_break.md', as_yaml_objects:=false, content:=true);
+----
+0
+
+# `---foo` is not a delimiter line either. Before the fix this yielded a row with a NULL
+# frontmatter and a body of just "body\n"; `title: swallowed` vanished without a trace.
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/dash_prefix.md', as_yaml_objects:=true, content:=true);
+----
+0
+
+# ---------------------------------------------------------------------------
+# A UTF-8 BOM must not hide an otherwise valid frontmatter block.
+# Before the fix bom.md returned zero rows.
+# ---------------------------------------------------------------------------
+
+query III
+SELECT title, count, rtrim(content, chr(10)) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/bom.md', content:=true);
+----
+bom title	7	# Body after BOM
+
+# The BOM must not leak into the first key name either -- if it did, the column would be
+# named "﻿title" and this would resolve to NULL rather than TINYINT.
+query I
+SELECT typeof(count) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/bom.md');
+----
+TINYINT
+
+# ---------------------------------------------------------------------------
+# CRLF line endings: fields parse, and no stray '\r' is left dangling on the last
+# frontmatter line by the "delimiter minus one byte" slice.
+# ---------------------------------------------------------------------------
+
+query II
+SELECT title, count FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/crlf.md');
+----
+crlf title	42
+
+query II
+SELECT title = 'crlf title', typeof(count) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/crlf.md');
+----
+true	TINYINT
+
+# ---------------------------------------------------------------------------
+# The empty-block fix from #50 must hold under CRLF and with a "..." closer too:
+# no body text may leak into the frontmatter.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/empty_block_crlf.md', as_yaml_objects:=true, content:=true);
+----
+0
+
+query I
+SELECT COUNT(*) FROM read_yaml_frontmatter('test/yaml/frontmatter_delimiters/empty_block_dots.md', as_yaml_objects:=true, content:=true);
+----
+0
+
+# ---------------------------------------------------------------------------
+# Regression: ordinary frontmatter still parses and the body is preserved intact.
+# ---------------------------------------------------------------------------
+
+query II
+SELECT title, content LIKE '%# My First Blog Post%' FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', content:=true);
+----
+My First Blog Post	true
