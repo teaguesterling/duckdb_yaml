@@ -1,0 +1,69 @@
+# name: test/sql/yaml_invalid_cast.test
+# description: Casting unparseable text to YAML must error, not silently yield an empty YAML value (#42)
+# group: [sql]
+
+require yaml
+
+# VarcharToYAMLCast used to wrap the whole parse in `catch (...) { return string_t(); }`.
+# ParseYAML() raises a descriptive error, but it was swallowed and the row became an
+# *empty* YAML value. Nothing anywhere reported a problem, and the damage surfaced later:
+# yaml_to_json() of that empty value returns an empty string typed as JSON, so a function
+# declared to return LogicalType::JSON() handed back something that is not JSON. The first
+# visible symptom was an unrelated-looking "Malformed JSON at byte 0 of input: input length
+# is 0" from whichever json_* call happened to touch it next.
+#
+# yaml_valid() always reported these correctly -- only the cast disagreed.
+
+query I
+SELECT yaml_valid('{unclosed: [');
+----
+false
+
+# A plain CAST now raises, like every other DuckDB type.
+statement error
+SELECT '{unclosed: ['::YAML;
+----
+Error parsing YAML
+
+# Tab indentation is invalid YAML too.
+statement error
+SELECT ('a:'||chr(10)||chr(9)||'b: 1')::YAML;
+----
+Error parsing YAML
+
+# The implicit cast on a VARCHAR literal argument goes through the same path, so a
+# yaml_to_json() that used to return a non-JSON empty string now errors instead.
+statement error
+SELECT yaml_to_json('{unclosed: [');
+----
+Error parsing YAML
+
+# TRY_CAST yields NULL rather than raising -- the standard DuckDB escape hatch.
+query I
+SELECT TRY_CAST('{unclosed: [' AS YAML) IS NULL;
+----
+true
+
+query II
+SELECT TRY_CAST('a: 1' AS YAML) IS NULL, TRY_CAST('{unclosed: [' AS YAML) IS NULL;
+----
+false	true
+
+# Valid documents are unaffected, including multi-line scalars and multi-document input.
+query I
+SELECT yaml_to_json('a: 1'::YAML)::VARCHAR;
+----
+{"a":1}
+
+query III
+SELECT yaml_to_json(('k: '||chr(34)||'a'||chr(10)||'b'||chr(34))::YAML)::VARCHAR,
+       yaml_to_json(('k: a'||chr(10)||'  b')::YAML)::VARCHAR,
+       yaml_to_json(('k: |'||chr(10)||'  a'||chr(10)||'  b')::YAML)::VARCHAR;
+----
+{"k":"a b"}	{"k":"a b"}	{"k":"a\nb"}
+
+# An empty string stays an empty YAML value (unchanged, and not a parse failure).
+query I
+SELECT ''::YAML::VARCHAR = '';
+----
+true

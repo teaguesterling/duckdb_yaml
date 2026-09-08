@@ -209,6 +209,15 @@ Frontmatter works with any text file that uses `---` delimiters:
 
 Schemas are automatically merged across files with different frontmatter fields (jagged schema support). Columns not present in a file will have `NULL` values.
 
+**Delimiters.** The opening delimiter must be a line containing exactly `---` (trailing
+spaces or tabs are allowed) as the very first line of the file; a leading UTF-8 BOM is
+skipped. A line that merely *starts* with three dashes — a markdown thematic break such as
+`----`, or `---foo` — does not open a frontmatter block, so an ordinary markdown file that
+opens with a horizontal rule is correctly treated as having no frontmatter. The block is
+closed by the next `---` or `...` line at column 0; a `---` indented inside a block scalar
+is scalar content and does not close it. Files with no frontmatter, and files whose
+frontmatter block is empty, produce no rows.
+
 #### Example: Analyzing a Blog
 
 ```sql
