@@ -68,8 +68,13 @@ static bool IsDelimiterLine(const string &content, size_t pos, bool allow_docume
 static pair<string, string> ExtractFrontmatter(const string &content) {
 	// A UTF-8 BOM is common in Windows-authored markdown. Without skipping it the opening
 	// delimiter never matches and the file silently yields no frontmatter at all, even
-	// though it has some (issue #42). Every other frontmatter reader (Jekyll, gray-matter,
-	// python-frontmatter) strips the BOM before looking for the delimiter.
+	// though it has some (issue #42). MEASURED against the other readers 2026-09-07 rather
+	// than assumed: Jekyll strips it (Utils.merged_file_read_opts prepends "bom|" to any
+	// utf- encoding, so Ruby drops it at read time) and so does gray-matter; but
+	// python-frontmatter does NOT -- its `^-{3,}\s*$` boundary simply fails and a BOM'd file
+	// comes back with no metadata. Stripping is the majority behaviour and the only one that
+	// does not lose data, and it is what duckdb_markdown's SkipBOM already did, so the two
+	// extensions agree about the same file.
 	size_t origin = 0;
 	if (content.size() >= 3 && content.compare(0, 3, "\xEF\xBB\xBF") == 0) {
 		origin = 3;

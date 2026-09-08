@@ -67,3 +67,48 @@ query I
 SELECT ''::YAML::VARCHAR = '';
 ----
 true
+
+# The other half of the same defect, which the cast fix alone does not reach.
+#
+# The complaint in #42 is a function declared LogicalType::JSON() handing back
+# something that is not JSON. Validating the VARCHAR -> YAML cast closes the
+# route the issue described, but not the shape: `yaml_to_json` and the
+# YAML -> JSON cast both short-circuit a zero-length input to a zero-length
+# RESULT, and a zero-length string is not JSON. `''::YAML` is a legal, reachable
+# empty YAML value -- the assertion above says so deliberately -- so
+# `yaml_to_json(''::YAML)` still produced the same "Malformed JSON at byte 0 of
+# input: input length is 0" from whichever json_* call touched it next.
+#
+# An empty YAML document is JSON `null`, which is what the docs.empty() branch
+# one line further down already emitted.
+
+query I
+SELECT yaml_to_json(''::YAML)::VARCHAR;
+----
+null
+
+# SQL NULL is not the JSON literal null: it must still propagate as NULL.
+query I
+SELECT yaml_to_json(NULL::YAML) IS NULL;
+----
+true
+
+# The YAML -> JSON *cast* is a second copy of the same short-circuit and needed
+# the same fix. Naming the JSON type, and json_valid, both live in the json
+# extension -- everything above this line runs without it.
+require json
+
+query I
+SELECT (''::YAML::JSON)::VARCHAR;
+----
+null
+
+query II
+SELECT json_valid(yaml_to_json(''::YAML)::VARCHAR), json_valid((''::YAML::JSON)::VARCHAR);
+----
+true	true
+
+query I
+SELECT (NULL::YAML::JSON) IS NULL;
+----
+true

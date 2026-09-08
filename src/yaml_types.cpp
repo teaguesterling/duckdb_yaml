@@ -31,7 +31,13 @@ static bool IsYAMLType(const LogicalType &t) {
 static bool YAMLToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t yaml_str) -> string_t {
 		if (yaml_str.GetSize() == 0) {
-			return string_t();
+			// An empty YAML document is JSON `null` -- which is what the docs.empty()
+			// branch below already answers. Returning string_t() handed a ZERO-LENGTH
+			// string back from a cast whose TARGET is LogicalType::JSON(), and a
+			// zero-length string is not JSON. Same defect as the swallowed parse
+			// error in VarcharToYAMLCast, by a route validating that cast does not
+			// close: `''::YAML` is a legal, reachable empty YAML value (#42).
+			return StringVector::AddString(result, "null", 4);
 		}
 
 		try {
