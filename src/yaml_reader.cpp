@@ -15,7 +15,7 @@ unique_ptr<TableRef> YAMLReader::ReadYAMLReplacement(ClientContext &context, Rep
 
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(CompatConstant(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("read_yaml", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

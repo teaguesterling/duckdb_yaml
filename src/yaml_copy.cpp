@@ -133,49 +133,49 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	// Add style parameter if specified (using named parameter syntax)
 	if (!yaml_style.empty()) {
 		// Create named parameter: style := 'block' or style := 'flow'
-		auto style_value = make_uniq<ConstantExpression>(yaml_style);
+		auto style_value = CompatConstant(Value(yaml_style));
 		style_value->SetAlias("style"); // This creates the named parameter
 		format_yaml_children.emplace_back(std::move(style_value));
 	}
 
 	// For COPY TO, always use layout=document internally to avoid array wrapping
 	// The actual layout transformation will be handled via post-processing
-	auto internal_layout_value = make_uniq<ConstantExpression>("document");
+	auto internal_layout_value = CompatConstant(Value("document"));
 	internal_layout_value->SetAlias("layout");
 	format_yaml_children.emplace_back(std::move(internal_layout_value));
 
 	// Add the target layout, style, multiline, and indent as trailing positional args
 	if (!yaml_layout.empty()) {
-		auto target_layout_value = make_uniq<ConstantExpression>(yaml_layout);
+		auto target_layout_value = CompatConstant(Value(yaml_layout));
 		format_yaml_children.emplace_back(std::move(target_layout_value));
 	} else {
-		auto target_layout_value = make_uniq<ConstantExpression>("document"); // Default
+		auto target_layout_value = CompatConstant(Value("document")); // Default
 		format_yaml_children.emplace_back(std::move(target_layout_value));
 	}
 
 	if (!yaml_style.empty()) {
-		auto target_style_value = make_uniq<ConstantExpression>(yaml_style);
+		auto target_style_value = CompatConstant(Value(yaml_style));
 		format_yaml_children.emplace_back(std::move(target_style_value));
 	} else {
-		auto target_style_value = make_uniq<ConstantExpression>("block"); // Default changed to block
+		auto target_style_value = CompatConstant(Value("block")); // Default changed to block
 		format_yaml_children.emplace_back(std::move(target_style_value));
 	}
 
 	// Multiline style (auto/literal/quoted)
 	if (!yaml_multiline.empty()) {
-		auto multiline_value = make_uniq<ConstantExpression>(yaml_multiline);
+		auto multiline_value = CompatConstant(Value(yaml_multiline));
 		format_yaml_children.emplace_back(std::move(multiline_value));
 	} else {
-		auto multiline_value = make_uniq<ConstantExpression>("auto"); // Default
+		auto multiline_value = CompatConstant(Value("auto")); // Default
 		format_yaml_children.emplace_back(std::move(multiline_value));
 	}
 
 	// Indent size
 	if (!yaml_indent.empty()) {
-		auto indent_value = make_uniq<ConstantExpression>(yaml_indent);
+		auto indent_value = CompatConstant(Value(yaml_indent));
 		format_yaml_children.emplace_back(std::move(indent_value));
 	} else {
-		auto indent_value = make_uniq<ConstantExpression>("2"); // Default
+		auto indent_value = CompatConstant(Value("2")); // Default
 		format_yaml_children.emplace_back(std::move(indent_value));
 	}
 
