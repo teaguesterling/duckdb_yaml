@@ -96,7 +96,7 @@ static bool JSONToYAMLCast(Vector &source, Vector &result, idx_t count, CastPara
 
 static bool VarcharToYAMLCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	CompatUnaryExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t str, ValidityMask &mask, idx_t idx) -> string_t {
 		    if (str.GetSize() == 0) {
 			    return string_t();
