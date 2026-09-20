@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
@@ -715,7 +716,18 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	// rethrows an execution error from an unmarked function as an INTERNAL error
 	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
 	CompatSetFallible(yaml_type_set);
-	loader.RegisterFunction(yaml_type_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_type_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description =
+		    "Return the YAML type of the input value or at a given path ('null', 'scalar', 'array', 'object').";
+		desc.examples = {"yaml_type('[1, 2, 3]')", "yaml_type('a: 1', '$.a')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_extract function with yaml_extract_path alias
 	// Returns YAML type, accepts both YAML and VARCHAR input
@@ -724,17 +736,32 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_extract_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
 	yaml_extract_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLExtractFunction));
-
-	// Register yaml_extract and yaml_extract_path alias
-	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
-	// rethrows an execution error from an unmarked function as an INTERNAL error
-	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
 	CompatSetFallible(yaml_extract_set);
 
-	vector<ScalarFunctionSet> extract_functions;
-	AddAliases({"yaml_extract", "yaml_extract_path"}, yaml_extract_set, extract_functions);
-	for (auto &func : extract_functions) {
-		loader.RegisterFunction(func);
+	{
+		CreateScalarFunctionInfo info(yaml_extract_set);
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Extract a YAML value from a YAML document at the specified path.";
+		desc.examples = {"yaml_extract('a: {b: 2}', '$.a.b')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
+	{
+		ScalarFunctionSet yaml_extract_path_set("yaml_extract_path");
+		yaml_extract_path_set = yaml_extract_set;
+		yaml_extract_path_set.name = CompatMakeIdentifier("yaml_extract_path");
+		CreateScalarFunctionInfo info(std::move(yaml_extract_path_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Extract a YAML value from a YAML document at the specified path (alias for yaml_extract).";
+		desc.examples = {"yaml_extract_path('a: {b: 2}', '$.a.b')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
 	}
 
 	// yaml_extract_string function with ->> alias
@@ -744,18 +771,47 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	    ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
 	yaml_extract_string_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLExtractStringFunction));
-
-	// Register yaml_extract_string, yaml_extract_path_text, and ->> alias
-	// Fallible: this can raise a runtime error on malformed input. DuckDB v2.0
-	// rethrows an execution error from an unmarked function as an INTERNAL error
-	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
 	CompatSetFallible(yaml_extract_string_set);
 
-	vector<ScalarFunctionSet> extract_string_functions;
-	AddAliases({"yaml_extract_string", "yaml_extract_path_text", "->>"}, yaml_extract_string_set,
-	           extract_string_functions);
-	for (auto &func : extract_string_functions) {
-		loader.RegisterFunction(func);
+	{
+		CreateScalarFunctionInfo info(yaml_extract_string_set);
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Extract a scalar value as VARCHAR from a YAML document at the specified path.";
+		desc.examples = {"yaml_extract_string('name: Alice', '$.name')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
+	{
+		ScalarFunctionSet yaml_extract_path_text_set("yaml_extract_path_text");
+		yaml_extract_path_text_set = yaml_extract_string_set;
+		yaml_extract_path_text_set.name = CompatMakeIdentifier("yaml_extract_path_text");
+		CreateScalarFunctionInfo info(std::move(yaml_extract_path_text_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Extract a scalar value as VARCHAR from a YAML document at the specified path (alias for "
+		                   "yaml_extract_string).";
+		desc.examples = {"yaml_extract_path_text('name: Alice', '$.name')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
+	{
+		ScalarFunctionSet arrow_set("->>");
+		arrow_set = yaml_extract_string_set;
+		arrow_set.name = CompatMakeIdentifier("->>");
+		CreateScalarFunctionInfo info(std::move(arrow_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Extract a scalar value as VARCHAR from a YAML document at the specified path.";
+		desc.examples = {"'name: Alice' ->> '$.name'"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
 	}
 
 	// yaml_exists function
@@ -768,14 +824,34 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	// catch (...) { return false; }, so it cannot raise. Marking is not free --
 	// `errors` feeds Expression::CanThrow() on the pinned v1.5 too, gating
 	// conjunct reordering and filter pushdown -- so the claim has to be true.
-	loader.RegisterFunction(yaml_exists_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_exists_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Check if a path exists within a YAML document.";
+		desc.examples = {"yaml_exists('a: 1', '$.a')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_structure function - returns JSON representation of YAML structure
 	ScalarFunctionSet yaml_structure_set("yaml_structure");
 	yaml_structure_set.AddFunction(ScalarFunction({yaml_type}, LogicalType::JSON(), YAMLStructureFunction));
 	yaml_structure_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), YAMLStructureFunction));
 	CompatSetFallible(yaml_structure_set);
-	loader.RegisterFunction(yaml_structure_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_structure_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml"};
+		desc.description = "Return a JSON representation describing the structure and types of the YAML document.";
+		desc.examples = {"yaml_structure('a: 1\nb: [2, 3]')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_contains function - check if first YAML contains second YAML
 	ScalarFunctionSet yaml_contains_set("yaml_contains");
@@ -787,7 +863,17 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_contains_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, YAMLContainsFunction));
 	CompatSetFallible(yaml_contains_set);
-	loader.RegisterFunction(yaml_contains_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_contains_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"target", "candidate"};
+		desc.description = "Check if target YAML document contains candidate YAML document.";
+		desc.examples = {"yaml_contains('a: 1\nb: 2', 'a: 1')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_merge_patch function - RFC 7386 merge patch
 	ScalarFunctionSet yaml_merge_patch_set("yaml_merge_patch");
@@ -799,7 +885,17 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_merge_patch_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, yaml_type, YAMLMergePatchFunction));
 	CompatSetFallible(yaml_merge_patch_set);
-	loader.RegisterFunction(yaml_merge_patch_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_merge_patch_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"target", "patch"};
+		desc.description = "Apply a JSON Merge Patch (RFC 7386) to a target YAML document.";
+		desc.examples = {"yaml_merge_patch('a: 1\nb: 2', 'a: 3\nc: 4')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_value function - extract scalar value only, NULL for non-scalars
 	ScalarFunctionSet yaml_value_set("yaml_value");
@@ -808,7 +904,18 @@ void YAMLExtractionFunctions::Register(ExtensionLoader &loader) {
 	yaml_value_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, YAMLValueFunction));
 	CompatSetFallible(yaml_value_set);
-	loader.RegisterFunction(yaml_value_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_value_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description =
+		    "Extract a scalar value only as VARCHAR from a YAML document, returning NULL for non-scalars.";
+		desc.examples = {"yaml_value('a: 1', '$.a')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 }
 
 } // namespace duckdb
