@@ -47,8 +47,17 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml.named_parameters["list_column_name"] = LogicalType::VARCHAR;
 	read_yaml.named_parameters["strip_document_suffixes"] = LogicalType::BOOLEAN;
 
-	// Register the function
-	loader.RegisterFunction(read_yaml);
+	{
+		CreateTableFunctionInfo info(std::move(read_yaml));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"path"};
+		desc.description = "Read YAML files into a tabular format.";
+		desc.examples = {"SELECT * FROM read_yaml('data.yaml')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// Register the object-based reader
 	TableFunction read_yaml_objects("read_yaml_objects", {LogicalType::ANY}, YAMLReadObjectsFunction,
@@ -65,7 +74,18 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	read_yaml_objects.named_parameters["sample_size"] = LogicalType::BIGINT;
 	read_yaml_objects.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 	read_yaml_objects.named_parameters["strip_document_suffixes"] = LogicalType::BOOLEAN;
-	loader.RegisterFunction(read_yaml_objects);
+
+	{
+		CreateTableFunctionInfo info(std::move(read_yaml_objects));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"path"};
+		desc.description = "Read YAML files as structured YAML objects.";
+		desc.examples = {"SELECT * FROM read_yaml_objects('data.yaml')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// Register parse_yaml table function for parsing YAML strings
 	TableFunction parse_yaml("parse_yaml", {LogicalType::VARCHAR}, ParseYAMLFunction, ParseYAMLBind);
@@ -74,7 +94,18 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	parse_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
 	parse_yaml.named_parameters["frontmatter_as_columns"] = LogicalType::BOOLEAN;
 	parse_yaml.named_parameters["list_column_name"] = LogicalType::VARCHAR;
-	loader.RegisterFunction(parse_yaml);
+
+	{
+		CreateTableFunctionInfo info(std::move(parse_yaml));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml_string"};
+		desc.description = "Parse a YAML string into a table.";
+		desc.examples = {"SELECT * FROM parse_yaml('a: 1\nb: 2')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 }
 
 } // namespace duckdb

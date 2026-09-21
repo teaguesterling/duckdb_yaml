@@ -423,7 +423,15 @@ void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {
 	read_yaml_frontmatter.named_parameters["content"] = LogicalType::BOOLEAN;
 	read_yaml_frontmatter.named_parameters["filename"] = LogicalType::BOOLEAN;
 
-	loader.RegisterFunction(read_yaml_frontmatter);
+	CreateTableFunctionInfo info(std::move(read_yaml_frontmatter));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	FunctionDescription desc;
+	desc.parameter_names = {"path"};
+	desc.description = "Read YAML frontmatter from documents.";
+	desc.examples = {"SELECT * FROM read_yaml_frontmatter('doc.md')"};
+	desc.categories = {"yaml"};
+	info.descriptions.push_back(desc);
+	loader.RegisterFunction(std::move(info));
 }
 
 } // namespace duckdb

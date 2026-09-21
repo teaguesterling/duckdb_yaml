@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include <algorithm>
 #include <cctype>
 
@@ -61,8 +62,18 @@ void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 	// wraps the parse in catch(...) and answers false; the YAML one is a constant
 	// true. Marking a function fallible is only a lost optimisation, but marking
 	// one that cannot throw is still a claim worth not making.
-	loader.RegisterFunction(yaml_valid_varchar);
-	loader.RegisterFunction(yaml_valid_yaml);
+	ScalarFunctionSet yaml_valid_set("yaml_valid");
+	yaml_valid_set.AddFunction(yaml_valid_varchar);
+	yaml_valid_set.AddFunction(yaml_valid_yaml);
+	CreateScalarFunctionInfo info(std::move(yaml_valid_set));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	FunctionDescription desc;
+	desc.parameter_names = {"yaml"};
+	desc.description = "Return true if the input string is valid YAML, false otherwise.";
+	desc.examples = {"yaml_valid('name: Alice')"};
+	desc.categories = {"yaml"};
+	info.descriptions.push_back(desc);
+	loader.RegisterFunction(std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -291,17 +302,47 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	// assertion, so a canary leg built without assertions can be green while the
 	// contract is violated. No-op on the pinned v1.5.x.
 	CompatSetFallible(yaml_to_json_fun);
-	loader.RegisterFunction(yaml_to_json_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_to_json_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml"};
+		desc.description = "Convert a YAML string or document to a JSON string.";
+		desc.examples = {"yaml_to_json('name: Alice\nage: 30')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// Register value_to_yaml function and to_yaml alias (single parameter, returns YAML type)
 	auto value_to_yaml_fun = ScalarFunction("value_to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
 	// value_to_yaml / to_yaml are deliberately NOT marked: ValueToYAMLFunction
 	// catches std::exception and (...) per row and substitutes "null".
-	loader.RegisterFunction(value_to_yaml_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(value_to_yaml_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"value"};
+		desc.description = "Convert any SQL value or structure into a YAML document string.";
+		desc.examples = {"value_to_yaml({'name': 'Alice', 'age': 30})"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// to_yaml alias for consistency with to_json
 	auto to_yaml_fun = ScalarFunction("to_yaml", {LogicalType::ANY}, yaml_type, ValueToYAMLFunction);
-	loader.RegisterFunction(to_yaml_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(to_yaml_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"value"};
+		desc.description = "Convert any SQL value or structure into a YAML document string (alias for value_to_yaml).";
+		desc.examples = {"to_yaml({'name': 'Alice', 'age': 30})"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// Register format_yaml function with named parameters (returns VARCHAR for display/formatting)
 	auto format_yaml_fun =
@@ -317,7 +358,18 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 	// build. No-op on the pinned v1.5.x, where capture was unconditional.
 	CompatSetCaptureArgumentAliases(format_yaml_fun);
 	CompatSetFallible(format_yaml_fun);
-	loader.RegisterFunction(format_yaml_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(format_yaml_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"value"};
+		desc.description = "Format a SQL value as YAML with configurable style, multiline, and indentation options.";
+		desc.examples = {
+		    "format_yaml({'name': 'Alice', 'hobbies': ['reading', 'gaming']}, style := 'block', indent := 4)"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// Register yaml() constructor function (parses YAML string to YAML type)
 	auto yaml_constructor_fun = ScalarFunction(
@@ -336,7 +388,17 @@ void YAMLFunctions::RegisterYAMLTypeFunctions(ExtensionLoader &loader) {
 		    });
 	    });
 	CompatSetFallible(yaml_constructor_fun);
-	loader.RegisterFunction(yaml_constructor_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_constructor_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml_str"};
+		desc.description = "Parse a YAML string and return a value of YAML type.";
+		desc.examples = {"yaml('name: Alice')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -383,12 +445,32 @@ void YAMLFunctions::RegisterStyleFunctions(ExtensionLoader &loader) {
 	auto yaml_set_default_style_fun = ScalarFunction("yaml_set_default_style", {LogicalType::VARCHAR},
 	                                                 LogicalType::VARCHAR, YAMLSetDefaultStyleFunction);
 	CompatSetFallible(yaml_set_default_style_fun); // rejects NULL and unknown styles
-	loader.RegisterFunction(yaml_set_default_style_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_set_default_style_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"style"};
+		desc.description = "Set the default output style for YAML functions ('flow' or 'block').";
+		desc.examples = {"yaml_set_default_style('block')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	auto yaml_get_default_style_fun =
 	    ScalarFunction("yaml_get_default_style", {}, LogicalType::VARCHAR, YAMLGetDefaultStyleFunction);
 	// yaml_get_default_style is total -- a pure read of the current setting.
-	loader.RegisterFunction(yaml_get_default_style_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_get_default_style_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {};
+		desc.description = "Get the current default output style for YAML functions.";
+		desc.examples = {"yaml_get_default_style()"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	RegisterLimitFunctions(loader);
 }
@@ -427,26 +509,49 @@ static ScalarFunction MakeLimitSetter(const char *name) {
 // a getter is a pure read and cannot raise.
 template <idx_t (*GETTER)()>
 static ScalarFunction MakeLimitGetter(const char *name) {
-	return ScalarFunction(name, {}, LogicalType::BIGINT,
-	                      [](DataChunk &args, ExpressionState &state, Vector &result) {
-		                      result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		                      auto data = ConstantVector::GetData<int64_t>(result);
-		                      data[0] = static_cast<int64_t>(GETTER());
-	                      });
+	return ScalarFunction(name, {}, LogicalType::BIGINT, [](DataChunk &args, ExpressionState &state, Vector &result) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto data = ConstantVector::GetData<int64_t>(result);
+		data[0] = static_cast<int64_t>(GETTER());
+	});
+}
+
+static void RegisterLimitFunction(ExtensionLoader &loader, ScalarFunction fun, const vector<string> &param_names,
+                                  const string &desc_str, const string &example_str) {
+	CreateScalarFunctionInfo info(std::move(fun));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	FunctionDescription desc;
+	desc.parameter_names = param_names;
+	desc.description = desc_str;
+	desc.examples = {example_str};
+	desc.categories = {"yaml"};
+	info.descriptions.push_back(desc);
+	loader.RegisterFunction(std::move(info));
 }
 
 void YAMLFunctions::RegisterLimitFunctions(ExtensionLoader &loader) {
 	using yaml_utils::YAMLSettings;
-	loader.RegisterFunction(MakeLimitSetter<YAMLSettings::SetMaxExpansionNodes, YAMLSettings::GetMaxExpansionNodes>(
-	    "yaml_set_max_expansion_nodes"));
-	loader.RegisterFunction(
-	    MakeLimitGetter<YAMLSettings::GetMaxExpansionNodes>("yaml_get_max_expansion_nodes"));
-	loader.RegisterFunction(
-	    MakeLimitSetter<YAMLSettings::SetMaxNestingDepth, YAMLSettings::GetMaxNestingDepth>("yaml_set_max_nesting_depth"));
-	loader.RegisterFunction(MakeLimitGetter<YAMLSettings::GetMaxNestingDepth>("yaml_get_max_nesting_depth"));
-	loader.RegisterFunction(
-	    MakeLimitSetter<YAMLSettings::SetMaxInputSize, YAMLSettings::GetMaxInputSize>("yaml_set_max_input_size"));
-	loader.RegisterFunction(MakeLimitGetter<YAMLSettings::GetMaxInputSize>("yaml_get_max_input_size"));
+	RegisterLimitFunction(loader,
+	                      MakeLimitSetter<YAMLSettings::SetMaxExpansionNodes, YAMLSettings::GetMaxExpansionNodes>(
+	                          "yaml_set_max_expansion_nodes"),
+	                      {"limit"}, "Set the maximum number of YAML nodes created during alias/anchor expansion.",
+	                      "yaml_set_max_expansion_nodes(100000)");
+	RegisterLimitFunction(loader, MakeLimitGetter<YAMLSettings::GetMaxExpansionNodes>("yaml_get_max_expansion_nodes"),
+	                      {}, "Get the maximum number of YAML nodes allowed during alias/anchor expansion.",
+	                      "yaml_get_max_expansion_nodes()");
+	RegisterLimitFunction(loader,
+	                      MakeLimitSetter<YAMLSettings::SetMaxNestingDepth, YAMLSettings::GetMaxNestingDepth>(
+	                          "yaml_set_max_nesting_depth"),
+	                      {"limit"}, "Set the maximum allowed nesting depth for YAML parsing.",
+	                      "yaml_set_max_nesting_depth(1000)");
+	RegisterLimitFunction(loader, MakeLimitGetter<YAMLSettings::GetMaxNestingDepth>("yaml_get_max_nesting_depth"), {},
+	                      "Get the maximum allowed nesting depth for YAML parsing.", "yaml_get_max_nesting_depth()");
+	RegisterLimitFunction(
+	    loader,
+	    MakeLimitSetter<YAMLSettings::SetMaxInputSize, YAMLSettings::GetMaxInputSize>("yaml_set_max_input_size"),
+	    {"limit"}, "Set the maximum allowed byte size for a YAML document.", "yaml_set_max_input_size(10485760)");
+	RegisterLimitFunction(loader, MakeLimitGetter<YAMLSettings::GetMaxInputSize>("yaml_get_max_input_size"), {},
+	                      "Get the maximum allowed byte size for a YAML document.", "yaml_get_max_input_size()");
 }
 
 //===--------------------------------------------------------------------===//
@@ -540,14 +645,26 @@ void YAMLFunctions::RegisterFromYAMLFunction(ExtensionLoader &loader) {
 	    ScalarFunction("from_yaml", {yaml_type, LogicalType::ANY}, LogicalType::ANY, FromYAMLFunction, FromYAMLBind);
 	CompatSetScalarNullHandling(from_yaml_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetFallible(from_yaml_fun);
-	loader.RegisterFunction(from_yaml_fun);
 
 	// Also register version that takes VARCHAR input
 	auto from_yaml_varchar_fun = ScalarFunction("from_yaml", {LogicalType::VARCHAR, LogicalType::ANY}, LogicalType::ANY,
 	                                            FromYAMLFunction, FromYAMLBind);
 	CompatSetScalarNullHandling(from_yaml_varchar_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetFallible(from_yaml_varchar_fun);
-	loader.RegisterFunction(from_yaml_varchar_fun);
+
+	ScalarFunctionSet from_yaml_set("from_yaml");
+	from_yaml_set.AddFunction(from_yaml_fun);
+	from_yaml_set.AddFunction(from_yaml_varchar_fun);
+
+	CreateScalarFunctionInfo info(std::move(from_yaml_set));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	FunctionDescription desc;
+	desc.parameter_names = {"yaml", "structure"};
+	desc.description = "Parse a YAML string or document into a structured DuckDB type.";
+	desc.examples = {"from_yaml('name: Alice\nage: 30', {'name': 'VARCHAR', 'age': 'INTEGER'})"};
+	desc.categories = {"yaml"};
+	info.descriptions.push_back(desc);
+	loader.RegisterFunction(std::move(info));
 }
 
 } // namespace duckdb

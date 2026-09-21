@@ -7,6 +7,9 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace duckdb {
@@ -122,8 +125,7 @@ static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &
 
 static void YAMLArrayLengthUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatUnaryExecuteWithNulls<string_t, int64_t>(
-	    args.data[0], result, args.size(),
-	    [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> int64_t {
+	    args.data[0], result, args.size(), [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> int64_t {
 		    if (yaml_str.GetSize() == 0) {
 			    mask.SetInvalid(idx);
 			    return 0;
@@ -170,8 +172,7 @@ static void YAMLArrayLengthBinaryFunction(DataChunk &args, ExpressionState &stat
 
 static void YAMLKeysUnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	CompatUnaryExecuteWithNulls<string_t, list_entry_t>(
-	    args.data[0], result, args.size(),
-	    [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
+	    args.data[0], result, args.size(), [&](string_t yaml_str, ValidityMask &mask, idx_t idx) -> list_entry_t {
 		    if (yaml_str.GetSize() == 0) {
 			    mask.SetInvalid(idx);
 			    return {0, 0};
@@ -603,8 +604,8 @@ static void YAMLAggCombine(Vector &state_vector, Vector &combined_vector, Aggreg
 	}
 }
 
-static void YAMLAggFinalize(Vector &state_vector, DUCKDB_AGG_FINALIZE_INPUT_TYPE &aggr_input_data, Vector &result, idx_t count,
-                            idx_t offset) {
+static void YAMLAggFinalize(Vector &state_vector, DUCKDB_AGG_FINALIZE_INPUT_TYPE &aggr_input_data, Vector &result,
+                            idx_t count, idx_t offset) {
 	auto states = FlatVector::GetData<YAMLAggState *>(state_vector);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -663,7 +664,17 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	// rethrows an execution error from an unmarked function as an INTERNAL error
 	// ("the function must call SetFallible()"). No-op on the pinned v1.5.x.
 	CompatSetFallible(yaml_array_length_set);
-	loader.RegisterFunction(yaml_array_length_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_array_length_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Return the number of elements in a YAML array, optionally at a given path.";
+		desc.examples = {"yaml_array_length('[1, 2, 3]')", "yaml_array_length('items: [a, b]', '$.items')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_keys function
 	ScalarFunctionSet yaml_keys_set("yaml_keys");
@@ -672,22 +683,62 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	yaml_keys_set.AddFunction(ScalarFunction({yaml_type, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
 	                                         YAMLKeysBinaryFunction));
 	CompatSetFallible(yaml_keys_set);
-	loader.RegisterFunction(yaml_keys_set);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_keys_set));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml", "path"};
+		desc.description = "Return the keys of a YAML mapping as a list of VARCHAR, optionally at a given path.";
+		desc.examples = {"yaml_keys('a: 1\nb: 2')", "yaml_keys('root: {x: 10, y: 20}', '$.root')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_array_elements table function
 	TableFunction yaml_array_elements("yaml_array_elements", {yaml_type}, YAMLArrayElementsFunction,
 	                                  YAMLArrayElementsBind);
-	loader.RegisterFunction(yaml_array_elements);
+	{
+		CreateTableFunctionInfo info(std::move(yaml_array_elements));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml"};
+		desc.description = "Unnest a YAML array into rows of YAML values.";
+		desc.examples = {"SELECT * FROM yaml_array_elements('[10, 20, 30]')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_each table function
 	TableFunction yaml_each("yaml_each", {yaml_type}, YAMLEachFunction, YAMLEachBind);
-	loader.RegisterFunction(yaml_each);
+	{
+		CreateTableFunctionInfo info(std::move(yaml_each));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"yaml"};
+		desc.description = "Unnest a YAML mapping into key-value pairs.";
+		desc.examples = {"SELECT * FROM yaml_each('a: 1\nb: 2')"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_build_object function - variadic function
 	auto yaml_build_object_fun = ScalarFunction("yaml_build_object", {}, yaml_type, YAMLBuildObjectFunction);
 	CompatSetScalarVarArgs(yaml_build_object_fun, LogicalType::ANY);
 	CompatSetFallible(yaml_build_object_fun);
-	loader.RegisterFunction(yaml_build_object_fun);
+	{
+		CreateScalarFunctionInfo info(std::move(yaml_build_object_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"key", "value"};
+		desc.description = "Construct a YAML mapping from alternating key and value arguments.";
+		desc.examples = {"yaml_build_object('name', 'Alice', 'age', 30)"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 
 	// yaml_agg aggregate function
 	auto yaml_agg_fun =
@@ -701,7 +752,17 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	// The aggregate re-parses and re-emits YAML in its finalize, so it can raise
 	// a runtime error too; BaseAggregateFunction carries the same contract.
 	CompatSetFallible(yaml_agg_fun);
-	loader.RegisterFunction(yaml_agg_fun);
+	{
+		CreateAggregateFunctionInfo info(std::move(yaml_agg_fun));
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		FunctionDescription desc;
+		desc.parameter_names = {"value"};
+		desc.description = "Aggregate values into a YAML array.";
+		desc.examples = {"yaml_agg(x)"};
+		desc.categories = {"yaml"};
+		info.descriptions.push_back(desc);
+		loader.RegisterFunction(std::move(info));
+	}
 }
 
 } // namespace duckdb
