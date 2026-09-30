@@ -30,7 +30,7 @@ jobs:
     # required-check configuration may key on this job name.
     runs-on: ubuntu-latest
     env:
-      DUCKDB_VERSION: v1.5.5
+      DUCKDB_VERSION: v1.5.6
       DUCKDB_NEXT: v2.0-cyanoptera
       # Flip day (spec §3 step 3) keeps a duckdb-legacy-build at the outgoing version
       # for one release; set this to that version then so the stray-literal scan below
@@ -176,7 +176,7 @@ jobs:
     name: Build extension binaries
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
-      duckdb_version: v1.5.5
+      duckdb_version: v1.5.6
       ci_tools_version: v1.5-variegata
       extension_name: yaml
       # Windows fully enabled: both windows_amd64 (MSVC) and windows_amd64_mingw build
@@ -198,7 +198,7 @@ jobs:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
-      duckdb_version: v1.5.5
+      duckdb_version: v1.5.6
       ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
@@ -224,7 +224,7 @@ jobs:
       - name: Download WASM artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: yaml-v1.5.5-extension-wasm_*
+          pattern: yaml-v1.5.6-extension-wasm_*
           path: wasm-artifacts
       - name: Static symbol check (yaml-cpp must be linked, not unresolved)
         run: bash test/wasm/run_wasm_checks.sh wasm-artifacts
@@ -235,8 +235,8 @@ jobs:
         run: |
           set -uo pipefail
           timeout 300 npm install --no-save
-          mkdir -p repo/v1.5.5/wasm_eh
-          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.5-extension-wasm_eh/yaml.duckdb_extension.wasm" \
-             repo/v1.5.5/wasm_eh/
+          mkdir -p repo/v1.5.6/wasm_eh
+          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.6-extension-wasm_eh/yaml.duckdb_extension.wasm" \
+             repo/v1.5.6/wasm_eh/
           timeout 240 node load_test.cjs --repo repo --name yaml --platform eh \
             --query "SELECT yaml_valid('a: 1') AS ok" --expect '"ok":true'
