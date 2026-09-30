@@ -2,6 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include <type_traits>
 
 // duckdb_compat.hpp — cross-version shim for DuckDB extensions.
 //
@@ -188,6 +189,22 @@ inline CompatIdentifierKey CompatMakeIdentifier(string name) {
 	return CompatMakeIdentifierImpl(std::move(name), static_cast<const CompatIdentifierKey *>(nullptr));
 }
 
+// Assign a named parameter type on function classes across API variants where
+// named parameters are either exposed as a map field or through AddNamedParameter.
+template <class F>
+auto CompatAddNamedParameterImpl(F &func, string name, LogicalType type, int)
+    -> decltype(func.AddNamedParameter(CompatMakeIdentifier(name), std::move(type)), void()) {
+	func.AddNamedParameter(CompatMakeIdentifier(std::move(name)), std::move(type));
+}
+template <class F>
+void CompatAddNamedParameterImpl(F &func, string name, LogicalType type, long) {
+	func.named_parameters[CompatMakeIdentifier(std::move(name))] = std::move(type);
+}
+template <class F>
+inline void CompatAddNamedParameter(F &func, string name, LogicalType type) {
+	CompatAddNamedParameterImpl(func, std::move(name), std::move(type), 0);
+}
+
 } // namespace duckdb
 
 // === duckdb main API compat (appended for v1.6.x/main) ===
@@ -233,9 +250,6 @@ inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
 inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
 	f.SetNullHandling(h);
 }
-inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	f.SetVarArgs(std::move(v));
-}
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
 }
@@ -255,13 +269,21 @@ inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
 inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
 	f.null_handling = h;
 }
-inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	f.varargs = std::move(v);
-}
 inline string CompatExprAlias(const BaseExpression &e) {
 	return e.alias;
 }
 #endif
+
+inline auto CompatSetScalarVarArgsImpl(ScalarFunction &f, LogicalType v, int)
+    -> decltype(f.SetVarArgs(std::move(v)), void()) {
+	f.SetVarArgs(std::move(v));
+}
+inline void CompatSetScalarVarArgsImpl(ScalarFunction &f, LogicalType v, long) {
+	f.varargs = std::move(v);
+}
+inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+	CompatSetScalarVarArgsImpl(f, std::move(v), 0);
+}
 
 } // namespace duckdb
 
