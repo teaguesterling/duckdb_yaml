@@ -2,6 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include <initializer_list>
 
 // duckdb_compat.hpp — cross-version shim for DuckDB extensions.
 //
@@ -188,6 +189,48 @@ inline CompatIdentifierKey CompatMakeIdentifier(string name) {
 	return CompatMakeIdentifierImpl(std::move(name), static_cast<const CompatIdentifierKey *>(nullptr));
 }
 
+// Register named parameters for a table/scalar-like function across DuckDB API
+// generations.
+//
+// v1.5.x: TableFunction inherits SimpleNamedParameterFunction and exposes
+// `named_parameters`.
+// v2.0+:  TableFunction inherits SimpleFunction; named options are declared as a
+// typed **kwargs schema on FunctionSignature.
+template <class FUNC, class = void>
+struct CompatHasNamedParametersMember : std::false_type {};
+template <class FUNC>
+struct CompatHasNamedParametersMember<FUNC, decltype(void(std::declval<FUNC &>().named_parameters))> : std::true_type {
+};
+
+template <class FUNC>
+inline void CompatSetNamedParametersImpl(FUNC &fun,
+                                         const std::initializer_list<std::pair<const char *, LogicalType>> &params,
+                                         std::true_type) {
+	for (auto &param : params) {
+		fun.named_parameters[CompatMakeIdentifier(param.first)] = param.second;
+	}
+}
+
+template <class FUNC>
+inline void CompatSetNamedParametersImpl(FUNC &fun,
+                                         const std::initializer_list<std::pair<const char *, LogicalType>> &params,
+                                         std::false_type) {
+	auto &signature = fun.GetSignature();
+	typedef typename std::remove_cv<typename std::remove_reference<decltype(*signature.GetTypedKwargs())>::type>::type
+	    CompatTypedKwargs;
+	CompatTypedKwargs kwargs;
+	for (auto &param : params) {
+		kwargs.Add(CompatMakeIdentifier(param.first), param.second);
+	}
+	signature.AddTypedKwargs(CompatMakeIdentifier("options"), std::move(kwargs));
+}
+
+template <class FUNC>
+inline void CompatSetNamedParameters(FUNC &fun,
+                                     const std::initializer_list<std::pair<const char *, LogicalType>> &params) {
+	CompatSetNamedParametersImpl(fun, params, CompatHasNamedParametersMember<FUNC>());
+}
+
 } // namespace duckdb
 
 // === duckdb main API compat (appended for v1.6.x/main) ===
@@ -234,7 +277,7 @@ inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling 
 	f.SetNullHandling(h);
 }
 inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	f.SetVarArgs(std::move(v));
+	f.GetSignature().AddArgs(CompatMakeIdentifier("args"), std::move(v));
 }
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
