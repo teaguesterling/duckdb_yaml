@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "named_parameter_compat.hpp"
 #include "yaml_utils.hpp"
 #include "duckdb_compat.hpp"
 #include "yaml_extension.hpp"
@@ -419,9 +420,11 @@ void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {
 	read_yaml_frontmatter.init_local = YAMLFrontmatterInit;
 
 	// Add named parameters
-	read_yaml_frontmatter.named_parameters["as_yaml_objects"] = LogicalType::BOOLEAN;
-	read_yaml_frontmatter.named_parameters["content"] = LogicalType::BOOLEAN;
-	read_yaml_frontmatter.named_parameters["filename"] = LogicalType::BOOLEAN;
+	DeclareNamedParameters(read_yaml_frontmatter, {
+		{"as_yaml_objects", LogicalType::BOOLEAN},
+		{"content", LogicalType::BOOLEAN},
+		{"filename", LogicalType::BOOLEAN},
+	});
 
 	CreateTableFunctionInfo info(std::move(read_yaml_frontmatter));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
