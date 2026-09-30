@@ -31,21 +31,20 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	TableFunction read_yaml("read_yaml", {LogicalType::ANY}, YAMLReadRowsFunction, YAMLReadRowsBind, YAMLReadRowsInit);
 	read_yaml.init_local = YAMLReadRowsInitLocal;
 	read_yaml.get_partition_data = YAMLReadGetPartitionData;
-
-	// Add optional named parameters
-	read_yaml.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	read_yaml.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	read_yaml.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
-	read_yaml.named_parameters["maximum_file_size"] = LogicalType::BIGINT;
-	read_yaml.named_parameters["multi_document"] = LogicalType::ANY; // Accepts BOOLEAN or VARCHAR for mode
-	read_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
-	read_yaml.named_parameters["columns"] = LogicalType::ANY;
-	read_yaml.named_parameters["sample_size"] = LogicalType::BIGINT;
-	read_yaml.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
-	read_yaml.named_parameters["records"] = LogicalType::VARCHAR;
-	read_yaml.named_parameters["frontmatter_as_columns"] = LogicalType::BOOLEAN;
-	read_yaml.named_parameters["list_column_name"] = LogicalType::VARCHAR;
-	read_yaml.named_parameters["strip_document_suffixes"] = LogicalType::BOOLEAN;
+	CompatSetNamedParameters(
+	    read_yaml, {{"auto_detect", LogicalType::BOOLEAN},
+	                {"ignore_errors", LogicalType::BOOLEAN},
+	                {"maximum_object_size", LogicalType::BIGINT},
+	                {"maximum_file_size", LogicalType::BIGINT},
+	                {"multi_document", LogicalType::ANY}, // Accepts BOOLEAN or VARCHAR for mode
+	                {"expand_root_sequence", LogicalType::BOOLEAN},
+	                {"columns", LogicalType::ANY},
+	                {"sample_size", LogicalType::BIGINT},
+	                {"maximum_sample_files", LogicalType::BIGINT},
+	                {"records", LogicalType::VARCHAR},
+	                {"frontmatter_as_columns", LogicalType::BOOLEAN},
+	                {"list_column_name", LogicalType::VARCHAR},
+	                {"strip_document_suffixes", LogicalType::BOOLEAN}});
 
 	{
 		CreateTableFunctionInfo info(std::move(read_yaml));
@@ -64,16 +63,16 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	                                YAMLReadObjectsBind, YAMLReadObjectsInit);
 	read_yaml_objects.init_local = YAMLReadObjectsInitLocal;
 	read_yaml_objects.get_partition_data = YAMLReadGetPartitionData;
-
-	read_yaml_objects.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	read_yaml_objects.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	read_yaml_objects.named_parameters["maximum_object_size"] = LogicalType::BIGINT;
-	read_yaml_objects.named_parameters["maximum_file_size"] = LogicalType::BIGINT;
-	read_yaml_objects.named_parameters["multi_document"] = LogicalType::ANY; // Accepts BOOLEAN or VARCHAR for mode
-	read_yaml_objects.named_parameters["columns"] = LogicalType::ANY;
-	read_yaml_objects.named_parameters["sample_size"] = LogicalType::BIGINT;
-	read_yaml_objects.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
-	read_yaml_objects.named_parameters["strip_document_suffixes"] = LogicalType::BOOLEAN;
+	CompatSetNamedParameters(
+	    read_yaml_objects, {{"auto_detect", LogicalType::BOOLEAN},
+	                        {"ignore_errors", LogicalType::BOOLEAN},
+	                        {"maximum_object_size", LogicalType::BIGINT},
+	                        {"maximum_file_size", LogicalType::BIGINT},
+	                        {"multi_document", LogicalType::ANY}, // Accepts BOOLEAN or VARCHAR for mode
+	                        {"columns", LogicalType::ANY},
+	                        {"sample_size", LogicalType::BIGINT},
+	                        {"maximum_sample_files", LogicalType::BIGINT},
+	                        {"strip_document_suffixes", LogicalType::BOOLEAN}});
 
 	{
 		CreateTableFunctionInfo info(std::move(read_yaml_objects));
@@ -90,10 +89,10 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	// Register parse_yaml table function for parsing YAML strings
 	TableFunction parse_yaml("parse_yaml", {LogicalType::VARCHAR}, ParseYAMLFunction, ParseYAMLBind);
 	parse_yaml.init_local = ParseYAMLInit;
-	parse_yaml.named_parameters["multi_document"] = LogicalType::ANY; // Accepts BOOLEAN or VARCHAR for mode
-	parse_yaml.named_parameters["expand_root_sequence"] = LogicalType::BOOLEAN;
-	parse_yaml.named_parameters["frontmatter_as_columns"] = LogicalType::BOOLEAN;
-	parse_yaml.named_parameters["list_column_name"] = LogicalType::VARCHAR;
+	CompatSetNamedParameters(parse_yaml, {{"multi_document", LogicalType::ANY}, // Accepts BOOLEAN or VARCHAR for mode
+	                                      {"expand_root_sequence", LogicalType::BOOLEAN},
+	                                      {"frontmatter_as_columns", LogicalType::BOOLEAN},
+	                                      {"list_column_name", LogicalType::VARCHAR}});
 
 	{
 		CreateTableFunctionInfo info(std::move(parse_yaml));

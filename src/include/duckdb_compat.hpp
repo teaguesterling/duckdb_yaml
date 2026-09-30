@@ -233,8 +233,32 @@ inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
 inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
 	f.SetNullHandling(h);
 }
-inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+template <class F, class = void>
+struct CompatHasScalarSetVarArgs : std::false_type {};
+template <class F>
+struct CompatHasScalarSetVarArgs<F, decltype(void(std::declval<F &>().SetVarArgs(LogicalType())))> : std::true_type {};
+
+template <class F, class = void>
+struct CompatHasSignatureAddArgs : std::false_type {};
+template <class F>
+struct CompatHasSignatureAddArgs<
+    F, decltype(void(std::declval<F &>().GetSignature().AddArgs(CompatMakeIdentifier(string()), LogicalType())))>
+    : std::true_type {};
+
+template <class F>
+inline void CompatSetScalarVarArgsImpl(F &f, LogicalType v, std::true_type, std::false_type) {
 	f.SetVarArgs(std::move(v));
+}
+template <class F>
+inline void CompatSetScalarVarArgsImpl(F &f, LogicalType v, std::false_type, std::true_type) {
+	f.GetSignature().AddArgs(CompatMakeIdentifier("args"), std::move(v));
+}
+template <class F>
+inline void CompatSetScalarVarArgsImpl(F &, LogicalType, std::false_type, std::false_type) {
+}
+template <class F>
+inline void CompatSetScalarVarArgs(F &f, LogicalType v) {
+	CompatSetScalarVarArgsImpl(f, std::move(v), CompatHasScalarSetVarArgs<F>(), CompatHasSignatureAddArgs<F>());
 }
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
@@ -255,7 +279,8 @@ inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
 inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
 	f.null_handling = h;
 }
-inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+template <class F>
+inline void CompatSetScalarVarArgs(F &f, LogicalType v) {
 	f.varargs = std::move(v);
 }
 inline string CompatExprAlias(const BaseExpression &e) {
@@ -487,6 +512,61 @@ inline void CompatSetCaptureArgumentAliasesImpl(FUNC &, std::false_type) {
 template <class FUNC>
 inline void CompatSetCaptureArgumentAliases(FUNC &fun) {
 	CompatSetCaptureArgumentAliasesImpl(fun, CompatHasSetCaptureArgumentAliases<FUNC>());
+}
+
+//===--------------------------------------------------------------------===//
+// CompatSetNamedParameters -- table function named options
+//===--------------------------------------------------------------------===//
+template <class F, class = void>
+struct CompatHasNamedParametersMember : std::false_type {};
+template <class F>
+struct CompatHasNamedParametersMember<F, decltype(void(std::declval<F &>().named_parameters))> : std::true_type {};
+
+struct CompatTypedKwargsConfigurator {
+	explicit CompatTypedKwargsConfigurator(const vector<pair<string, LogicalType>> &params_p) : params(params_p) {
+	}
+	template <class KWARGS>
+	void operator()(KWARGS &kwargs) const {
+		for (const auto &param : params) {
+			kwargs.Add(CompatMakeIdentifier(param.first), param.second);
+		}
+	}
+	const vector<pair<string, LogicalType>> &params;
+};
+
+template <class F, class = void>
+struct CompatHasWithTypedKwargs : std::false_type {};
+template <class F>
+struct CompatHasWithTypedKwargs<
+    F, decltype(void(std::declval<F &>().GetSignature().WithTypedKwargs(
+           CompatMakeIdentifier(string()),
+           CompatTypedKwargsConfigurator(std::declval<const vector<pair<string, LogicalType>> &>()))))>
+    : std::true_type {};
+
+template <class F>
+inline void CompatSetNamedParametersImpl(F &fun, const vector<pair<string, LogicalType>> &params, std::true_type,
+                                         std::false_type) {
+	for (const auto &param : params) {
+		fun.named_parameters[CompatMakeIdentifier(param.first)] = param.second;
+	}
+}
+template <class F>
+inline void CompatSetNamedParametersImpl(F &fun, const vector<pair<string, LogicalType>> &params, std::false_type,
+                                         std::true_type) {
+	fun.GetSignature().WithTypedKwargs(CompatMakeIdentifier("options"), CompatTypedKwargsConfigurator(params));
+}
+template <class F>
+inline void CompatSetNamedParametersImpl(F &fun, const vector<pair<string, LogicalType>> &params, std::true_type,
+                                         std::true_type) {
+	CompatSetNamedParametersImpl(fun, params, std::true_type(), std::false_type());
+}
+template <class F>
+inline void CompatSetNamedParametersImpl(F &, const vector<pair<string, LogicalType>> &, std::false_type,
+                                         std::false_type) {
+}
+template <class F>
+inline void CompatSetNamedParameters(F &fun, const vector<pair<string, LogicalType>> &params) {
+	CompatSetNamedParametersImpl(fun, params, CompatHasNamedParametersMember<F>(), CompatHasWithTypedKwargs<F>());
 }
 
 //===--------------------------------------------------------------------===//
