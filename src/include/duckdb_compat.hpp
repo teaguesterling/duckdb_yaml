@@ -233,8 +233,13 @@ inline void CompatSetScalarReturnType(ScalarFunction &f, LogicalType t) {
 inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling h) {
 	f.SetNullHandling(h);
 }
+// v2.0-cyanoptera removed the ScalarFunction::SetVarArgs setter; varargs is a
+// signature parameter now. The constructor sets it internally via
+// AddArgs("args") + AddKwargs("kwargs") (function.cpp SimpleFunction ctor), and
+// GetSignature() is mutable post-construction, so do the same here — matching
+// the proven-green webbed fix (duckdb_webbed duckdb_compat.hpp).
 inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	f.SetVarArgs(std::move(v));
+	f.GetSignature().AddArgs("args", v).AddKwargs("kwargs", std::move(v));
 }
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
