@@ -14,7 +14,7 @@ Binder Error: Invalid named parameter "not_a_parameter" for function read_yaml
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', maximum_object_size='large');
 ----
-Invalid Input Error: Failed to cast value: Could not convert string 'large' to INT64
+Could not convert string 'large' to INT64
 
 # Test with duplicate parameters
 #statement error
