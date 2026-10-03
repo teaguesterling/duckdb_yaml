@@ -239,7 +239,12 @@ inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling 
 // GetSignature() is mutable post-construction, so do the same here — matching
 // the proven-green webbed fix (duckdb_webbed duckdb_compat.hpp).
 inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	f.GetSignature().AddArgs("args", v).AddKwargs("kwargs", std::move(v));
+	// Split rather than chain: pre-C++17 the move in `.AddArgs(v).AddKwargs(std::move(v))` is not
+	// guaranteed sequenced after AddArgs runs, so AddArgs could read a moved-from LogicalType and
+	// silently take the wrong type. Sequence the copy into AddArgs before the move into AddKwargs.
+	auto &signature = f.GetSignature();
+	signature.AddArgs("args", v);
+	signature.AddKwargs("kwargs", std::move(v));
 }
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
