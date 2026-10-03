@@ -103,10 +103,23 @@ Jane	2
 John	1
 
 # Test error cases - invalid column type
+#
+# The expectation is narrowed to the type NAME because the two DuckDB lines raise
+# different errors here, and sqllogictest matches an error by substring:
+#
+#   v1.5.x        Invalid type 'INVALID_TYPE' for column 'name'    <- yaml's own check
+#   v2.0          Catalog Error: Type with name INVALID_TYPE does not exist!
+#
+# On v2.0 the binder resolves the type name before yaml_column_types.cpp can
+# validate it, so yaml's friendlier message never fires. Pinning the full v1.5
+# string made the v2.0 canary fail from 2026-10-02 onward. INVALID_TYPE is the
+# only text the two messages share, and the assertion still proves the query
+# fails AND that the failure names the offending type -- sqllogictest matches
+# against the error, not the query, so this does not pass vacuously.
 statement error
 SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'INVALID_TYPE'});
 ----
-Invalid type 'INVALID_TYPE' for column 'name'
+INVALID_TYPE
 
 # Test error cases - columns parameter is not a struct
 statement error
