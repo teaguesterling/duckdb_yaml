@@ -3,6 +3,14 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
+// Needed as early as the varargs shim below (the CompatHasSetVarArgs detector), not only by
+// the CompatName section further down, so they are included here rather than mid-file. Both
+// are C++11, so including them unconditionally is safe: this header is compiled at
+// -std=c++11 against the pinned v1.5.x DuckDB (see the note below about why the extension
+// must not be forced to C++17).
+#include <type_traits>
+#include <utility>
+
 // duckdb_compat.hpp — cross-version shim for DuckDB extensions.
 //
 // Pattern from @bendrucker's teaguesterling/duckdb_webbed#76 (May 2026):
@@ -236,15 +244,49 @@ inline void CompatSetScalarNullHandling(ScalarFunction &f, FunctionNullHandling 
 // v2.0-cyanoptera removed the ScalarFunction::SetVarArgs setter; varargs is a
 // signature parameter now. The constructor sets it internally via
 // AddArgs("args") + AddKwargs("kwargs") (function.cpp SimpleFunction ctor), and
-// GetSignature() is mutable post-construction, so do the same here — matching
-// the proven-green webbed fix (duckdb_webbed duckdb_compat.hpp).
-inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
-	// Split rather than chain: pre-C++17 the move in `.AddArgs(v).AddKwargs(std::move(v))` is not
-	// guaranteed sequenced after AddArgs runs, so AddArgs could read a moved-from LogicalType and
-	// silently take the wrong type. Sequence the copy into AddArgs before the move into AddKwargs.
+// GetSignature() is mutable post-construction, so do the same here.
+//
+// DETECTED, NOT #ifdef'd. DUCKDB_HAS_NEW_VECTOR_HEADERS is true on BOTH post-1.5 lines
+// (list_vector.hpp: absent on v1.5.6, present on duckdb main AND on v2.0-cyanoptera) but
+// they DISAGREE about varargs, so this sentinel cannot separate them. Measured on
+// src/include/duckdb/function/function.hpp (2026-10-03):
+//
+//   ref                AddArgs / AddKwargs   SetVarArgs
+//   duckdb main              0 / 0               4
+//   v2.0-cyanoptera          1 / 1               0
+//
+// So AddArgs under this sentinel compiles against cyanoptera and FAILS against duckdb main,
+// where the SetVarArgs it replaced is still the API. duckdb_webbed hit exactly this and fixed
+// it by detection (duckdb_webbed 3def798); the shim here was copied from the earlier,
+// #ifdef-only shape of that fix. It has gone unnoticed in this repo only because no job in
+// MainDistributionPipeline.yml built duckdb_version: main -- the canary added alongside this
+// change closes that gap, and is what makes the branch below verifiable rather than asserted.
+//
+// BOTH overloads MUST be templates. Tag dispatch only chooses which one is CALLED; a
+// non-template inline function is type-checked whether it is called or not, so plain
+// overloads would still compile the duckdb-main body against cyanoptera and fail there.
+template <class T, class = void>
+struct CompatHasSetVarArgs : std::false_type {};
+template <class T>
+struct CompatHasSetVarArgs<T, decltype(void(std::declval<T &>().SetVarArgs(std::declval<LogicalType>())))>
+    : std::true_type {};
+
+template <class FUNC>
+inline void CompatSetScalarVarArgsImpl(FUNC &f, LogicalType v, std::true_type) {
+	// duckdb main: the setter survives, forwarding to FunctionSignature::SetVarArgs.
+	f.SetVarArgs(std::move(v));
+}
+template <class FUNC>
+inline void CompatSetScalarVarArgsImpl(FUNC &f, LogicalType v, std::false_type) {
+	// v2.0-cyanoptera. Split rather than chain: pre-C++17 the move in
+	// `.AddArgs(v).AddKwargs(std::move(v))` is not guaranteed sequenced after AddArgs runs, so
+	// AddArgs could read a moved-from LogicalType and silently take the wrong type (#60).
 	auto &signature = f.GetSignature();
 	signature.AddArgs("args", v);
 	signature.AddKwargs("kwargs", std::move(v));
+}
+inline void CompatSetScalarVarArgs(ScalarFunction &f, LogicalType v) {
+	CompatSetScalarVarArgsImpl(f, std::move(v), CompatHasSetVarArgs<ScalarFunction>());
 }
 inline string CompatExprAlias(const BaseExpression &e) {
 	return CompatIdentifierName(e.GetAlias());
@@ -331,12 +373,11 @@ inline const unique_ptr<FunctionData> &CompatBoundBindInfo(const BoundFunctionEx
 // silently picks the wrong branch the moment they land in different releases --
 // so these deliberately do NOT reuse DUCKDB_HAS_NEW_VECTOR_HEADERS.
 //
-// <type_traits> is C++11, so it is safe to include unconditionally: this header
-// is compiled at -std=c++11 against the pinned v1.5.x DuckDB (see the note at
-// the top of the file about why the extension must not be forced to C++17).
+// <type_traits> / <utility> are included at the TOP of this file -- the varargs shim above
+// needs them too. They are C++11, so including them unconditionally is safe: this header is
+// compiled at -std=c++11 against the pinned v1.5.x DuckDB (see the note at the top of the
+// file about why the extension must not be forced to C++17).
 
-#include <type_traits>
-#include <utility>
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {

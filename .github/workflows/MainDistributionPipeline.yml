@@ -147,7 +147,13 @@ jobs:
   # upstream API drift. Promoted 2026-09-13 (Teague's dual-line ruling): now
   # runs on pull_request too, not just push-to-main/dispatch (see below).
   duckdb-next-build:
-    name: DuckDB main canary
+    # Named for what it BUILDS. It was called "DuckDB main canary" while building
+    # duckdb_version: v2.0-cyanoptera, and no job in this workflow built duckdb main at all --
+    # so the name claimed coverage the repo did not have, and hid the real gap: the
+    # #ifdef-gated varargs shim in duckdb_compat.hpp would only ever fail against duckdb main,
+    # which nothing here compiled. A job-name search for the next line also missed this job
+    # entirely. The genuine main canary is below.
+    name: Build extension binaries (duckdb next, v2.0 line)
     # This must be `if:` and NOT `continue-on-error:` — a job that calls a
     # REUSABLE workflow accepts only a fixed key set, and adding
     # continue-on-error makes the whole workflow fail to parse (scheduling zero
@@ -165,6 +171,27 @@ jobs:
       # windows_amd64 (MSVC) validated against duckdb main + shipped for v1.5.4; enabled
       # here for canary coverage too. windows_amd64_mingw stays excluded on this leg only
       # (validated on the v1.5.4 stable leg, not yet against duckdb main).
+      exclude_archs: 'windows_amd64_mingw'
+
+  # ADVISORY canary on DuckDB main, the line beyond 2.0. Pushes to main and on demand only;
+  # it never gates a PR, for the same reason the next-line job uses `if:` and not
+  # continue-on-error (a job calling a REUSABLE workflow accepts only a fixed key set, and
+  # continue-on-error makes the whole workflow fail to parse -- scheduling zero jobs,
+  # including the shippable build).
+  #
+  # Why it has to exist: duckdb main and v2.0-cyanoptera have diverged BOTH ways. main kept
+  # SimpleFunction::SetVarArgs, which cyanoptera deleted in favour of AddArgs/AddKwargs, so
+  # green on the next-line leg is NOT evidence for this one. Without this job the varargs
+  # shim's #ifdef could not fail anywhere in CI, which is exactly how it sat here unnoticed.
+  # Mirrors duckdb_webbed's duckdb-main-canary.
+  duckdb-main-canary:
+    name: Build extension binaries (duckdb main canary)
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    with:
+      duckdb_version: main
+      ci_tools_version: main
+      extension_name: yaml
       exclude_archs: 'windows_amd64_mingw'
 
   # Shippable build. The submodules are pinned at the v1.5-variegata branch tip
