@@ -210,6 +210,15 @@ jobs:
       # (validated on the v1.5.4 stable leg, not yet against duckdb main).
       exclude_archs: 'windows_amd64_mingw'
 
+      # Make a skipped test run FAIL on this leg. `T` is the test pattern ci-tools
+      # hands run_tests.py (`T ?=` in duckdb_extension.Makefile, so an env var wins)
+      # and test_env_variables reaches `make test_release` via ci_phase.py.
+      # `--require yaml` turns "could not load" into `require yaml: FAILED`
+      # instead of a silent skip. Verified on ci-tools main against b15358c371d:
+      # present -> exit 0 "16 passed, 2 skipped"; hidden -> exit 2 "0 passed, 18 failed".
+      # Needs a ci_tools_version that HAS `T` (main / v2.0-cyanoptera); on
+      # v1.5-variegata the variable is silently ignored -- hence `make test-require`.
+      test_config: '{"test_env_variables": {"T": "--test-flags \"--require yaml\" \"test/*\""}}'
   # ADVISORY canary on DuckDB main, the line beyond 2.0. Pushes to main and on demand only;
   # it never gates a PR, for the same reason the next-line job uses `if:` and not
   # continue-on-error (a job calling a REUSABLE workflow accepts only a fixed key set, and
