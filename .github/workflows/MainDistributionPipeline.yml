@@ -21,47 +21,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # THE PIN EQUALS THE REGISTRY DEFAULT, AND THE WORKFLOW SHIPS EVERY LINE THE
-  # REGISTRY BUILDS. Fleet rule (Teague, 2026-09-13): the duckdb submodule is
-  # pinned at exactly the commit of the tag the stable build ships against, which
-  # is also the version the community registry builds every extension with, and
-  # this workflow also ships the next line the registry builds (build_next.yml).
-  # Otherwise local builds and each repo's own CI artifacts carry a different
-  # DuckDB than the served one, and extensions built in different repos cannot
-  # co-load locally (the ABI is exact-version). Measured 2026-09-13: five sibling
-  # repos were on a July dev commit, one on a v1.5.6-dev commit, one on DuckDB
-  # main. Nothing but a check keeps this true. The second assertion keeps this
-  # job's constants from drifting away from the `duckdb_version:` the build jobs
-  # above actually use.
+  # THE PIN EQUALS THE REGISTRY DEFAULT COMMIT, AND THE WORKFLOW SHIPS THE DEFAULT
+  # AND THE VARIANT. Fleet rule (Teague, 2026-09-13): the duckdb submodule is
+  # pinned at exactly the commit the community registry builds every extension
+  # with by default (build.yml's duckdb_commit, built as its duckdb_version),
+  # and this workflow also ships the v1.5 variant the registry still builds
+  # (scripts/build.py's variegata route). Otherwise local builds and each repo's
+  # own CI artifacts carry a different DuckDB than the served one, and extensions
+  # built in different repos cannot co-load locally (the ABI is exact-version).
+  # Measured 2026-09-13: five sibling repos were on a July dev commit, one on a
+  # v1.5.6-dev commit, one on DuckDB main. Nothing but a check keeps this true.
+  # The greps keep this job's constants from drifting away from the
+  # `duckdb_commit:` / `duckdb_version:` / `ci_tools_version:` the build jobs
+  # below actually use.
+  #
+  # THE NEXT LINE IS NOT A CONSTANT HERE. duckdb-next-ref resolves the
+  # v2.0-cyanoptera tip and its staged version at run time, so there is nothing
+  # to pin, nothing to bump and nothing to exempt (Teague, 2026-10-25 — the
+  # canonical recipe; it replaces the former DUCKDB_NEXT / DUCKDB_NEXT_COMMIT
+  # pair). The branch name `v2.0-cyanoptera` has no third numeric component, so
+  # it never matches the version pattern the scan below uses.
   duckdb-pin:
     name: DuckDB submodule pin equals the shipped tag
-    # Name kept as-is even though the rule is now two-sided:
+    # Name kept as-is even though the rule is now "pin equals the registry default":
     # required-check configuration may key on this job name.
     runs-on: ubuntu-latest
     env:
-      # What this repo pins, ships, and tests against.
-      DUCKDB_VERSION: v1.5.6
-      # The next line this workflow builds, for compile-compat and for the
-      # test-coverage leg. BRANCH name, not the registry's commit -- see
-      # duckdb-v2-test-coverage below for why that distinction is load-bearing.
-      DUCKDB_NEXT: v2.0-cyanoptera
-      # What the community registry builds by default, as of #3079. Recorded so
-      # that the registry moving again is a FAILURE here rather than a surprise
-      # in a release. DUCKDB_REGISTRY_TAG is not an upstream tag: ci-tools tags
-      # the commit with it locally so the built extension reports a version.
-      DUCKDB_REGISTRY_COMMIT: b15358c371daf10dad799a43b6167f6ccdce84d8
-      DUCKDB_REGISTRY_TAG: v2.0.0-alpha46057
-      DUCKDB_REGISTRY_TOOLS: v2.0-cyanoptera
-      # scripts/build.py routes a v1.5.6 build to each descriptor's `variegata`
-      # ref, which is the line this repo still ships.
-      DUCKDB_REGISTRY_VARIANT: v1.5.6
+      DUCKDB_COMMIT: d54cbbe3df17e8e5ce68312f483b4155836112aa
+      # The version the build reports, passed as duckdb_version while duckdb_commit
+      # selects the checkout. It must be a short release-shaped string: the
+      # extension's metadata stamps at most 32 bytes of it, and DuckDB refuses to
+      # load a file whose stamp differs from its own version, so a bare 40-char
+      # commit as duckdb_version makes every `require yaml` fail
+      # (duckdb/community-extensions#3086).
+      DUCKDB_VERSION: v2.0.0
+      DUCKDB_CI_TOOLS: v2.0-cyanoptera
+      DUCKDB_VARIANT: v1.5.6
       # Flip day keeps a duckdb-legacy-build at the outgoing version for one
       # release; set this to that version then so the stray-literal scan exempts
       # it instead of flagging it. Empty the rest of the time.
+      #
+      # EMPTY at this flip: the outgoing version is v1.5.6, which is not leaving --
+      # it is DUCKDB_VARIANT above, built by duckdb-variegata-build and already
+      # exempt from the scan. So there is no legacy job to exempt.
       DUCKDB_LEGACY: ''
     steps:
       - uses: actions/checkout@v4
-      - name: Compare the pin with its tag, and the recorded registry values with the registry
+      - name: Compare the submodule pin with the registry default commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -70,15 +76,16 @@ jobs:
           # verbatim, and the greps and the stray-literal scans below all read
           # this same file.
           wf=.github/workflows/MainDistributionPipeline.yml
-          want=$(git ls-remote --tags https://github.com/duckdb/duckdb "refs/tags/${DUCKDB_VERSION}^{}" | cut -f1)
-          [ -n "$want" ] || want=$(git ls-remote --tags https://github.com/duckdb/duckdb "refs/tags/${DUCKDB_VERSION}" | cut -f1)
+          # The pin is compared with the commit directly rather than resolved
+          # through ls-remote, so a moved tag cannot hide a stale pin.
           have=$(git ls-tree HEAD duckdb | awk '{print $3}')
-          echo "shipped tag ${DUCKDB_VERSION} -> ${want}"
-          echo "submodule pin          -> ${have}"
-          [ -n "$want" ] || { echo "::error::could not resolve tag ${DUCKDB_VERSION} upstream"; exit 1; }
-          [ "$want" = "$have" ] || { echo "::error::duckdb submodule pin ${have} is not the ${DUCKDB_VERSION} tag ${want}; run: git -C duckdb fetch --tags && git -C duckdb checkout ${DUCKDB_VERSION}"; exit 1; }
-          # The build jobs must actually use this job's constants.
-          for want_line in "duckdb_version: ${DUCKDB_VERSION}" "duckdb_version: ${DUCKDB_NEXT}"; do
+          echo "registry default commit -> ${DUCKDB_COMMIT} (${DUCKDB_VERSION})"
+          echo "submodule pin           -> ${have}"
+          [ "$DUCKDB_COMMIT" = "$have" ] || { echo "::error::duckdb submodule pin ${have} is not the registry default commit ${DUCKDB_COMMIT}; run: git -C duckdb fetch origin ${DUCKDB_CI_TOOLS} && git -C duckdb checkout ${DUCKDB_COMMIT}"; exit 1; }
+          # The build jobs must actually use this job's constants. The next leg is
+          # absent on purpose: duckdb-next-ref resolves it, so no constant here
+          # describes it and there is nothing for this loop to assert.
+          for want_line in "duckdb_commit: ${DUCKDB_COMMIT}" "duckdb_version: ${DUCKDB_VERSION}" "ci_tools_version: ${DUCKDB_CI_TOOLS}" "duckdb_version: ${DUCKDB_VARIANT}"; do
             c=$(grep -c "${want_line}$" "$wf" || true)
             [ "$c" -ge 1 ] || { echo "::error::no build job in this workflow uses ${want_line}; this job's constants have drifted"; exit 1; }
           done
@@ -86,37 +93,83 @@ jobs:
           # sibling workflows (yaml, mcp) embed a version in artifact NAMES and CLI
           # download URLs (e.g. `yaml-v1.5.4-extension-wasm_*`,
           # `releases/download/v1.5.4/duckdb_cli`) that the greps above cannot see, so
-          # a bump left them stale and this job went green over a red build. Comment
-          # lines (first non-space char `#`) are exempt, and so are `uses:` lines (a
-          # `- uses:` list item too): a third-party action pin like `@v2.0.4` is not a
-          # DuckDB version. Branch names like `v2.0-cyanoptera` and `v1.5-variegata`
-          # have no third numeric component and so never match. The optional
-          # pre-release suffix makes `v2.0.0-alpha46057` match whole rather than
-          # reading as `v2.0.0`, while `v1.5.6-extension-wasm_eh` in an artifact name
-          # still reads as `v1.5.6`. DUCKDB_LEGACY, when set, is exempt too.
+          # a bump left them stale and this job went green over a red build. Branch
+          # names like `v2.0-cyanoptera` and `v1.5-variegata` have no third numeric
+          # component and so never match. The optional pre-release suffix makes a
+          # literal like `v2.0.1-alpha50125` match whole rather than reading as
+          # `v2.0.1`, while `v1.5.6-extension-wasm_eh` in an artifact name still
+          # reads as `v1.5.6`.
+          #
+          # EXEMPT ONLY ON A DECLARATION LINE, AND ONLY ITS OWN VALUE.
+          #
+          # Defect 1 in the first draft of this scan: the exemptions were a fixed
+          # list of values (DUCKDB_VERSION / VARIANT / NEXT / LEGACY). A repo with
+          # other constants -- duckdb_markdown has DUCKDB_REGISTRY_VERSION and
+          # DUCKDB_REGISTRY_VARIANT -- had its own correct declaration flagged,
+          # because the value on that line matched no constant in the list.
+          # Measured: markdown's `DUCKDB_REGISTRY_VERSION: v2.0.0` went red while
+          # being right. So each declaration is compared against ITS OWN constant by
+          # shell indirection, which works for any repo's constant names without
+          # enumerating them.
+          #
+          # Defect 2: skipping every `uses:` line removed a deliberate carve-out. A
+          # third-party action pin like `@v2.0.4` is not a DuckDB version and is
+          # exempt, but `uses: duckdb/extension-ci-tools/...@vX.Y.Z` IS a DuckDB-line
+          # pin and must stay checked: a bump can leave it on the old line while
+          # every other assertion in this job passes (duckdb_markdown issue #88).
+          #
+          # DUCKDB_LEGACY, when set (flip day, see above), is exempt too. Comment
+          # lines (first non-space char `#`) are exempt.
+          decl_re='^[[:space:]]*(duckdb_version|duckdb_commit|ci_tools_version|DUCKDB_[A-Z_]+):[[:space:]]'
           ver_re='v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc|dev)[0-9.]*)?'
           bad=0
           while IFS=: read -r lineno line; do
             printf '%s\n' "$line" | grep -qE '^[[:space:]]*#' && continue
-            printf '%s\n' "$line" | grep -qE '^[[:space:]]*-?[[:space:]]*uses:' && continue
+            # `uses:` is exempt only when it is NOT an extension-ci-tools pin.
+            if printf '%s\n' "$line" | grep -qE '^[[:space:]]*-?[[:space:]]*uses:' \
+               && ! printf '%s\n' "$line" | grep -qE 'duckdb/extension-ci-tools'; then
+              continue
+            fi
+            is_decl=0
+            printf '%s\n' "$line" | grep -qE "$decl_re" && is_decl=1
+            # The constant this line declares, if it declares one of ours.
+            own_name=$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\(DUCKDB_[A-Z_]*\):.*/\1/p')
             for v in $(printf '%s\n' "$line" | grep -oE "$ver_re" || true); do
-              [ "$v" = "$DUCKDB_VERSION" ] && continue
-              [ "$v" = "$DUCKDB_REGISTRY_TAG" ] && continue
-              [ -n "$DUCKDB_LEGACY" ] && [ "$v" = "$DUCKDB_LEGACY" ] && continue
-              echo "::error::line ${lineno}: ${line} -- a DuckDB version literal that is not the shipped ${DUCKDB_VERSION} or the recorded registry tag ${DUCKDB_REGISTRY_TAG}: derive it from the shipped version or bump it"
+              if [ "$is_decl" = 1 ]; then
+                # A DUCKDB_* declaration is exempt for its own value only.
+                if [ -n "$own_name" ]; then
+                  eval "own_val=\${$own_name-}"
+                  [ -n "$own_val" ] && [ "$v" = "$own_val" ] && continue
+                fi
+                # A workflow input line (`duckdb_version:` etc.) is exempt when the
+                # value is one of the versions this job declares as shipped.
+                [ "$v" = "$DUCKDB_VERSION" ] && continue
+                [ "$v" = "${DUCKDB_VARIANT-}" ] && continue
+                [ -n "${DUCKDB_LEGACY-}" ] && [ "$v" = "$DUCKDB_LEGACY" ] && continue
+              fi
+              echo "::error::line ${lineno}: ${line} -- a DuckDB version literal outside a version declaration, or not that declaration's own value: derive it from the DUCKDB_* constants rather than hardcoding it"
               bad=1
             done
           done < <(grep -nE "$ver_re" "$wf" || true)
-          # Any 40-hex literal outside comments, `uses:` pins and `vcpkg_commit:`
-          # must be the recorded registry commit: a commit bump otherwise leaves a
-          # stale sha that the version scan above cannot see.
+          # The commit appears in `duckdb_commit:` inputs, which the version scan
+          # above cannot see, so a commit bump could leave a stale sha behind. Any
+          # 40-hex literal outside comments, `uses:` pins and `vcpkg_commit:` must be
+          # the registry default commit.
+          #
+          # This scan keeps its UNCONDITIONAL `uses:` skip -- deliberately asymmetric
+          # with the version scan, and the asymmetry is principled. A ci-tools pin
+          # written `@vX.Y.Z` is in the same namespace as the declared DuckDB
+          # versions, so the version scan can compare it and catch a leg left on the
+          # old line. A ci-tools pin written as a 40-hex sha is an extension-ci-tools
+          # commit, and no constant here holds a ci-tools sha (DUCKDB_CI_TOOLS is a
+          # branch name), so flagging it would produce a warning nothing can act on.
           while IFS=: read -r lineno line; do
             printf '%s\n' "$line" | grep -qE '^[[:space:]]*#' && continue
             printf '%s\n' "$line" | grep -qE '^[[:space:]]*-?[[:space:]]*uses:' && continue
             printf '%s\n' "$line" | grep -qE '^[[:space:]]*vcpkg_commit:' && continue
             for h in $(printf '%s\n' "$line" | grep -oE '[0-9a-f]{40}' || true); do
-              [ "$h" = "$DUCKDB_REGISTRY_COMMIT" ] && continue
-              echo "::error::line ${lineno}: ${line} -- a commit literal that is not the recorded registry commit ${DUCKDB_REGISTRY_COMMIT}: derive it or bump it"
+              [ "$h" = "$DUCKDB_COMMIT" ] && continue
+              echo "::error::line ${lineno}: ${line} -- a commit literal that is not the registry default ${DUCKDB_COMMIT}: derive it from the pinned commit or bump it"
               bad=1
             done
           done < <(grep -nE '[0-9a-f]{40}' "$wf" || true)
@@ -134,13 +187,16 @@ jobs:
           # REACHABLE, 2xx, BUT UNPARSEABLE is this check being wrong about the file's
           # content -> also a FAILURE.
           #
-          # FOUR values are parsed, not one. The previous revision parsed only a
-          # `'v<semver>'` default out of build.yml, so when #3079 replaced it with a
-          # bare commit the parse returned empty and this job failed on the
-          # UNPARSEABLE branch -- hiding the real change behind a parse error. The
-          # registry's default has taken a tag, a 10-char abbreviated sha and a full
-          # 40-char sha within four commits, so each value is parsed in the shape the
-          # registry actually writes it.
+          # FOUR values are parsed, not one, and they are compared with THIS REPO'S
+          # OWN constants -- there is no second set of DUCKDB_REGISTRY_* values to
+          # keep in step any more, because the repo now ships exactly what the
+          # registry builds. The previous revision parsed only a `'v<semver>'`
+          # default out of build.yml, so when #3079 replaced it with a bare commit
+          # the parse returned empty and this job failed on the UNPARSEABLE branch --
+          # hiding the real change behind a parse error. The registry's default has
+          # taken a tag, a 10-char abbreviated sha and a full 40-char sha within four
+          # commits, so each value is parsed in the shape the registry actually
+          # writes it.
           summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
           base="https://raw.githubusercontent.com/duckdb/community-extensions"
           # An Authorization: Bearer header with an EMPTY token is not "no header":
@@ -169,54 +225,95 @@ jobs:
             echo "::error::community registry returned HTTP ${code2} for ${url2}"
             echo "duckdb-pin: FAILED, registry returned ${code2} for ${url2}" >> "$summary"; exit 1
           else
-            reg_commit=$(grep -m1 -o "inputs.duckdb_version || '[0-9a-f]\{40\}'" "$f1" | grep -o '[0-9a-f]\{40\}' || true)
-            reg_tag=$(grep -m1 -o "inputs.duckdb_tag || 'v[^']*'" "$f1" | grep -o "'v[^']*'" | tr -d "'" || true)
-            reg_tools=$(grep -m1 -o "inputs.ci_tools_version || '[^']*'" "$f1" | grep -o "'[^']*'$" | tr -d "'" || true)
+            # Commented-out lines are dropped first: build.yml keeps a disabled
+            # `# duckdb_tag:` line, and parsing it would report a tag nothing builds.
+            grep -v '^[[:space:]]*#' "$f1" > "$f1.live" || true
+            reg_commit=$(grep -m1 -o "inputs.duckdb_commit || (inputs.duckdb_version == '' && '[0-9a-f]\{40\}'" "$f1.live" | grep -o '[0-9a-f]\{40\}' || true)
+            reg_version=$(grep -m1 -oE "^[[:space:]]+duckdb_version: \\$\\{\\{ inputs.duckdb_version \\|\\| 'v[^']*'" "$f1.live" | grep -o "'v[^']*'" | tr -d "'" || true)
+            reg_tools=$(grep -m1 -o "inputs.ci_tools_version || '[^']*'" "$f1.live" | grep -o "'[^']*'$" | tr -d "'" || true)
             # build.py routes one DUCKDB_VERSION to each descriptor's `variegata`
             # ref; the version sits in the condition on the line before.
             reg_variant=$(grep -B1 "'variegata' in desc" "$f2" | grep -m1 -o "== 'v[0-9.]*'" | grep -o "v[0-9.]*" || true)
-            if [ -z "$reg_commit" ] || [ -z "$reg_tag" ] || [ -z "$reg_tools" ] || [ -z "$reg_variant" ]; then
-              echo "::error::community-extensions at ${sha:-main} was fetched but build.yml/build.py carry no recognisable defaults (commit='${reg_commit}', tag='${reg_tag}', ci-tools='${reg_tools}', variant='${reg_variant}'); this check's parse is wrong about the registry, fix the check"
+            if [ -z "$reg_commit" ] || [ -z "$reg_version" ] || [ -z "$reg_tools" ] || [ -z "$reg_variant" ]; then
+              echo "::error::community-extensions at ${sha:-main} was fetched but build.yml/build.py carry no recognisable default (commit='${reg_commit}', version='${reg_version}', ci-tools='${reg_tools}', variant='${reg_variant}'); this check's parse is wrong about the registry, fix the check"
               echo "duckdb-pin: FAILED, registry files fetched but unparseable" >> "$summary"; exit 1
             fi
-            registry="${reg_commit}/${reg_tag}/${reg_tools}/${reg_variant}"
-            recorded="${DUCKDB_REGISTRY_COMMIT}/${DUCKDB_REGISTRY_TAG}/${DUCKDB_REGISTRY_TOOLS}/${DUCKDB_REGISTRY_VARIANT}"
-            if [ "$registry" != "$recorded" ]; then
-              echo "::error::the community registry now builds commit/tag/ci-tools/variant ${registry} (at ${sha:-main}) but this workflow records ${recorded}; update the DUCKDB_REGISTRY_* constants, and re-read the DIVERGENCE note at the top of this job -- the registry has moved again"
-              echo "duckdb-pin: FAILED, registry ${registry} vs recorded ${recorded}" >> "$summary"; exit 1
+            registry="${reg_commit}/${reg_version}/${reg_tools}/${reg_variant}"
+            repo="${DUCKDB_COMMIT}/${DUCKDB_VERSION}/${DUCKDB_CI_TOOLS}/${DUCKDB_VARIANT}"
+            if [ "$registry" != "$repo" ]; then
+              echo "::error::the community registry builds commit/version/ci-tools/variant ${registry} (at ${sha:-main}) but this repo ships ${repo}; update the pin, the constants and the build jobs to the registry's lines"
+              echo "duckdb-pin: FAILED, registry ${registry} vs repo ${repo}" >> "$summary"; exit 1
             fi
-            # The divergence this repo knowingly carries, restated every run so it
-            # cannot become invisible: we pin and ship ${DUCKDB_VERSION} while the
-            # registry's default build target is ${reg_commit:0:10} (${reg_tag}).
-            mode="registry verified at ${sha:-main}: default ${reg_commit:0:10} ${reg_tag} on ${reg_tools}, variant ${reg_variant}; THIS REPO SHIPS ${DUCKDB_VERSION} (declared divergence; see the note in this job)"
+            mode="checked against the registry (default ${reg_commit:0:10} ${reg_version} on ${reg_tools}, variant ${reg_variant}, at ${sha:-main})"
           fi
-          echo "duckdb-pin: OK, pin ${have:0:10} == ${DUCKDB_VERSION}; jobs ship ${DUCKDB_VERSION} and ${DUCKDB_NEXT}; ${mode}" | tee -a "$summary"
+          echo "duckdb-pin: OK, pin ${have:0:10} == ${DUCKDB_COMMIT:0:10} (${DUCKDB_VERSION}); jobs ship it and ${DUCKDB_VARIANT}; ${mode}" | tee -a "$summary"
 
-  duckdb-next-build:
-    # Named for what it BUILDS. It was called "DuckDB main canary" while building
-    # duckdb_version: v2.0-cyanoptera, and no job in this workflow built duckdb main at all --
-    # so the name claimed coverage the repo did not have, and hid the real gap: the
-    # #ifdef-gated varargs shim in duckdb_compat.hpp would only ever fail against duckdb main,
-    # which nothing here compiled. A job-name search for the next line also missed this job
-    # entirely. The genuine main canary is below.
-    name: Build extension binaries (duckdb next, v2.0 line)
-    # This must be `if:` and NOT `continue-on-error:` — a job that calls a
-    # REUSABLE workflow accepts only a fixed key set, and adding
-    # continue-on-error makes the whole workflow fail to parse (scheduling zero
-    # jobs, including the shippable build). Can also be run on demand:
-    #   gh workflow run MainDistributionPipeline.yml --ref <branch>
+  # THE NEXT LINE RESOLVES, IT DOES NOT PIN (Teague, 2026-10-25; the merged
+  # resolver is teaguesterling/plinking_duck#73, copied from that file).
+  #
+  # ci-tools fetches a PREBUILT libduckdb from duckdb-staging, which reports a
+  # concrete version (e.g. v2.0.1-alphaN). Passing the branch NAME
+  # "v2.0-cyanoptera" as duckdb_version stamps that string into the extension, so
+  # the loader refuses the prebuilt lib and every `require yaml` FAILS. DuckDB's
+  # own CMake also refuses a ref name as the commit
+  # (`GIT_COMMIT_HASH MATCHES "^[a-fA-F0-9]+$"`, length 10-64, else
+  # `FATAL_ERROR "Invalid DuckDB commit"`). Resolving the tip to a hex sha AND
+  # reading the staged version for that sha, then passing BOTH, makes the stamp
+  # match the prebuilt.
+  #
+  # Why resolve rather than pin a staged version/commit pair: a pin needs a manual
+  # bump every time the tip moves, and a stale pin measures drift on an old commit
+  # rather than on the 2.0 line. The version is validated against the SAME pattern
+  # ci_phase.py uses and the job hard-fails otherwise, so the value handed to
+  # duckdb_version can never trigger the staged-prebuilt substitution that stamps a
+  # mismatched version. That defect is closed by construction, not by vigilance.
+  duckdb-next-ref:
+    name: Next-line build — resolve DuckDB v2.0
+    # This must be `if:` on THIS job and NOT `continue-on-error:` on the build job
+    # below — a job that calls a REUSABLE workflow accepts only a fixed key set, and
+    # adding continue-on-error makes the whole workflow fail to parse (scheduling
+    # zero jobs, including the shippable build). The build job inherits the gate
+    # through `needs:`: a skipped dependency skips it too. Can also be run on
+    # demand: gh workflow run MainDistributionPipeline.yml --ref <branch>
     # Gated to run once, not twice, per PR: a push to a PR branch fires both a
     # push run and a pull_request run for the same commit, so an ungated job
     # would build it twice. Runs on PRs, on push to main, and on dispatch.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.resolve.outputs.commit }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - id: resolve
+        run: |
+          commit=$(git ls-remote https://github.com/duckdb/duckdb.git refs/heads/v2.0-cyanoptera | cut -f1)
+          [ -n "$commit" ] || { echo "::error::could not resolve duckdb v2.0-cyanoptera"; exit 1; }
+          version=$(curl -sSfL "https://duckdb-staging.duckdb.org/${commit:0:10}/latest_alpha_version.txt" | tr -d '[:space:]') || version=
+          if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|rc|dev)[0-9]+)?$ ]]; then
+            echo "::error::no staged DuckDB version for v2.0-cyanoptera at $commit (got '$version')"
+            exit 1
+          fi
+          echo "v2.0-cyanoptera -> $commit, version $version"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  duckdb-next-build:
+    # Named for what it BUILDS. It was called "DuckDB main canary" while building
+    # the v2.0 line, and no job in this workflow built duckdb main at all -- so the
+    # name claimed coverage the repo did not have, and hid the real gap: the
+    # #ifdef-gated varargs shim in duckdb_compat.hpp would only ever fail against
+    # duckdb main, which nothing here compiled. The genuine main canary is below.
+    name: Build extension binaries (duckdb next, v2.0 line)
+    needs: duckdb-next-ref
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: v2.0-cyanoptera
+      duckdb_version: ${{ needs.duckdb-next-ref.outputs.version }}
+      duckdb_commit: ${{ needs.duckdb-next-ref.outputs.commit }}
       ci_tools_version: main
       extension_name: yaml
       # windows_amd64 (MSVC) validated against duckdb main + shipped for v1.5.4; enabled
       # here for canary coverage too. windows_amd64_mingw stays excluded on this leg only
-      # (validated on the v1.5.4 stable leg, not yet against duckdb main).
+      # (validated on the v1.5.4 stable leg, not yet against the next line).
       exclude_archs: 'windows_amd64_mingw'
 
       # Make a skipped test run FAIL on this leg. `T` is the test pattern ci-tools
@@ -249,23 +346,50 @@ jobs:
       extension_name: yaml
       exclude_archs: 'windows_amd64_mingw'
 
-  # Shippable build. The submodules are pinned at the v1.5-variegata branch tip
-  # (see .gitmodules), but the extension is BUILT against the v1.5.4 release tag
-  # so the produced binary is a proper release (loadable by released DuckDB),
-  # not a `-dev` build. This is the leg the community-extensions manylinux
-  # (linux_amd64 / linux_arm64 docker) binaries are cut from.
+  # SHIPPABLE BUILD, and the registry default line: the same commit, version and
+  # ci-tools branch as community-extensions' build.yml. The submodule gitlink is
+  # that commit; `duckdb_version` is what the binary reports, so the artifacts land
+  # as `yaml-v2.0.0-extension-<arch>` and the result is a proper release binary
+  # (loadable by released DuckDB), not a `-dev` build. This is the leg the
+  # community-extensions manylinux (linux_amd64 / linux_arm64 docker) binaries are
+  # cut from.
   duckdb-stable-build:
     name: Build extension binaries
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v2.0-cyanoptera
+    with:
+      duckdb_version: v2.0.0
+      duckdb_commit: d54cbbe3df17e8e5ce68312f483b4155836112aa
+      ci_tools_version: v2.0-cyanoptera
+      extension_name: yaml
+      # Windows fully enabled: both windows_amd64 (MSVC) and windows_amd64_mingw build
+      # and pass the full suite on the v1.5 leg (real ~24-min / ~31-min CI runs incl.
+      # yaml_copy_to.test — the earlier "COPY TO deadlock" did not reproduce and is treated
+      # as an intermittent flake; the historical /std:c++17 fmt C7525 compile error is stale
+      # too). Measured 2026-10-25: the registry serves yaml for BOTH windows_amd64 and
+      # windows_amd64_mingw at v2.0.0 (HTTP 200), so neither is excluded here.
+      exclude_archs: ''
+      # Same `--require yaml` guard as the next leg: v2.0-cyanoptera has `T`, and
+      # without it a leg that cannot load the extension reports success on all skips.
+      test_config: '{"test_env_variables": {"T": "--test-flags \"--require yaml\" \"test/*\""}}'
+
+  # The v1.5 variant the registry still builds (scripts/build.py routes v1.5.6 to
+  # each descriptor's variegata ref). This was the stable job before the flip; it
+  # stays gating because v1.5.6 users are the bulk of current installs. The
+  # reusable workflow repoints DuckDB itself (`DUCKDB_GIT_VERSION=... make
+  # set_duckdb_version`), so this job builds the v1.5.6 RELEASE TAG even though the
+  # submodule gitlink is the v2.0.0 commit. Branch-tip builds would produce -dev
+  # extensions that will not load into a released CLI.
+  #
+  # No `test_config` here: on v1.5-variegata the `T` variable is silently ignored,
+  # so adding it would claim a guard this leg does not have (`make test-require` is
+  # the local equivalent).
+  duckdb-variegata-build:
+    name: Build extension binaries (DuckDB v1.5 variant)
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
       duckdb_version: v1.5.6
       ci_tools_version: v1.5-variegata
       extension_name: yaml
-      # Windows fully enabled: both windows_amd64 (MSVC) and windows_amd64_mingw build
-      # and pass the full suite on this v1.5.4 leg (real ~24-min / ~31-min CI runs incl.
-      # yaml_copy_to.test — the earlier "COPY TO deadlock" did not reproduce and is treated
-      # as an intermittent flake; the historical /std:c++17 fmt C7525 compile error is stale
-      # too). windows_amd64 ships in the community build (v1.7.0); mingw is validated here.
       exclude_archs: ''
 
   # Code-quality (clang-format) stays on the @main ci-tools target — the repo's
@@ -291,13 +415,22 @@ jobs:
   # Two layers (see test/wasm/):
   #   1. static symbol check (hard gate) — no duckdb-wasm runtime needed.
   #   2. live load+query in duckdb-wasm (informational / continue-on-error) —
-  #      expected-red until an official duckdb-wasm ships a matching v1.5.4
-  #      build (a version/emscripten skew between the engine and the extension
+  #      expected-red until an official duckdb-wasm ships a matching build
+  #      (a version/emscripten skew between the engine and the extension
   #      surfaces as an ABI mismatch on LOAD).
   wasm-load-test:
     name: WASM load test
     needs: [duckdb-stable-build]
     runs-on: ubuntu-latest
+    env:
+      # DERIVED, NOT HARDCODED. The artifact names and the wasm repository path
+      # must follow duckdb-stable-build's `duckdb_version:`, and before this
+      # declaration existed they were four literal `v1.5.6`s that the duckdb-pin
+      # greps could not see -- exactly the staleness class that scan exists to
+      # catch. The scan resolves this line against its OWN constant by name, so a
+      # bump that misses it is flagged here rather than silently downloading no
+      # artifacts. Keep it equal to duckdb-stable-build's duckdb_version.
+      DUCKDB_VERSION: v2.0.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -306,7 +439,7 @@ jobs:
       - name: Download WASM artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: yaml-v1.5.6-extension-wasm_*
+          pattern: yaml-${{ env.DUCKDB_VERSION }}-extension-wasm_*
           path: wasm-artifacts
       - name: Static symbol check (yaml-cpp must be linked, not unresolved)
         run: bash test/wasm/run_wasm_checks.sh wasm-artifacts
@@ -317,8 +450,8 @@ jobs:
         run: |
           set -uo pipefail
           timeout 300 npm install --no-save
-          mkdir -p repo/v1.5.6/wasm_eh
-          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-v1.5.6-extension-wasm_eh/yaml.duckdb_extension.wasm" \
-             repo/v1.5.6/wasm_eh/
+          mkdir -p "repo/${DUCKDB_VERSION}/wasm_eh"
+          cp "$GITHUB_WORKSPACE/wasm-artifacts/yaml-${DUCKDB_VERSION}-extension-wasm_eh/yaml.duckdb_extension.wasm" \
+             "repo/${DUCKDB_VERSION}/wasm_eh/"
           timeout 240 node load_test.cjs --repo repo --name yaml --platform eh \
             --query "SELECT yaml_valid('a: 1') AS ok" --expect '"ok":true'
