@@ -1,11 +1,11 @@
 # name: test/sql/yaml_reader/yaml_issue_37_empty_list_nesting.test
-# description: Regression for issue #37 — empty list in the FIRST row of a struct-array
-#              field used to be inferred as LIST<LIST<child>> instead of LIST<child>,
-#              causing later rows with populated lists to fail unification with a
-#              misleading "Failed to cast value: Type VARCHAR ... can't be cast to
-#              the destination type VARCHAR[]" error in YAMLNodeToValue's
-#              empty-Sequence branch.
+# description: Regression for issue #37 — an empty list in the FIRST row of a struct-array field
 # group: [yaml_reader]
+
+# Such a field used to be inferred as LIST<LIST<child>> instead of LIST<child>, so later
+# rows with populated lists failed unification with a misleading "Failed to cast value:
+# Type VARCHAR ... can't be cast to the destination type VARCHAR[]" error in
+# YAMLNodeToValue's empty-Sequence branch.
 
 require yaml
 

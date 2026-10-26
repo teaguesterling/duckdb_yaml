@@ -93,7 +93,9 @@ After building:
 
 #### SQL Tests
 
-Tests are located in `test/sql/`. Create `.test` files using DuckDB's SQL test format:
+Tests are located in `test/sql/`. Create `.test` files using DuckDB's SQL test format.
+The `# group:` tag must be the name of the directory that holds the file — DuckDB's
+`format-check` rewrites it to match, so a different value makes CI red:
 
 ```sql
 # name: test/sql/yaml/my_test.test

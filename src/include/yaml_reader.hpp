@@ -130,8 +130,7 @@ private:
 	/**
 	 * @brief Global init function for read_yaml
 	 */
-	static unique_ptr<GlobalTableFunctionState> YAMLReadRowsInit(ClientContext &context,
-	                                                             TableFunctionInitInput &input);
+	static unique_ptr<GlobalTableFunctionState> YAMLReadRowsInit(ClientContext &context, TableFunctionInitInput &input);
 
 	/**
 	 * @brief Local init function for read_yaml

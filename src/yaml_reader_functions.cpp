@@ -116,8 +116,7 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 				} else if (merged_children[i].second.id() != child2.second.id()) {
 					// Different scalar types for a field across records - widen (e.g. TINYINT +
 					// SMALLINT -> SMALLINT) instead of collapsing to YAML (issue #42).
-					merged_children[i].second =
-					    WidenConflictingScalarTypes(merged_children[i].second, child2.second);
+					merged_children[i].second = WidenConflictingScalarTypes(merged_children[i].second, child2.second);
 				}
 				found = true;
 				break;
@@ -479,7 +478,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 }
 
 unique_ptr<GlobalTableFunctionState> YAMLReader::YAMLReadRowsInit(ClientContext &context,
-                                                                 TableFunctionInitInput &input) {
+                                                                  TableFunctionInitInput &input) {
 	auto result = make_uniq<YAMLReadGlobalState>();
 	auto &bind_data = input.bind_data->Cast<YAMLReadRowsBindData>();
 	result->files = bind_data.files;
@@ -487,13 +486,13 @@ unique_ptr<GlobalTableFunctionState> YAMLReader::YAMLReadRowsInit(ClientContext 
 }
 
 unique_ptr<LocalTableFunctionState> YAMLReader::YAMLReadRowsInitLocal(ExecutionContext &context,
-                                                                     TableFunctionInitInput &input,
-                                                                     GlobalTableFunctionState *global_state) {
+                                                                      TableFunctionInitInput &input,
+                                                                      GlobalTableFunctionState *global_state) {
 	return make_uniq<YAMLReadLocalState>();
 }
 
 unique_ptr<GlobalTableFunctionState> YAMLReader::YAMLReadObjectsInit(ClientContext &context,
-                                                                    TableFunctionInitInput &input) {
+                                                                     TableFunctionInitInput &input) {
 	auto result = make_uniq<YAMLReadGlobalState>();
 	auto &bind_data = input.bind_data->Cast<YAMLReadBindData>();
 	result->files = bind_data.files;
@@ -501,13 +500,13 @@ unique_ptr<GlobalTableFunctionState> YAMLReader::YAMLReadObjectsInit(ClientConte
 }
 
 unique_ptr<LocalTableFunctionState> YAMLReader::YAMLReadObjectsInitLocal(ExecutionContext &context,
-                                                                        TableFunctionInitInput &input,
-                                                                        GlobalTableFunctionState *global_state) {
+                                                                         TableFunctionInitInput &input,
+                                                                         GlobalTableFunctionState *global_state) {
 	return make_uniq<YAMLReadLocalState>();
 }
 
 OperatorPartitionData YAMLReader::YAMLReadGetPartitionData(ClientContext &context,
-                                                          TableFunctionGetPartitionInput &input) {
+                                                           TableFunctionGetPartitionInput &input) {
 	auto &lstate = input.local_state->Cast<YAMLReadLocalState>();
 	return OperatorPartitionData(lstate.last_batch_index);
 }
@@ -730,7 +729,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 				if (bind_data.options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
 					if (docs.size() < 2) {
 						if (!bind_data.options.ignore_errors) {
-							throw BinderException("FRONTMATTER mode requires at least 2 documents (frontmatter + data)");
+							throw BinderException(
+							    "FRONTMATTER mode requires at least 2 documents (frontmatter + data)");
 						}
 						lstate.file_nodes.clear();
 					} else {
@@ -818,8 +818,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 			} else {
 				idx_t fm_col_count = lstate.frontmatter_values.size();
 
-				while (lstate.current_row_index < lstate.file_nodes.size() &&
-				       output_idx < STANDARD_VECTOR_SIZE) {
+				while (lstate.current_row_index < lstate.file_nodes.size() && output_idx < STANDARD_VECTOR_SIZE) {
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 					if (bind_data.names.size() == 1 && bind_data.names[0] == "value") {
@@ -973,8 +972,7 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				lstate.file_loaded = true;
 			}
 
-			while (lstate.current_row_index < lstate.file_nodes.size() &&
-			       output_idx < STANDARD_VECTOR_SIZE) {
+			while (lstate.current_row_index < lstate.file_nodes.size() && output_idx < STANDARD_VECTOR_SIZE) {
 				const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 				if (bind_data.names.size() == 1 && bind_data.names[0] == "yaml") {

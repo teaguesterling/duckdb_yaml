@@ -467,7 +467,8 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		for (auto &entry : struct_children) {
 			auto entry_name = CompatIdentifierName(entry.first);
 			if (node[entry_name]) {
-				struct_values.push_back(make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, budget)));
+				struct_values.push_back(
+				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, budget)));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
 			}

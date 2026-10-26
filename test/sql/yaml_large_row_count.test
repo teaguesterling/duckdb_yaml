@@ -1,6 +1,6 @@
 # name: test/sql/yaml_large_row_count.test
 # description: Test read_yaml() with files containing >2048 rows (STANDARD_VECTOR_SIZE)
-# group: [yaml_reader]
+# group: [sql]
 
 require yaml
 

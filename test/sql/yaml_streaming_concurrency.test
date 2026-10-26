@@ -1,6 +1,6 @@
 # name: test/sql/yaml_streaming_concurrency.test
 # description: Concurrency, multi-threading, and re-scan tests for streaming YAML table functions
-# group: [yaml_reader]
+# group: [sql]
 
 require yaml
 
