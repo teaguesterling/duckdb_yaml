@@ -1,6 +1,6 @@
 # name: test/sql/yaml_security_limits.test
 # description: DoS hardening - bound YAML nesting depth and alias/anchor expansion (GHSA-h5hw-g5m6-vmjj)
-# group: [yaml]
+# group: [sql]
 
 require yaml
 

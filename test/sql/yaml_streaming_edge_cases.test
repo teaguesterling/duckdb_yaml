@@ -1,6 +1,6 @@
 # name: test/sql/yaml_streaming_edge_cases.test
 # description: Edge cases for streaming YAML parser including empty files, chunk boundaries, size limits, and corrupt files
-# group: [yaml_reader]
+# group: [sql]
 
 require yaml
 

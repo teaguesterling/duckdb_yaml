@@ -421,10 +421,10 @@ void RegisterYAMLFrontmatterFunction(ExtensionLoader &loader) {
 
 	// Add named parameters
 	DeclareNamedParameters(read_yaml_frontmatter, {
-		{"as_yaml_objects", LogicalType::BOOLEAN},
-		{"content", LogicalType::BOOLEAN},
-		{"filename", LogicalType::BOOLEAN},
-	});
+	                                                  {"as_yaml_objects", LogicalType::BOOLEAN},
+	                                                  {"content", LogicalType::BOOLEAN},
+	                                                  {"filename", LogicalType::BOOLEAN},
+	                                              });
 
 	CreateTableFunctionInfo info(std::move(read_yaml_frontmatter));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
