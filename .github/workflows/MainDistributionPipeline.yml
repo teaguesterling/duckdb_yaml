@@ -288,7 +288,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEPTH=50
+          DEPTH=150
           tip=$(git ls-remote https://github.com/duckdb/duckdb.git refs/heads/v2.0-cyanoptera | cut -f1)
           [ -n "$tip" ] || { echo "::error::could not resolve duckdb v2.0-cyanoptera"; exit 1; }
 
