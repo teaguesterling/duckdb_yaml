@@ -357,15 +357,66 @@ jobs:
   # green on the next-line leg is NOT evidence for this one. Without this job the varargs
   # shim's #ifdef could not fail anywhere in CI, which is exactly how it sat here unnoticed.
   # Mirrors duckdb_webbed's duckdb-main-canary.
+  # RESOLVE main TO A (commit, version) PAIR. `duckdb_version: main` reached the
+  # build as DUCKDB_VERSION=main, and duckdb main's CMakeLists.txt reads that env
+  # var as its explicit version. The library then reports 'vmain' while the
+  # extension is stamped 'main', and the loader refuses it:
+  #   "built specifically for DuckDB version 'main' ... this version of DuckDB is 'vmain'"
+  # Every test then SKIPS at its require line, and the leg reports success. Measured
+  # on this repo's own main run 40358474431: all three canary legs printed
+  # `ran tests: 0 passed, 56 skipped`.
+  #
+  # The version is computed the way duckdb's own CMake does for a dev build:
+  # v<scripts/ci/release_version.txt>.0-dev<git rev-list --count HEAD>. Staging has
+  # no prebuilt for a main commit, so ci-tools builds from source; ci_phase.py's
+  # staged-version lookup is keyed on the commit, 404s, and falls back.
+  #
+  # Canonical text: duckdb_scalarfs at 6271b22, proven there on four platforms.
+  duckdb-main-ref:
+    name: Canary build — resolve DuckDB main
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.resolve.outputs.commit }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+          # Commits only: rev-list --count needs the whole history, not its trees.
+          git clone --quiet --filter=tree:0 --no-checkout --single-branch --branch main \
+              https://github.com/duckdb/duckdb.git "$tmp/duckdb"
+          commit=$(git -C "$tmp/duckdb" rev-parse HEAD)
+          release=$(git -C "$tmp/duckdb" show HEAD:scripts/ci/release_version.txt | tr -d '[:space:]')
+          count=$(git -C "$tmp/duckdb" rev-list --count HEAD)
+          version="v${release}.0-dev${count}"
+          if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.0-dev[0-9]+$ ]]; then
+            echo "::error::could not build a dev version for duckdb main at $commit (got '$version')"
+            exit 1
+          fi
+          echo "duckdb main -> $commit, version $version"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   duckdb-main-canary:
     name: Build extension binaries (duckdb main canary)
+    needs: duckdb-main-ref
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: main
+      duckdb_version: ${{ needs.duckdb-main-ref.outputs.version }}
+      duckdb_commit: ${{ needs.duckdb-main-ref.outputs.commit }}
       ci_tools_version: main
       extension_name: yaml
       exclude_archs: 'windows_amd64_mingw'
+
+      # THE GUARD, newly added here. Fixing the version is only half of it: without
+      # `--require yaml` a load failure is still a silent skip that reports success,
+      # which is how `0 passed, 56 skipped` passed for as long as it did. With the
+      # guard the same condition becomes `require yaml: FAILED`.
+      test_config: '{"test_env_variables": {"T": "--test-flags \"--require yaml\" \"test/*\""}}'
 
   # SHIPPABLE BUILD, and the registry default line: the same commit, version and
   # ci-tools branch as community-extensions' build.yml. The submodule gitlink is
