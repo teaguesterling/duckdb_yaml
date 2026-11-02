@@ -297,7 +297,7 @@ static unique_ptr<FunctionData> YAMLArrayElementsBind(ClientContext &context, Ta
 				out.SetIndent(2);
 				out.SetMapFormat(YAML::Flow);
 				out.SetSeqFormat(YAML::Flow);
-				out << node[i];
+				yaml_utils::EmitNodeWithStringStyle(out, node[i], yaml_utils::YAMLStringStyle::QUOTED);
 				result->elements.push_back(out.c_str());
 			}
 		} catch (const YAML::Exception &e) {

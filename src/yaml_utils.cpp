@@ -1,4 +1,5 @@
 #include "yaml_utils.hpp"
+#include "yaml_reader.hpp"
 #include "duckdb_compat.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/exception.hpp"
@@ -156,6 +157,19 @@ void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format, idx_t indent) {
 	}
 }
 
+bool IsStringScalar(const YAML::Node &node) {
+	// yaml-cpp's parser tags every non-plain (quoted or block) scalar "!" and plain ones "?".
+	return node.IsScalar() && (node.Tag() == "!" || node.Tag() == "tag:yaml.org,2002:str");
+}
+
+// Whether writing this string scalar plain would change how it reads back. yaml-cpp's emitter
+// writes any string plain when it can, so "123" would come back as the number 123.
+static bool ChangesWhenPlain(const YAML::Node &node) {
+	const YAML::Node plain(node.Scalar());
+	return YAMLReader::DetectYAMLType(plain) != YAMLReader::DetectYAMLType(node) ||
+	       YAMLNodeToJSON(plain) != YAMLNodeToJSON(node);
+}
+
 static void EmitNodeWithStringStyleImpl(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style,
                                         YAMLTraversalBudget &budget) {
 	YAMLBudgetScope scope(budget);
@@ -165,6 +179,8 @@ static void EmitNodeWithStringStyleImpl(YAML::Emitter &out, const YAML::Node &no
 		// Only apply Literal style to scalars that actually contain newlines
 		if (resolved_style == YAMLStringStyle::LITERAL && scalar.find('\n') != std::string::npos) {
 			out << YAML::Literal << scalar;
+		} else if (IsStringScalar(node) && ChangesWhenPlain(node)) {
+			out << YAML::DoubleQuoted << scalar;
 		} else {
 			out << node;
 		}
@@ -208,12 +224,7 @@ std::string EmitYAML(const YAML::Node &node, YAMLFormat format, YAMLStringStyle 
 	}
 	YAML::Emitter out;
 	ConfigureEmitter(out, format, indent);
-	auto resolved = ResolveStringStyle(string_style, format);
-	if (resolved == YAMLStringStyle::LITERAL) {
-		EmitNodeWithStringStyle(out, node, resolved);
-	} else {
-		out << node;
-	}
+	EmitNodeWithStringStyle(out, node, ResolveStringStyle(string_style, format));
 	return out.c_str();
 }
 
@@ -232,7 +243,7 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node> &docs, YAMLFormat for
 		ConfigureEmitter(out, format);
 		out << YAML::BeginSeq;
 		for (const auto &doc : docs) {
-			out << doc;
+			EmitNodeWithStringStyle(out, doc, YAMLStringStyle::QUOTED);
 		}
 		out << YAML::EndSeq;
 		return out.c_str();
@@ -350,6 +361,11 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 		return "null";
 	case YAML::NodeType::Scalar: {
 		const auto value = node.Scalar();
+		if (IsStringScalar(node)) {
+			// A quoted scalar is a JSON string; dates and times are normalized as below.
+			std::string json_value;
+			return TryDetectDateOrTimestamp(value, json_value) ? json_value : EscapeJSONString(value);
+		}
 
 		// Check for boolean values (case-insensitive)
 		std::string lower_value = value;

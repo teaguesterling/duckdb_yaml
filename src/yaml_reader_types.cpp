@@ -27,6 +27,9 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 	switch (node.Type()) {
 	case YAML::NodeType::Scalar: {
 		std::string scalar_value = node.Scalar();
+		// A quoted scalar is a string, never a null, boolean or number. Like read_json, a string
+		// may still be detected as a date, time or timestamp below.
+		const bool is_string = yaml_utils::IsStringScalar(node);
 
 		// Check for null values
 		if (scalar_value == "null" || scalar_value == "~" || scalar_value.empty()) {
@@ -37,9 +40,9 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		std::string lower_value = scalar_value;
 		std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
 
-		if (lower_value == "true" || lower_value == "false" || lower_value == "yes" || lower_value == "no" ||
-		    lower_value == "on" || lower_value == "off" || lower_value == "y" || lower_value == "n" ||
-		    lower_value == "t" || lower_value == "f") {
+		if (!is_string && (lower_value == "true" || lower_value == "false" || lower_value == "yes" ||
+		                   lower_value == "no" || lower_value == "on" || lower_value == "off" || lower_value == "y" ||
+		                   lower_value == "n" || lower_value == "t" || lower_value == "f")) {
 			return LogicalType::BOOLEAN;
 		}
 
@@ -80,7 +83,7 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 			}
 		}
 
-		if (!might_be_temporal) {
+		if (!might_be_temporal && !is_string) {
 			// Check for special floating point values first
 			if (lower_value == "inf" || lower_value == "infinity") {
 				return LogicalType::DOUBLE;
@@ -279,7 +282,7 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		// First convert YAML node to YAML string, then use the same path as yaml_to_json function
 		YAML::Emitter out;
 		yaml_utils::ConfigureEmitter(out, yaml_utils::YAMLFormat::BLOCK);
-		out << node;
+		yaml_utils::EmitNodeWithStringStyle(out, node, yaml_utils::YAMLStringStyle::QUOTED);
 		std::string yaml_str = out.c_str();
 
 		// Now parse and convert to JSON using the same logic as yaml_to_json
@@ -311,7 +314,7 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		// Emit as YAML string
 		YAML::Emitter out;
 		yaml_utils::ConfigureEmitter(out, yaml_utils::YAMLFormat::FLOW);
-		out << node;
+		yaml_utils::EmitNodeWithStringStyle(out, node, yaml_utils::YAMLStringStyle::QUOTED);
 		return Value(out.c_str());
 	}
 

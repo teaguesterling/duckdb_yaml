@@ -229,7 +229,7 @@ static void YAMLExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 			    out.SetIndent(2);
 			    out.SetMapFormat(YAML::Flow);
 			    out.SetSeqFormat(YAML::Flow);
-			    out << node;
+			    yaml_utils::EmitNodeWithStringStyle(out, node, yaml_utils::YAMLStringStyle::QUOTED);
 
 			    string yaml_result = out.c_str();
 			    return StringVector::AddString(result, yaml_result.c_str(), yaml_result.length());
@@ -269,7 +269,7 @@ static void YAMLExtractStringFunction(DataChunk &args, ExpressionState &state, V
 				    out.SetIndent(2);
 				    out.SetMapFormat(YAML::Flow);
 				    out.SetSeqFormat(YAML::Flow);
-				    out << node;
+				    yaml_utils::EmitNodeWithStringStyle(out, node, yaml_utils::YAMLStringStyle::QUOTED);
 				    string yaml_result = out.c_str();
 				    return StringVector::AddString(result, yaml_result.c_str(), yaml_result.length());
 			    }
@@ -415,7 +415,7 @@ static string BuildYAMLStructure(const YAML::Node &node) {
 
 	switch (node.Type()) {
 	case YAML::NodeType::Scalar: {
-		string type_name = DetectScalarTypeName(node.Scalar());
+		string type_name = yaml_utils::IsStringScalar(node) ? "VARCHAR" : DetectScalarTypeName(node.Scalar());
 		return "\"" + type_name + "\"";
 	}
 	case YAML::NodeType::Sequence: {
