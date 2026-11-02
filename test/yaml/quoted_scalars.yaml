@@ -1,0 +1,12 @@
+plain_int: 123
+dq_int: "123"
+sq_int: '123'
+plain_float: 0.5
+dq_float: "0.5"
+sq_float: '0.5'
+plain_bool: true
+dq_bool: "true"
+sq_bool: 'yes'
+plain_date: 2024-01-15
+dq_date: "2024-01-15"
+tagged: !!str 7

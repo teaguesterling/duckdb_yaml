@@ -1,0 +1,48 @@
+# name: test/sql/yaml_quoted_scalars.test
+# description: Quoted scalars are strings (YAML 1.2 core schema); only plain scalars become numbers, booleans or nulls
+# group: [sql]
+
+require yaml
+
+# Quoting decides int/float/bool/null. A date is not a core-schema type, so, as read_json does for
+# JSON strings, a quoted date is still detected (yaml_type_detection_current.test pins that).
+query IIIIIIIIIIII
+SELECT typeof(plain_int), typeof(dq_int), typeof(sq_int), typeof(plain_float), typeof(dq_float), typeof(sq_float),
+       typeof(plain_bool), typeof(dq_bool), typeof(sq_bool), typeof(plain_date), typeof(dq_date), typeof(tagged)
+FROM read_yaml('test/yaml/quoted_scalars.yaml');
+----
+TINYINT	VARCHAR	VARCHAR	DOUBLE	VARCHAR	VARCHAR	BOOLEAN	VARCHAR	VARCHAR	DATE	DATE	VARCHAR
+
+query IIII
+SELECT dq_int, sq_float, dq_bool, sq_bool FROM read_yaml('test/yaml/quoted_scalars.yaml');
+----
+123	0.5	true	yes
+
+# A quoted value among plain numbers is a type conflict, so the column falls back to YAML,
+# where the quoted value keeps its quotes
+query II
+SELECT typeof(a), a FROM parse_yaml(E'- a: 1\n- a: "2"') ORDER BY a;
+----
+yaml	"2"
+yaml	1
+
+# The cast to YAML keeps the quotes that make a value a string, and only those
+query I
+SELECT (E'a: "123"\nb: \'true\'\nc: "x"\nd: 5'::YAML)::VARCHAR;
+----
+{a: "123", b: "true", c: x, d: 5}
+
+query I
+SELECT yaml_to_json(E'i: "123"\nf: \'0.5\'\nb: "true"\nn: "null"\nt: \'~\'\ne: ""\np: 123'::YAML)::VARCHAR;
+----
+{"i":"123","f":"0.5","b":"true","n":"null","t":"~","e":"","p":123}
+
+query I
+SELECT yaml_structure(E'a: "123"\nb: 123'::YAML);
+----
+{"a":"VARCHAR","b":"UBIGINT"}
+
+query II
+SELECT yaml_extract('a: "123"', '$.a'), yaml_extract('a: 123', '$.a');
+----
+"123"	123

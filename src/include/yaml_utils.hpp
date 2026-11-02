@@ -125,7 +125,12 @@ void CheckExpansionBudget(const YAML::Node &node);
 // Configure YAML emitter with format settings
 void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format, idx_t indent = 2);
 
-// Emit a YAML::Node tree, applying YAML::Literal to multiline scalars when style is LITERAL
+// True for a quoted or block scalar, or one tagged !!str. Under the YAML 1.2 core schema the
+// quoting style decides: only plain scalars are resolved to int/float/bool/null.
+bool IsStringScalar(const YAML::Node &node);
+
+// Emit a YAML::Node tree, applying YAML::Literal to multiline scalars when style is LITERAL.
+// A string scalar that would read back as another type when written plain is double-quoted.
 void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style);
 
 // Emit single YAML document
