@@ -313,45 +313,21 @@ static void YAMLExistsFunction(DataChunk &args, ExpressionState &state, Vector &
 
 // Helper to detect the DuckDB type name for a scalar value
 static string DetectScalarTypeName(const string &scalar_value) {
-	if (scalar_value.empty() || scalar_value == "null" || scalar_value == "~") {
+	switch (yaml_utils::ClassifyPlainScalar(scalar_value)) {
+	case yaml_utils::YAMLCoreKind::NULL_VALUE:
 		return "NULL";
-	}
-
-	// Check for boolean
-	string lower_value = scalar_value;
-	std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
-	if (lower_value == "true" || lower_value == "false" || lower_value == "yes" || lower_value == "no" ||
-	    lower_value == "on" || lower_value == "off" || lower_value == "y" || lower_value == "n" || lower_value == "t" ||
-	    lower_value == "f") {
+	case yaml_utils::YAMLCoreKind::BOOLEAN:
 		return "BOOLEAN";
-	}
-
-	// Check for special float values
-	if (lower_value == "inf" || lower_value == "infinity" || lower_value == "-inf" || lower_value == "-infinity" ||
-	    lower_value == "nan") {
-		return "DOUBLE";
-	}
-
-	// strtoll and strtod, not std::stoll and std::stod: those throw for every string that is not a number.
-	const char *number_start = scalar_value.c_str();
-	const char *number_end = number_start + scalar_value.size();
-	char *parse_end;
-
-	// Try integer
-	errno = 0;
-	const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
-	if (parse_end != number_start && parse_end == number_end && errno != ERANGE) {
+	case yaml_utils::YAMLCoreKind::INTEGER: {
+		int64_t int_val = 0;
+		yaml_utils::ParseCoreInteger(scalar_value, int_val);
 		return int_val >= 0 ? "UBIGINT" : "BIGINT";
 	}
-
-	// Try double
-	errno = 0;
-	std::strtod(number_start, &parse_end);
-	if (parse_end != number_start && parse_end == number_end && errno != ERANGE) {
+	case yaml_utils::YAMLCoreKind::FLOAT:
 		return "DOUBLE";
+	default:
+		return "VARCHAR";
 	}
-
-	return "VARCHAR";
 }
 
 // Forward declaration for mutual recursion

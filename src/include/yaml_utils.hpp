@@ -129,6 +129,21 @@ void ConfigureEmitter(YAML::Emitter &out, YAMLFormat format, idx_t indent = 2);
 // quoting style decides: only plain scalars are resolved to int/float/bool/null.
 bool IsStringScalar(const YAML::Node &node);
 
+// What the YAML 1.2 core schema resolves a plain scalar to. This is the one definition: detection, yaml_to_json,
+// yaml_structure and the writer all use it. A value that the schema calls a number but that DuckDB cannot hold without
+// changing it, such as 1e400, is a STRING, so the text is kept.
+enum class YAMLCoreKind { NULL_VALUE, BOOLEAN, INTEGER, FLOAT, STRING };
+YAMLCoreKind ClassifyPlainScalar(const std::string &value);
+
+// [-+]?[0-9]+, 0o[0-7]+ or 0x[0-9a-fA-F]+, within int64.
+bool ParseCoreInteger(const std::string &value, int64_t &result);
+
+// A core float with a fraction or an exponent, or a core form of infinity or not-a-number.
+bool ParseCoreFloat(const std::string &value, double &result);
+
+// A timestamp with a UTC offset or Z, as the UTC instant. False without an offset, or with a time zone name.
+bool TryParseTimestampWithOffset(const std::string &value, timestamp_t &result);
+
 // Emit a YAML::Node tree, applying YAML::Literal to multiline scalars when style is LITERAL.
 // A string scalar that would read back as another type when written plain is double-quoted.
 void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style);

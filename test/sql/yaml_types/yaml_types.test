@@ -146,7 +146,7 @@ SELECT value_to_yaml({'name': 'John', 'age': 30}) AS yaml_value;
 query I
 SELECT yaml_to_json('special_values: {null_value: null, tilde_null: ~, true_values: [true, yes, on], false_values: [false, no, off]}') AS json_value;
 ----
-{"special_values":{"null_value":null,"tilde_null":null,"true_values":[true,true,true],"false_values":[false,false,false]}}
+{"special_values":{"null_value":null,"tilde_null":null,"true_values":[true,"yes","on"],"false_values":[false,"no","off"]}}
 
 # Test handling of quoted strings in YAML (simplified to avoid SQL parsing issues)
 query I
