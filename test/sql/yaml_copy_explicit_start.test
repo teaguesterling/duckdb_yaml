@@ -6,9 +6,6 @@ require yaml
 
 # The invariant in every case below: a separator comes before every document except, by default, the first document
 # of each FILE. A document with no separator anywhere but byte 0 merges into the previous one, and that row is lost.
-#
-# Reads of more than 32,767 ids set the column type: read_yaml takes SMALLINT from its sample, then reads larger values
-# as NULL. That is a reader defect, and this file tests the writer.
 
 statement ok
 SET threads=8;
@@ -71,13 +68,13 @@ statement ok
 COPY t TO '__TEST_DIR__/batch.yaml' (FORMAT yaml);
 
 query IIII
-SELECT count(*), count(DISTINCT id), min(id), max(id) FROM read_yaml('__TEST_DIR__/batch.yaml', columns={'id': 'BIGINT'});
+SELECT count(*), count(DISTINCT id), min(id), max(id) FROM read_yaml('__TEST_DIR__/batch.yaml');
 ----
 100000	100000	0	99999
 
 # Insertion order is kept
 query I
-SELECT count(*) FROM (SELECT id, row_number() OVER () - 1 AS pos FROM read_yaml('__TEST_DIR__/batch.yaml', columns={'id': 'BIGINT'})) WHERE id <> pos;
+SELECT count(*) FROM (SELECT id, row_number() OVER () - 1 AS pos FROM read_yaml('__TEST_DIR__/batch.yaml')) WHERE id <> pos;
 ----
 0
 
@@ -99,7 +96,7 @@ statement ok
 SET preserve_insertion_order=true;
 
 query II
-SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/unordered.yaml', columns={'id': 'BIGINT'});
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/unordered.yaml');
 ----
 100000	100000
 
@@ -128,7 +125,7 @@ SELECT count(*) FROM read_text('__TEST_DIR__/rotated/*.yaml') WHERE content[1:3]
 0
 
 query II
-SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated/*.yaml', columns={'id': 'BIGINT'});
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated/*.yaml');
 ----
 100000	100000
 
@@ -162,7 +159,7 @@ SELECT count(*) > 1, count(*) FILTER (content[1:3] = '---'), max(size) < 300000 
 true	0	true
 
 query II
-SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated_unordered/*.yaml', columns={'id': 'BIGINT'});
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated_unordered/*.yaml');
 ----
 100000	100000
 
@@ -183,7 +180,7 @@ SELECT count(*) FROM read_text('__TEST_DIR__/per_thread/*.yaml') WHERE content[1
 0
 
 query II
-SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/per_thread/*.yaml', columns={'id': 'BIGINT'});
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/per_thread/*.yaml');
 ----
 100000	100000
 
@@ -214,6 +211,48 @@ statement error
 COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, STYLE flow, EXPLICIT_START true);
 ----
 EXPLICIT_START
+
+#--- DOCUMENT_SEPARATOR: flow output stays one document per line, and can have separators instead
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/flow_sep.yaml' (FORMAT yaml, STYLE flow, DOCUMENT_SEPARATOR true);
+
+query I
+SELECT content = E'{id: 0}\n---\n{id: 1}\n' FROM read_text('__TEST_DIR__/flow_sep.yaml');
+----
+true
+
+query I
+SELECT id FROM read_yaml('__TEST_DIR__/flow_sep.yaml') ORDER BY id;
+----
+0
+1
+
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/flow_sep_start.yaml' (FORMAT yaml, STYLE flow, DOCUMENT_SEPARATOR true, EXPLICIT_START true);
+
+query I
+SELECT content = E'---\n{id: 0}\n---\n{id: 1}\n' FROM read_text('__TEST_DIR__/flow_sep_start.yaml');
+----
+true
+
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/flow_nosep.yaml' (FORMAT yaml, STYLE flow, DOCUMENT_SEPARATOR false);
+
+query I
+SELECT content = E'{id: 0}\n{id: 1}\n' FROM read_text('__TEST_DIR__/flow_nosep.yaml');
+----
+true
+
+# Block output with no separator would merge rows and lose them, and a sequence has no documents
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, DOCUMENT_SEPARATOR false);
+----
+DOCUMENT_SEPARATOR
+
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, LAYOUT sequence, DOCUMENT_SEPARATOR true);
+----
+DOCUMENT_SEPARATOR
 
 #--- No rows, no documents, no bytes
 statement ok

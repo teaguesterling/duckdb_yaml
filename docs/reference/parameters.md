@@ -403,6 +403,15 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 |-------|-------------|
 | `1`-`10` (default: `2`) | Indentation width for block style output |
 
+### DOCUMENT_SEPARATOR
+
+| Value | Description |
+|-------|-------------|
+| `true` | Write `---` between documents. This is the default for `STYLE block`, where it cannot be turned off, because the rows would merge |
+| `false` | Write one document per line, with no `---`. This is the default for `STYLE flow` |
+
+With `STYLE flow`, the default output is not valid multi-document YAML if it has more than one row. `read_yaml` reads it, but other parsers, such as PyYAML, reject it. Set `DOCUMENT_SEPARATOR true` for those parsers. Requires `LAYOUT document`.
+
 ### EXPLICIT_START
 
 | Value | Description |
@@ -410,7 +419,7 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 | `false` (default) | Each file starts with its first document. A `---` separates each pair of documents |
 | `true` | Also write `---` before the first document of each file |
 
-Requires `LAYOUT document` and `STYLE block`, because other output has no `---`. Any other combination is an error.
+Requires output with separators: `LAYOUT document`, and `STYLE block` or `DOCUMENT_SEPARATOR true`. Any other combination is an error.
 
 **Example:**
 

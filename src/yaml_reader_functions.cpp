@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include <algorithm>
 #include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -158,6 +159,8 @@ LogicalType YAMLReader::MergeStructTypes(const LogicalType &type1, const Logical
 // Bind data structure for read_yaml
 // Bind data structure for read_yaml (immutable after bind)
 struct YAMLReadRowsBindData : public TableFunctionData {
+	//! One column holds each row whole, because the sample has rows that are not maps
+	bool row_is_value = false;
 	YAMLReadRowsBindData(vector<string> files, YAMLReader::YAMLReadOptions options)
 	    : files(std::move(files)), options(options) {
 	}
@@ -435,6 +438,29 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		return std::move(result);
 	}
 
+	// A row that is not a map has no keys to make columns from. So that it is not lost, a file with such rows has one
+	// column that holds each row, map or not. Explicit columns and frontmatter columns keep their schema.
+	if (options.column_names.empty() && options.multi_document_mode != MultiDocumentMode::FRONTMATTER &&
+	    std::any_of(sample_nodes.begin(), sample_nodes.end(), [](const YAML::Node &node) { return !node.IsMap(); })) {
+		LogicalType value_type = LogicalType::VARCHAR;
+		if (options.auto_detect_types) {
+			// Maps, sequences and scalars together have no common SQL type, so YAML holds them
+			const auto kind = sample_nodes[0].Type();
+			const bool mixed_kinds = std::any_of(sample_nodes.begin(), sample_nodes.end(),
+			                                     [&](const YAML::Node &node) { return node.Type() != kind; });
+			value_type = mixed_kinds ? YAMLTypes::YAMLType() : DetectJaggedYAMLType(sample_nodes);
+			if (sample_truncated) {
+				value_type = WidenSampledIntegers(value_type);
+			}
+		}
+		names.emplace_back("value");
+		return_types.emplace_back(value_type);
+		result->names = CompatNameStrings(names);
+		result->types = return_types;
+		result->row_is_value = true;
+		return std::move(result);
+	}
+
 	// Extract schema from sampled row nodes, considering user-provided column types
 	unordered_map<string, LogicalType> user_specified_types;
 	unordered_map<string, LogicalType> detected_types;
@@ -493,16 +519,6 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		const bool user_specified = user_specified_types.find(col) != user_specified_types.end();
 		return_types.push_back(sample_truncated && !user_specified ? WidenSampledIntegers(detected_types[col])
 		                                                           : detected_types[col]);
-	}
-
-	// Special handling for non-map documents
-	if (names.empty() && !sample_nodes.empty()) {
-		names.emplace_back("value");
-		if (options.auto_detect_types) {
-			return_types.emplace_back(DetectYAMLType(sample_nodes[0]));
-		} else {
-			return_types.emplace_back(LogicalType::VARCHAR);
-		}
 	}
 
 	// Save schema
@@ -861,10 +877,23 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 				while (lstate.current_row_index < lstate.file_nodes.size() && output_idx < STANDARD_VECTOR_SIZE) {
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
-					if (bind_data.names.size() == 1 && bind_data.names[0] == "value") {
+					if (bind_data.row_is_value) {
 						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 						output.SetValue(0, output_idx, val);
 					} else {
+						if (!node.IsMap()) {
+							// A row that does not fit the columns: after the sample, or against explicit columns
+							if (!bind_data.options.ignore_errors) {
+								throw InvalidInputException(
+								    "Cannot read row %s as columns, because it is not a map. A schema comes from a "
+								    "sample of the rows. Increase 'sample_size' (-1 reads every row), or set "
+								    "'ignore_errors' to skip this row.",
+								    node.IsScalar() ? "\"" + node.Scalar().substr(0, 100) + "\""
+								                    : string("a sequence"));
+							}
+							lstate.current_row_index++;
+							continue;
+						}
 						idx_t col_idx = 0;
 						if (bind_data.options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
 							for (idx_t fm_idx = 0; fm_idx < fm_col_count; fm_idx++) {

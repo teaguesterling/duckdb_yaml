@@ -11,7 +11,10 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cmath>
+#include <cstdlib>
+#include <limits>
 
 namespace duckdb {
 
@@ -167,12 +170,143 @@ bool IsStringScalar(const YAML::Node &node) {
 	return node.IsScalar() && (node.Tag() == "!" || node.Tag() == "tag:yaml.org,2002:str");
 }
 
-// Whether writing this string scalar plain would change how it reads back. yaml-cpp's emitter
-// writes any string plain when it can, so "123" would come back as the number 123.
+static bool AllCharsIn(const std::string &value, size_t start, const char *chars) {
+	return start < value.size() && value.find_first_not_of(chars, start) == std::string::npos;
+}
+
+bool ParseCoreInteger(const std::string &value, int64_t &result) {
+	int base;
+	size_t digits_start = 0;
+	if (value.size() > 2 && value[0] == '0' && value[1] == 'x') {
+		base = 16;
+		digits_start = 2;
+		if (!AllCharsIn(value, digits_start, "0123456789abcdefABCDEF")) {
+			return false;
+		}
+	} else if (value.size() > 2 && value[0] == '0' && value[1] == 'o') {
+		base = 8;
+		digits_start = 2;
+		if (!AllCharsIn(value, digits_start, "01234567")) {
+			return false;
+		}
+	} else {
+		base = 10;
+		const size_t sign = !value.empty() && (value[0] == '-' || value[0] == '+') ? 1 : 0;
+		if (!AllCharsIn(value, sign, "0123456789")) {
+			return false;
+		}
+	}
+	errno = 0;
+	result = std::strtoll(value.c_str() + digits_start, nullptr, base);
+	return errno != ERANGE;
+}
+
+bool ParseCoreFloat(const std::string &value, double &result) {
+	if (value == ".nan" || value == ".NaN" || value == ".NAN") {
+		result = std::numeric_limits<double>::quiet_NaN();
+		return true;
+	}
+	size_t pos = !value.empty() && (value[0] == '-' || value[0] == '+') ? 1 : 0;
+	const std::string unsigned_value = value.substr(pos);
+	if (unsigned_value == ".inf" || unsigned_value == ".Inf" || unsigned_value == ".INF") {
+		result = value[0] == '-' ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
+		return true;
+	}
+	// [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, with a fraction or an exponent. strtod alone is wider: it
+	// also reads hexadecimal floats and the words inf and nan.
+	const auto skip_digits = [&]() {
+		const size_t start = pos;
+		while (pos < value.size() && value[pos] >= '0' && value[pos] <= '9') {
+			pos++;
+		}
+		return pos - start;
+	};
+	const size_t int_digits = skip_digits();
+	size_t fraction_digits = 0;
+	bool has_point = false;
+	if (pos < value.size() && value[pos] == '.') {
+		has_point = true;
+		pos++;
+		fraction_digits = skip_digits();
+	}
+	if (int_digits == 0 && fraction_digits == 0) {
+		return false;
+	}
+	bool has_exponent = false;
+	if (pos < value.size() && (value[pos] == 'e' || value[pos] == 'E')) {
+		has_exponent = true;
+		pos++;
+		if (pos < value.size() && (value[pos] == '-' || value[pos] == '+')) {
+			pos++;
+		}
+		if (skip_digits() == 0) {
+			return false;
+		}
+	}
+	if (pos != value.size() || (!has_point && !has_exponent)) {
+		return false;
+	}
+	errno = 0;
+	result = std::strtod(value.c_str(), nullptr);
+	return errno != ERANGE;
+}
+
+YAMLCoreKind ClassifyPlainScalar(const std::string &value) {
+	if (value.empty() || value == "~" || value == "null" || value == "Null" || value == "NULL") {
+		return YAMLCoreKind::NULL_VALUE;
+	}
+	if (value == "true" || value == "True" || value == "TRUE" || value == "false" || value == "False" ||
+	    value == "FALSE") {
+		return YAMLCoreKind::BOOLEAN;
+	}
+	int64_t int_value;
+	if (ParseCoreInteger(value, int_value)) {
+		return YAMLCoreKind::INTEGER;
+	}
+	double float_value;
+	if (ParseCoreFloat(value, float_value)) {
+		return YAMLCoreKind::FLOAT;
+	}
+	return YAMLCoreKind::STRING;
+}
+
+bool TryParseTimestampWithOffset(const std::string &value, timestamp_t &result) {
+	bool has_offset = false;
+	string_t time_zone(nullptr, 0);
+	return Timestamp::TryConvertTimestampTZ(value.c_str(), value.size(), result, true, has_offset, time_zone) ==
+	           TimestampCastResult::SUCCESS &&
+	       has_offset && time_zone.GetSize() == 0;
+}
+
+// A string that is a string under the 1.2 core schema, but that a YAML 1.1 parser or a looser number parser reads as
+// something else. Most YAML parsers in use follow 1.1, so these stay quoted.
+static bool IsAmbiguousAcrossYAMLVersions(const std::string &value) {
+	std::string lower_value = value;
+	std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
+	if (lower_value == "y" || lower_value == "n" || lower_value == "yes" || lower_value == "no" ||
+	    lower_value == "on" || lower_value == "off" || lower_value == "true" || lower_value == "false" ||
+	    lower_value == "null") {
+		return true;
+	}
+	if (value.empty() ||
+	    (!StringUtil::CharacterIsDigit(value[0]) && value[0] != '-' && value[0] != '+' && value[0] != '.')) {
+		return false;
+	}
+	if (value.find_first_not_of("-+0123456789_") == std::string::npos ||
+	    (value.size() > 2 && lower_value.compare(0, 2, "0b") == 0)) {
+		return true; // 1_000 and 0b101 are integers in YAML 1.1
+	}
+	char *parse_end;
+	std::strtod(value.c_str(), &parse_end);
+	return parse_end == value.c_str() + value.size(); // 0X1F, and .InF on the parsers that fold case
+}
+
+// Whether writing this string scalar plain could read back as something else: here, or in another parser. yaml-cpp's
+// emitter writes any string plain when it can, so "123" would come back as the number 123.
 static bool ChangesWhenPlain(const YAML::Node &node) {
-	const YAML::Node plain(node.Scalar());
-	return YAMLReader::DetectYAMLType(plain) != YAMLReader::DetectYAMLType(node) ||
-	       YAMLNodeToJSON(plain) != YAMLNodeToJSON(node);
+	const auto &value = node.Scalar();
+	return ClassifyPlainScalar(value) != YAMLCoreKind::STRING || IsAmbiguousAcrossYAMLVersions(value) ||
+	       YAMLReader::DetectYAMLType(YAML::Node(value)) != LogicalType::VARCHAR;
 }
 
 // yaml-cpp writes every literal block as a bare `|`, which means "exactly one trailing newline". It has no way to
@@ -335,10 +469,11 @@ static bool TryDetectDateOrTimestamp(const std::string &value, std::string &json
 		return true;
 	}
 
-	// Try to parse as timestamp
+	// Try to parse as timestamp. With an offset, the instant in UTC.
 	timestamp_t timestamp_result;
-	if (Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result, false) ==
-	    TimestampCastResult::SUCCESS) {
+	if (TryParseTimestampWithOffset(value, timestamp_result) ||
+	    Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result, false) ==
+	        TimestampCastResult::SUCCESS) {
 		// Successfully parsed as timestamp, format it in ISO 8601 format with Z suffix for JSON compatibility
 		auto timestamp_str = Timestamp::ToString(timestamp_result);
 		// Check if timestamp already has timezone info
@@ -424,56 +559,29 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 			return TryDetectDateOrTimestamp(value, json_value) ? json_value : EscapeJSONString(value);
 		}
 
-		// Check for boolean values (case-insensitive)
-		std::string lower_value = value;
-		std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
-
-		if (lower_value == "true" || lower_value == "yes" || lower_value == "on" || lower_value == "y" ||
-		    lower_value == "t") {
-			return "true";
-		} else if (lower_value == "false" || lower_value == "no" || lower_value == "off" || lower_value == "n" ||
-		           lower_value == "f") {
-			return "false";
-		} else if (lower_value == "null" || value == "~" || value == "") {
+		switch (ClassifyPlainScalar(value)) {
+		case YAMLCoreKind::NULL_VALUE:
 			return "null";
+		case YAMLCoreKind::BOOLEAN:
+			return value[0] == 't' || value[0] == 'T' ? "true" : "false";
+		case YAMLCoreKind::INTEGER: {
+			// In the decimal form that JSON requires, for 0x1F, 0o17, 007 and +7
+			int64_t int_value = 0;
+			ParseCoreInteger(value, int_value);
+			return std::to_string(int_value);
 		}
-
-		// Try to parse as number (integer first, then double)
-		try {
-			// Skip numeric detection for values that look like dates/times
-			bool might_be_temporal = false;
-			if (value.find('-') != std::string::npos || value.find(':') != std::string::npos) {
-				might_be_temporal = true;
+		case YAMLCoreKind::FLOAT: {
+			double float_value = 0;
+			ParseCoreFloat(value, float_value);
+			if (std::isinf(float_value)) {
+				return float_value < 0 ? "\"-Infinity\"" : "\"Infinity\"";
+			} else if (std::isnan(float_value)) {
+				return "\"NaN\"";
 			}
-
-			if (!might_be_temporal) {
-				// TryCast, not Value::DefaultCastAs: that throws for every string that is not a number, which is the
-				// common case, and this runs once per scalar.
-				const string_t value_str(value.c_str(), static_cast<uint32_t>(value.size()));
-				int64_t int_val;
-				// If casting succeeded and the result converts back to the same string, it's a valid integer
-				if (TryCast::Operation<string_t, int64_t>(value_str, int_val, false) &&
-				    Value::BIGINT(int_val).ToString() == value) {
-					return value; // It's an integer, return as is
-				}
-
-				double numeric_val;
-				if (TryCast::Operation<string_t, double>(value_str, numeric_val, false)) {
-					// Check for special floating point values
-					if (std::isinf(numeric_val)) {
-						return value[0] == '-' ? "\"-Infinity\"" : "\"Infinity\"";
-					} else if (std::isnan(numeric_val)) {
-						return "\"NaN\"";
-					}
-
-					// Check if the double converts back to the same string representation
-					if (Value::DOUBLE(numeric_val).ToString() == value) {
-						return value; // It's a double, return as is
-					}
-				}
-			}
-		} catch (...) {
-			// Not a number, continue with other type detection
+			return Value::DOUBLE(float_value).ToString();
+		}
+		case YAMLCoreKind::STRING:
+			break;
 		}
 
 		// Try to detect date/timestamp/time

@@ -67,13 +67,13 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
 
 	for (const auto &doc : docs) {
 		if (doc.IsSequence() && expand_root_sequence) {
-			// Each item in the sequence becomes a row
+			// Each item in the sequence becomes a row. A null holds no data.
 			for (size_t idx = 0; idx < doc.size(); idx++) {
-				if (doc[idx].IsMap()) { // Only add map nodes as rows
+				if (!doc[idx].IsNull()) {
 					row_nodes.push_back(doc[idx]);
 				}
 			}
-		} else if (doc.IsMap()) {
+		} else if (!doc.IsNull()) {
 			// Document itself becomes a row
 			row_nodes.push_back(doc);
 		}

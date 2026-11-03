@@ -1,6 +1,6 @@
 # Type Detection
 
-The YAML extension includes comprehensive automatic type detection, inferring appropriate DuckDB types from YAML values.
+The YAML extension infers DuckDB types from YAML values. It follows the [YAML 1.2 core schema](https://yaml.org/spec/1.2.2/#103-core-schema): a plain scalar that the schema does not call a null, a boolean or a number is a string. Dates and times are DuckDB's addition, as in `read_json`.
 
 ## Overview
 
@@ -63,9 +63,7 @@ ts2: 2024-01-15T14:30:00+05:00
 ts3: 2024-01-15 14:30:00
 ```
 
-!!! warning "UTC offsets are not applied"
-    `2024-01-15T14:30:00+05:00` reads as `2024-01-15 14:30:00`, so the offset is lost and the instant is wrong.
-    To keep the offset, read the column as VARCHAR with `columns` and convert it to `TIMESTAMPTZ` yourself.
+A timestamp with `Z` or a UTC offset is `TIMESTAMP WITH TIME ZONE`, so it keeps its instant: `2024-01-15T14:30:00+05:00` is `2024-01-15 09:30:00+00`. Without one, it is `TIMESTAMP`.
 
 ### Numeric Types
 
@@ -93,45 +91,31 @@ large: 9223372036854775807
 decimal: 3.14159
 ```
 
-A number in another form reads as the number that it means, with the smallest type that holds it. `1e3` is SMALLINT `1000`, and `0x1F` is TINYINT `31`.
+Integers can be decimal with an optional sign, `0o17` (octal, 15) or `0x1F` (hexadecimal, 31). A leading zero does not mean octal: `007` is 7.
 
-A number with `-` in its exponent, such as `1.23e-4`, reads as VARCHAR. To read it as a number, set the column type with `columns`.
+A fraction or an exponent makes a float, even when the value is whole: `1.0` and `1e3` are `DOUBLE`.
+
+A value that DuckDB cannot hold without changing it, such as `9223372036854775808` or `1e400`, is `VARCHAR`, so the text is kept. Other forms, such as `1_000`, `0X1F` and `0b101`, are not core numbers and are also `VARCHAR`.
 
 #### Special Float Values
 
-`inf`, `-inf` and `nan` read as DOUBLE. The YAML forms `.inf`, `-.inf` and `.nan` read as VARCHAR.
+The core forms are `.inf`, `.Inf`, `.INF`, `.nan`, `.NaN` and `.NAN`, and infinity can have a sign. Other spellings, such as `inf` and `nan`, are `VARCHAR`.
 
 ```yaml
-infinity: inf   # DOUBLE
-yaml_form: .inf # VARCHAR
+infinity: .inf
+negative_infinity: -.inf
+not_a_number: .nan
+word: inf          # VARCHAR
 ```
 
 ### Boolean Type
 
-All recognized as BOOLEAN:
+The core forms are `true`, `True`, `TRUE`, `false`, `False` and `FALSE`.
 
-| True Values | False Values |
-|-------------|--------------|
-| `true` | `false` |
-| `True` | `False` |
-| `TRUE` | `FALSE` |
-| `yes` | `no` |
-| `Yes` | `No` |
-| `YES` | `NO` |
-| `on` | `off` |
-| `On` | `Off` |
-| `ON` | `OFF` |
-| `y` | `n` |
-| `Y` | `N` |
-| `t` | `f` |
-| `T` | `F` |
+YAML 1.1 also used `yes`, `no`, `on`, `off`, `y` and `n`. In YAML 1.2 these are strings, so `country: NO` is the string `NO`. To read them as booleans, set the column type:
 
-```yaml
-# All detected as BOOLEAN
-active: true
-enabled: yes
-running: on
-confirmed: Y
+```sql
+SELECT * FROM read_yaml('data.yaml', columns = {'enabled': 'BOOLEAN'});
 ```
 
 ### NULL Values
@@ -165,7 +149,7 @@ Quotes decide the type. A quoted or block scalar is a string, so it never become
 zip: "01234"       # VARCHAR '01234'
 zip: 01234         # SMALLINT 1234
 country: "NO"      # VARCHAR 'NO'
-country: NO        # BOOLEAN false
+country: NO        # VARCHAR 'NO', also with no quotes
 missing: "null"    # VARCHAR 'null'
 missing: null      # NULL
 ```
@@ -179,7 +163,7 @@ at: "14:30"        # TIME
 
 To keep these values as text, set `auto_detect = false` or set the column type with `columns`. See [Controlling Type Detection](#controlling-type-detection).
 
-Writing keeps this rule. `value_to_yaml` and `COPY ... (FORMAT yaml)` quote a VARCHAR when its plain form would read back as a different type.
+Writing keeps this rule. `value_to_yaml` and `COPY ... (FORMAT yaml)` quote a VARCHAR when its plain form could read back as a different type, in this extension or in another YAML parser. So `'2024-01-15'`, `'14:30'` and `'yes'` are written with quotes.
 
 ## Array Detection
 

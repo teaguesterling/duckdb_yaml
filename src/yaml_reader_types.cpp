@@ -33,21 +33,34 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		// may still be detected as a date, time or timestamp below.
 		const bool is_string = yaml_utils::IsStringScalar(node);
 
-		// Check for null values
-		if (scalar_value == "null" || scalar_value == "~" || scalar_value.empty()) {
-			return LogicalType::VARCHAR; // Will be NULL in the actual data
+		if (!is_string) {
+			switch (yaml_utils::ClassifyPlainScalar(scalar_value)) {
+			case yaml_utils::YAMLCoreKind::NULL_VALUE:
+				return LogicalType::VARCHAR; // Will be NULL in the actual data
+			case yaml_utils::YAMLCoreKind::BOOLEAN:
+				return LogicalType::BOOLEAN;
+			case yaml_utils::YAMLCoreKind::INTEGER: {
+				int64_t int_val = 0;
+				yaml_utils::ParseCoreInteger(scalar_value, int_val);
+				if (int_val >= -128 && int_val <= 127) {
+					return LogicalType::TINYINT;
+				} else if (int_val >= -32768 && int_val <= 32767) {
+					return LogicalType::SMALLINT;
+				} else if (int_val >= -2147483648LL && int_val <= 2147483647LL) {
+					return LogicalType::INTEGER;
+				}
+				return LogicalType::BIGINT;
+			}
+			case yaml_utils::YAMLCoreKind::FLOAT:
+				return LogicalType::DOUBLE;
+			case yaml_utils::YAMLCoreKind::STRING:
+				break;
+			}
+		} else if (scalar_value.empty()) {
+			return LogicalType::VARCHAR;
 		}
 
-		// Check for boolean values (case-insensitive)
-		std::string lower_value = scalar_value;
-		std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), ::tolower);
-
-		if (!is_string && (lower_value == "true" || lower_value == "false" || lower_value == "yes" ||
-		                   lower_value == "no" || lower_value == "on" || lower_value == "off" || lower_value == "y" ||
-		                   lower_value == "n" || lower_value == "t" || lower_value == "f")) {
-			return LogicalType::BOOLEAN;
-		}
-
+		// Dates and times are DuckDB's addition to the core schema. Like read_json, a quoted one is still detected.
 		// Skip numeric detection for values that might be dates/times
 		bool might_be_temporal = false;
 		if (scalar_value.find('-') != std::string::npos || scalar_value.find(':') != std::string::npos ||
@@ -68,8 +81,11 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 					return LogicalType::DATE;
 				}
 
-				// Try to parse as timestamp
+				// Try to parse as timestamp. An offset gives an instant, which TIMESTAMP cannot hold.
 				timestamp_t timestamp_result;
+				if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result)) {
+					return LogicalType::TIMESTAMP_TZ;
+				}
 				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result,
 				                                   false) == TimestampCastResult::SUCCESS) {
 					return LogicalType::TIMESTAMP;
@@ -85,55 +101,6 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 			}
 		}
 
-		if (!might_be_temporal && !is_string) {
-			// Check for special floating point values first
-			if (lower_value == "inf" || lower_value == "infinity") {
-				return LogicalType::DOUBLE;
-			} else if (lower_value == "-inf" || lower_value == "-infinity") {
-				return LogicalType::DOUBLE;
-			} else if (lower_value == "nan") {
-				return LogicalType::DOUBLE;
-			}
-
-			// strtoll and strtod, not std::stoll and std::stod: those throw for every string that is not a number,
-			// which is the common case. A failed conversion or a value out of range is not a number.
-			const char *number_start = scalar_value.c_str();
-			const char *number_end = number_start + scalar_value.size();
-			char *parse_end;
-			errno = 0;
-			const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
-			if (parse_end != number_start && errno != ERANGE) {
-				if (parse_end == number_end) {
-					// Choose appropriate integer type based on value
-					if (int_val >= -128 && int_val <= 127) {
-						return LogicalType::TINYINT;
-					} else if (int_val >= -32768 && int_val <= 32767) {
-						return LogicalType::SMALLINT;
-					} else if (int_val >= -2147483648LL && int_val <= 2147483647LL) {
-						return LogicalType::INTEGER;
-					} else {
-						return LogicalType::BIGINT;
-					}
-				}
-
-				// Try double
-				errno = 0;
-				const double double_val = std::strtod(number_start, &parse_end);
-				if (parse_end == number_end && errno != ERANGE) {
-					// Check for special floating point values
-					if (std::isinf(double_val) || std::isnan(double_val)) {
-						return LogicalType::DOUBLE;
-					}
-					// Check if it's a whole number that was written with decimal point
-					if (double_val == std::floor(double_val) && double_val >= std::numeric_limits<int64_t>::min() &&
-					    double_val <= std::numeric_limits<int64_t>::max()) {
-						// It's a whole number, use integer type
-						return DetectYAMLTypeImpl(YAML::Node(std::to_string(static_cast<int64_t>(double_val))), budget);
-					}
-					return LogicalType::DOUBLE;
-				}
-			}
-		}
 		return LogicalType::VARCHAR;
 	}
 	case YAML::NodeType::Sequence: {
@@ -275,24 +242,19 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 // Helper function to convert YAML node to DuckDB value.
 // Budget-carrying worker (see DetectYAMLTypeImpl) — bounds recursion depth and
 // total node expansion so alias-bombed / deeply-nested input fails cleanly.
-// The same rules as number detection in DetectYAMLTypeImpl, so that a value reads as what detection saw: 0x1F is 31 and
-// 1e3 is 1000. A partial number, such as 12abc, is not a number.
+// A value reads as what detection saw: 0x1F is 31. A partial number, such as 12abc, is not a number.
 static bool TryParseYAMLInteger(const std::string &scalar_value, int64_t &result) {
+	if (yaml_utils::ParseCoreInteger(scalar_value, result)) {
+		return true;
+	}
+	// A whole float, such as 1e3, also fits a column typed as an integer
 	const char *number_start = scalar_value.c_str();
 	const char *number_end = number_start + scalar_value.size();
 	char *parse_end;
 	errno = 0;
-	const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
-	if (parse_end == number_start) {
-		return false;
-	}
-	if (parse_end == number_end) {
-		result = int_val;
-		return errno != ERANGE;
-	}
-	errno = 0;
 	const double double_val = std::strtod(number_start, &parse_end);
-	if (parse_end != number_end || errno == ERANGE || double_val != std::floor(double_val)) {
+	if (parse_end == number_start || parse_end != number_end || errno == ERANGE ||
+	    double_val != std::floor(double_val)) {
 		return false;
 	}
 	// 2^63 is the first double that does not fit
@@ -414,7 +376,12 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			}
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::DOUBLE) {
-			// Handle special floating point values
+			double core_value;
+			if (yaml_utils::ParseCoreFloat(scalar_value, core_value)) {
+				return Value::DOUBLE(core_value);
+			}
+
+			// A column typed as DOUBLE also accepts other spellings
 			std::string lower_val = scalar_value;
 			std::transform(lower_val.begin(), lower_val.end(), lower_val.begin(), ::tolower);
 
@@ -446,9 +413,19 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIMESTAMP) {
 			timestamp_t timestamp_result;
-			if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
-			    TimestampCastResult::SUCCESS) {
+			// With an offset, the instant in UTC, as a cast to TIMESTAMP gives
+			if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result) ||
+			    Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
+			        TimestampCastResult::SUCCESS) {
 				return Value::TIMESTAMP(timestamp_result);
+			}
+			return MismatchedValue(node, target_type, strict);
+		} else if (target_type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+			timestamp_t timestamp_result;
+			if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result) ||
+			    Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
+			        TimestampCastResult::SUCCESS) {
+				return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_result));
 			}
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIME) {

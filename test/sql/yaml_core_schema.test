@@ -1,0 +1,177 @@
+# name: test/sql/yaml_core_schema.test
+# description: A plain scalar reads by the YAML 1.2 core schema. What the schema does not call a number or a boolean is a string.
+# group: [sql]
+
+require yaml
+
+require json
+
+#--- Booleans: only the six core forms
+query IIIIII
+SELECT typeof(a), typeof(b), typeof(c), typeof(d), typeof(e), typeof(f) FROM parse_yaml('{a: true, b: True, c: TRUE, d: false, e: False, f: FALSE}');
+----
+BOOLEAN	BOOLEAN	BOOLEAN	BOOLEAN	BOOLEAN	BOOLEAN
+
+# YAML 1.1 words are strings in 1.2, so `country: NO` is the string it looks like
+query IIIIIIII
+SELECT a, b, c, d, e, f, g, h FROM parse_yaml('{a: yes, b: no, c: on, d: off, e: y, f: n, g: NO, h: tRuE}');
+----
+yes	no	on	off	y	n	NO	tRuE
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: yes');
+----
+VARCHAR
+
+query I
+SELECT yaml_to_json('{a: yes, b: true, c: NO}'::YAML);
+----
+{"a":"yes","b":true,"c":"NO"}
+
+# A column that the user types as BOOLEAN still accepts them
+statement ok
+COPY (SELECT E'- a: yes\n- a: off') TO '__TEST_DIR__/words.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/words.yaml', columns={'a': 'BOOLEAN'});
+----
+true
+false
+
+#--- Integers: decimal with a sign, 0o octal and 0x hexadecimal
+query IIIIII
+SELECT a, b, c, d, e, f FROM parse_yaml('{a: 42, b: -7, c: +7, d: 007, e: 0o17, f: 0x1F}');
+----
+42	-7	7	7	15	31
+
+query II
+SELECT typeof(a), typeof(b) FROM parse_yaml('{a: 0o17, b: 0x1F}');
+----
+TINYINT	TINYINT
+
+# Not core integers, so strings: a sign on hex, upper-case prefixes, separators, binary, a hexadecimal float
+query IIIIII
+SELECT a, b, c, d, e, f FROM parse_yaml('{a: -0x1F, b: 0X1F, c: 0O17, d: 1_000, e: 0b101, f: 0x1p3}');
+----
+-0x1F	0X1F	0O17	1_000	0b101	0x1p3
+
+# Too large for a number that DuckDB infers: kept as text and not rounded
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 9223372036854775808');
+----
+VARCHAR	9223372036854775808
+
+#--- Floats: a fraction or an exponent makes a float, even when the value is whole
+query IIII
+SELECT typeof(a), typeof(b), typeof(c), typeof(d) FROM parse_yaml('{a: 1.0, b: 1e3, c: 1.23e-4, d: .5}');
+----
+DOUBLE	DOUBLE	DOUBLE	DOUBLE
+
+query IIII
+SELECT a, b, c, d FROM parse_yaml('{a: 1.0, b: 1e3, c: 1.23e-4, d: .5}');
+----
+1.0	1000.0	0.000123	0.5
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: 5.');
+----
+DOUBLE
+
+# The core forms of infinity and not-a-number
+query IIIIII
+SELECT typeof(a), a > 1e308, b < -1e308, c > 1e308, isnan(d), isnan(e) FROM parse_yaml('{a: .inf, b: -.Inf, c: +.INF, d: .nan, e: .NaN}');
+----
+DOUBLE	true	true	true	true	true
+
+# Other spellings are strings
+query IIII
+SELECT a, b, c, d FROM parse_yaml('{a: inf, b: infinity, c: nan, d: .InF}');
+----
+inf	infinity	nan	.InF
+
+# A float out of range is kept as text and not read as infinity
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 1e400');
+----
+VARCHAR	1e400
+
+#--- yaml_to_json writes valid JSON numbers for every core form
+query I
+SELECT yaml_to_json('{a: 0x1F, b: 0o17, c: 007, d: +7, e: 1e3, f: .5, g: 5., h: .inf, i: -.inf, j: .nan}'::YAML);
+----
+{"a":31,"b":15,"c":7,"d":7,"e":1000.0,"f":0.5,"g":5.0,"h":"Infinity","i":"-Infinity","j":"NaN"}
+
+query I
+SELECT yaml_structure('{a: yes, b: true, c: 0x1F, d: 1e3, e: .inf, f: inf, g: null}'::YAML);
+----
+{"a":"VARCHAR","b":"BOOLEAN","c":"UBIGINT","d":"DOUBLE","e":"DOUBLE","f":"VARCHAR","g":"NULL"}
+
+#--- Nulls: the core forms
+query IIII
+SELECT a, b, c, d FROM parse_yaml('{a: null, b: Null, c: NULL, d: ~}');
+----
+NULL	NULL	NULL	NULL
+
+query I
+SELECT a FROM parse_yaml('a: nULL');
+----
+nULL
+
+#--- Quotes still decide: a quoted scalar is a string
+query IIII
+SELECT typeof(a), typeof(b), typeof(c), typeof(d) FROM parse_yaml('{a: "true", b: "0x1F", c: "1e3", d: ".inf"}');
+----
+VARCHAR	VARCHAR	VARCHAR	VARCHAR
+
+#--- Dates and times are DuckDB's addition to the schema. An offset keeps its instant.
+query III
+SELECT typeof(a), typeof(b), typeof(c) FROM parse_yaml('{a: 2024-01-15, b: 14:30:00, c: 2024-01-15T14:30:00}');
+----
+DATE	TIME	TIMESTAMP
+
+query II
+SELECT typeof(a), a = TIMESTAMPTZ '2024-01-15 09:30:00+00' FROM parse_yaml('a: 2024-01-15T14:30:00+05:00');
+----
+TIMESTAMP WITH TIME ZONE	true
+
+query II
+SELECT typeof(a), a = TIMESTAMPTZ '2024-01-15 14:30:00+00' FROM parse_yaml('a: 2024-01-15T14:30:00Z');
+----
+TIMESTAMP WITH TIME ZONE	true
+
+# The same instant in JSON
+query I
+SELECT yaml_to_json('a: 2024-01-15T14:30:00+05:00'::YAML);
+----
+{"a":"2024-01-15 09:30:00Z"}
+
+#--- Writing: a string that another parser could read as something else is quoted
+query IIII
+SELECT value_to_yaml('2024-01-15'), value_to_yaml('14:30'), value_to_yaml('14:30:00'), value_to_yaml('2024-01-15T14:30:00');
+----
+"2024-01-15"	"14:30"	"14:30:00"	"2024-01-15T14:30:00"
+
+# Our reader treats the 1.1 words as strings, but YAML 1.1 parsers do not, so the writer still quotes them
+query IIII
+SELECT value_to_yaml('yes'), value_to_yaml('NO'), value_to_yaml('on'), value_to_yaml('y');
+----
+"yes"	"NO"	"on"	"y"
+
+query IIII
+SELECT value_to_yaml('.inf'), value_to_yaml('0o17'), value_to_yaml('1e3'), value_to_yaml('null');
+----
+".inf"	"0o17"	"1e3"	"null"
+
+query II
+SELECT value_to_yaml('plain'), value_to_yaml('inf');
+----
+plain	inf
+
+# Each of those reads back as the same string
+statement ok
+COPY (SELECT * FROM (VALUES ('2024-01-15'), ('14:30'), ('yes'), ('.inf'), ('0o17'), ('1e3'), ('null'), ('plain')) t(s)) TO '__TEST_DIR__/rt.yaml' (FORMAT yaml, LAYOUT sequence);
+
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/rt.yaml', columns={'s': 'VARCHAR'}) WHERE s IN ('2024-01-15', '14:30', 'yes', '.inf', '0o17', '1e3', 'null', 'plain');
+----
+8
