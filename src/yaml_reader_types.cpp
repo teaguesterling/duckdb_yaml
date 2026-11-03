@@ -1,4 +1,6 @@
 #include "yaml_reader.hpp"
+#include <cerrno>
+#include <cstdlib>
 #include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "duckdb_compat.hpp"
@@ -93,11 +95,15 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 				return LogicalType::DOUBLE;
 			}
 
-			try {
-				// Try integer
-				size_t pos;
-				int64_t int_val = std::stoll(scalar_value, &pos);
-				if (pos == scalar_value.size()) {
+			// strtoll and strtod, not std::stoll and std::stod: those throw for every string that is not a number,
+			// which is the common case. A failed conversion or a value out of range is not a number.
+			const char *number_start = scalar_value.c_str();
+			const char *number_end = number_start + scalar_value.size();
+			char *parse_end;
+			errno = 0;
+			const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
+			if (parse_end != number_start && errno != ERANGE) {
+				if (parse_end == number_end) {
 					// Choose appropriate integer type based on value
 					if (int_val >= -128 && int_val <= 127) {
 						return LogicalType::TINYINT;
@@ -111,8 +117,9 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 				}
 
 				// Try double
-				double double_val = std::stod(scalar_value, &pos);
-				if (pos == scalar_value.size()) {
+				errno = 0;
+				const double double_val = std::strtod(number_start, &parse_end);
+				if (parse_end == number_end && errno != ERANGE) {
 					// Check for special floating point values
 					if (std::isinf(double_val) || std::isnan(double_val)) {
 						return LogicalType::DOUBLE;
@@ -125,8 +132,6 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 					}
 					return LogicalType::DOUBLE;
 				}
-			} catch (...) {
-				// Not a number
 			}
 		}
 		return LogicalType::VARCHAR;

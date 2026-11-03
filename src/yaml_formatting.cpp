@@ -26,8 +26,8 @@ std::string ApplySequenceLayout(const std::string &yaml_str) {
 	return result;
 }
 
-std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_first_document, bool is_block_style) {
-	if (!is_block_style || is_first_document) {
+std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_block_style) {
+	if (!is_block_style) {
 		return yaml_str;
 	}
 
@@ -47,14 +47,14 @@ std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat for
 	return yaml_str;
 }
 
-std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout, yaml_utils::YAMLFormat format,
-                                 idx_t row_index) {
+std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout, yaml_utils::YAMLFormat format) {
 	if (layout == YAMLLayout::SEQUENCE) {
 		return ApplySequenceLayout(yaml_str);
 	} else if (layout == YAMLLayout::DOCUMENT) {
-		bool is_first_document = (row_index == 0);
+		// Every document gets a separator, including the first. This runs per data chunk, so it cannot tell which row
+		// is first in the file, and skipping the first row of each chunk merged that row into the previous document.
 		bool is_block_style = (format == yaml_utils::YAMLFormat::BLOCK);
-		return ApplyDocumentSeparator(yaml_str, is_first_document, is_block_style);
+		return ApplyDocumentSeparator(yaml_str, is_block_style);
 	}
 
 	// Fallback - return as-is
