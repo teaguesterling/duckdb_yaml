@@ -244,7 +244,7 @@ static void CopyFormatYAMLFunction(DataChunk &args, ExpressionState &state, Vect
 			std::string yaml_str = yaml_utils::ValueToYAMLString(value, format, string_style, indent);
 
 			// Apply layout-specific formatting
-			yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format, row_idx);
+			yaml_str = yaml_formatting::PostProcessForLayout(yaml_str, layout, format);
 
 			result.SetValue(row_idx, Value(yaml_str));
 		} catch (const std::exception &e) {
