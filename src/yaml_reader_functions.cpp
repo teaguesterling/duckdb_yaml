@@ -173,6 +173,8 @@ struct YAMLReadRowsBindData : public TableFunctionData {
 	// FRONTMATTER mode: metadata column info from first document
 	vector<string> frontmatter_names;
 	vector<LogicalType> frontmatter_types;
+
+	YAMLColumnFormats column_formats;
 };
 
 // Bind data structure for read_yaml_objects (immutable after bind)
@@ -376,6 +378,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 						LogicalType type;
 						if (options.auto_detect_types) {
 							type = DetectYAMLType(it->second);
+							DetectColumnFormats(type, {it->second}, key, result->column_formats);
 						} else {
 							type = LogicalType::VARCHAR;
 						}
@@ -413,6 +416,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			sampled_rows++;
 		}
 		LogicalType list_element_type = DetectJaggedYAMLType(sample_nodes);
+		DetectColumnFormats(list_element_type, sample_nodes, string(), result->column_formats);
 		if (sample_truncated) {
 			list_element_type = WidenSampledIntegers(list_element_type);
 		}
@@ -449,6 +453,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			const bool mixed_kinds = std::any_of(sample_nodes.begin(), sample_nodes.end(),
 			                                     [&](const YAML::Node &node) { return node.Type() != kind; });
 			value_type = mixed_kinds ? YAMLTypes::YAMLType() : DetectJaggedYAMLType(sample_nodes);
+			DetectColumnFormats(value_type, sample_nodes, string(), result->column_formats);
 			if (sample_truncated) {
 				value_type = WidenSampledIntegers(value_type);
 			}
@@ -517,6 +522,15 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	for (const auto &col : column_order) {
 		names.push_back(CompatMakeName(col));
 		const bool user_specified = user_specified_types.find(col) != user_specified_types.end();
+		if (options.auto_detect_types && !user_specified) {
+			vector<YAML::Node> column_values;
+			for (const YAML::Node &node : sample_nodes) {
+				if (node.IsMap() && node[col]) {
+					column_values.push_back(node[col]);
+				}
+			}
+			DetectColumnFormats(detected_types[col], column_values, col, result->column_formats);
+		}
 		return_types.push_back(sample_truncated && !user_specified ? WidenSampledIntegers(detected_types[col])
 		                                                           : detected_types[col]);
 	}
@@ -799,7 +813,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 									YAML::Node val = fm[raw_key];
 									if (val) {
 										lstate.frontmatter_values.push_back(YAMLNodeToValue(
-										    val, bind_data.frontmatter_types[i], !bind_data.options.ignore_errors));
+										    val, bind_data.frontmatter_types[i], !bind_data.options.ignore_errors,
+										    &bind_data.column_formats, bind_data.frontmatter_names[i]));
 									} else {
 										lstate.frontmatter_values.push_back(Value(bind_data.frontmatter_types[i]));
 									}
@@ -863,7 +878,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 						element_type = bind_data.types[0];
 					}
 					for (const auto &doc : lstate.file_nodes) {
-						doc_values.push_back(YAMLNodeToValue(doc, element_type, !bind_data.options.ignore_errors));
+						doc_values.push_back(YAMLNodeToValue(doc, element_type, !bind_data.options.ignore_errors,
+						                                     &bind_data.column_formats));
 					}
 					Value list_value = Value::LIST(element_type, doc_values);
 					output.SetValue(0, output_idx, list_value);
@@ -878,7 +894,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 					if (bind_data.row_is_value) {
-						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
+						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors,
+						                            &bind_data.column_formats);
 						output.SetValue(0, output_idx, val);
 					} else {
 						if (!node.IsMap()) {
@@ -907,7 +924,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 							YAML::Node value = node[col_name];
 							Value duckdb_value;
 							if (value) {
-								duckdb_value = YAMLNodeToValue(value, type, !bind_data.options.ignore_errors);
+								duckdb_value = YAMLNodeToValue(value, type, !bind_data.options.ignore_errors,
+								                               &bind_data.column_formats, col_name);
 							} else {
 								duckdb_value = Value(type);
 							}
@@ -1125,6 +1143,7 @@ struct ParseYAMLBindData : public TableFunctionData {
 	vector<YAML::Node> yaml_docs;                                    // Parsed YAML documents
 	vector<string> names;                                            // Column names
 	vector<LogicalType> types;                                       // Column types
+	YAMLColumnFormats column_formats;                                // Format of each non-ISO date column
 	MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS; // How to handle multi-document YAML
 	bool expand_root_sequence = true;                                // Whether to expand top-level sequences
 	bool frontmatter_as_columns = true;                              // For FRONTMATTER mode
@@ -1195,6 +1214,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 
 	// Detect schema from all documents using jagged schema detection
 	LogicalType merged_type = DetectJaggedYAMLType(result->yaml_docs);
+	DetectColumnFormats(merged_type, result->yaml_docs, string(), result->column_formats);
 
 	if (merged_type.id() == LogicalTypeId::STRUCT) {
 		// Struct type - use struct fields as columns
@@ -1245,7 +1265,7 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 				const LogicalType &col_type = bind_data.types[col_idx];
 
 				if (node[col_name]) {
-					Value val = YAMLNodeToValue(node[col_name], col_type);
+					Value val = YAMLNodeToValue(node[col_name], col_type, false, &bind_data.column_formats, col_name);
 					output.SetValue(col_idx, count, val);
 				} else {
 					output.SetValue(col_idx, count, Value(col_type));
@@ -1253,7 +1273,7 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 			}
 		} else if (bind_data.types.size() == 1) {
 			// Non-map node with single column output
-			Value val = YAMLNodeToValue(node, bind_data.types[0]);
+			Value val = YAMLNodeToValue(node, bind_data.types[0], false, &bind_data.column_formats);
 			output.SetValue(0, count, val);
 		}
 		count++;

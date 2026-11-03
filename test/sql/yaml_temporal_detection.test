@@ -87,11 +87,26 @@ SELECT typeof(a), a FROM parse_yaml('a: 2026/11/03');
 ----
 VARCHAR	2026/11/03
 
-# A two-digit year read as the year 26. Text is better than a wrong date.
+# read_json has no naive timestamp at 24:00, but accepts it with an offset. A bare time at 24:00 is valid.
 query II
-SELECT typeof(a), a FROM parse_yaml('a: 26-11-03');
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03T24:00:00');
 ----
-VARCHAR	26-11-03
+VARCHAR	2026-11-03T24:00:00
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 24:00:00');
+----
+VARCHAR	2026-11-03 24:00:00
+
+query II
+SELECT typeof(a), a = TIMESTAMPTZ '2026-11-04 00:00:00+00' FROM parse_yaml('a: 2026-11-03T24:00:00Z');
+----
+TIMESTAMP WITH TIME ZONE	true
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 24:00:00');
+----
+TIME	24:00:00
 
 # A column pinned as a timestamp must not drop an offset or a zone either
 statement ok
