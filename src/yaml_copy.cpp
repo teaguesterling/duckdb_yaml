@@ -33,6 +33,7 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 	string yaml_multiline = ""; // Default to empty, will resolve to "auto"
 	string yaml_indent = "";    // Default to empty, will use "2"
 	bool explicit_start = false;
+	string yaml_document_separator = ""; // Default to empty, will follow the style
 	// Typed off CopyInfo::options rather than spelled out: DuckDB v2.0 rekeyed
 	// that map from case_insensitive_map_t<...> (string keys) to
 	// identifier_map_t<...> (Identifier keys), and the two do not assign to each
@@ -96,6 +97,13 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 				ThrowYAMLCopyParameterException(loption);
 			}
 			explicit_start = kv.second.empty() || kv.second.back().DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
+		} else if (loption == "document_separator") {
+			if (kv.second.size() > 1) {
+				ThrowYAMLCopyParameterException(loption);
+			}
+			const bool value =
+			    kv.second.empty() || kv.second.back().DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
+			yaml_document_separator = value ? "true" : "false";
 		} else if (loption == "encoding") {
 			throw InvalidInputException("Option \"ENCODING\" is not supported for writing - only for reading");
 		} else if (loption == "compression" || loption == "per_thread_output" || loption == "file_size_bytes" ||
@@ -108,10 +116,20 @@ static BoundStatement CopyToYAMLPlan(Binder &binder, CopyStatement &stmt) {
 		}
 	}
 
-	// Only block-style documents have a separator. A sequence item or a flow line needs none.
-	const bool separated = StringUtil::Lower(yaml_layout) != "sequence" && StringUtil::Lower(yaml_style) != "flow";
+	// Block documents need a separator, or rows merge and are lost. A flow line has none by default, and can ask for
+	// one. A sequence has no documents.
+	const bool is_sequence = StringUtil::Lower(yaml_layout) == "sequence";
+	const bool is_flow = StringUtil::Lower(yaml_style) == "flow";
+	if (is_sequence && yaml_document_separator == "true") {
+		throw BinderException("DOCUMENT_SEPARATOR requires LAYOUT document: a sequence has no documents.");
+	}
+	if (!is_flow && !is_sequence && yaml_document_separator == "false") {
+		throw BinderException("DOCUMENT_SEPARATOR cannot be false with STYLE block: the rows would merge and be lost.");
+	}
+	const bool separated = !is_sequence && (!is_flow || yaml_document_separator == "true");
 	if (explicit_start && !separated) {
-		throw BinderException("EXPLICIT_START requires LAYOUT document and STYLE block: other output has no `---`.");
+		throw BinderException("EXPLICIT_START requires output with a `---`: LAYOUT document, and STYLE block or "
+		                      "DOCUMENT_SEPARATOR true.");
 	}
 
 	// Bind the select statement of the original to resolve the types
