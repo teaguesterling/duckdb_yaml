@@ -1,0 +1,118 @@
+# name: test/sql/yaml_multiline_roundtrip.test
+# description: A multi-line string keeps its exact value through every write style, and ENUM strings keep their quotes
+# group: [sql]
+
+require yaml
+
+# A bare `|` block means "exactly one trailing newline". Written for any other string, it changed the value
+# or produced YAML that did not parse. Each case below is a string that a bare `|` cannot represent, or a control.
+statement ok
+CREATE TABLE ml (id INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO ml VALUES
+    (1, E'a\nb'),
+    (2, E'a\nb\n'),
+    (3, E'a\n\nb'),
+    (4, E'a\nb\n\n'),
+    (5, E'  x\ny'),
+    (6, E'\nx'),
+    (7, E'\n'),
+    (8, E'x\n'),
+    (9, E'\ty\nz'),
+    (10, E'a\tb\nc'),
+    (11, E'a\r\nb'),
+    (12, E'a\n  indented\nb'),
+    (13, E'a\n   \nb'),
+    (14, E'a\n  '),
+    (15, E'12\n34'),
+    (16, E'# c\n- x');
+
+# Default style (block, literal)
+statement ok
+COPY (SELECT * FROM ml ORDER BY id) TO '__TEST_DIR__/ml_default.yaml' (FORMAT yaml);
+
+query I
+SELECT list(m.id ORDER BY m.id) FROM ml m JOIN read_yaml('__TEST_DIR__/ml_default.yaml') r USING (id) WHERE m.s IS DISTINCT FROM r.s;
+----
+NULL
+
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/ml_default.yaml');
+----
+16
+
+# Explicit literal
+statement ok
+COPY (SELECT * FROM ml ORDER BY id) TO '__TEST_DIR__/ml_literal.yaml' (FORMAT yaml, STYLE block, MULTILINE literal);
+
+query I
+SELECT list(m.id ORDER BY m.id) FROM ml m JOIN read_yaml('__TEST_DIR__/ml_literal.yaml') r USING (id) WHERE m.s IS DISTINCT FROM r.s;
+----
+NULL
+
+# Explicit quoted
+statement ok
+COPY (SELECT * FROM ml ORDER BY id) TO '__TEST_DIR__/ml_quoted.yaml' (FORMAT yaml, STYLE block, MULTILINE quoted);
+
+query I
+SELECT list(m.id ORDER BY m.id) FROM ml m JOIN read_yaml('__TEST_DIR__/ml_quoted.yaml') r USING (id) WHERE m.s IS DISTINCT FROM r.s;
+----
+NULL
+
+# Flow style cannot hold a block scalar, so literal becomes quoted with the same value
+statement ok
+COPY (SELECT * FROM ml ORDER BY id) TO '__TEST_DIR__/ml_flow.yaml' (FORMAT yaml, STYLE flow, MULTILINE literal);
+
+query I
+SELECT list(m.id ORDER BY m.id) FROM ml m JOIN read_yaml('__TEST_DIR__/ml_flow.yaml') r USING (id) WHERE m.s IS DISTINCT FROM r.s;
+----
+NULL
+
+# The readable block form stays where it can hold the value
+query I
+SELECT contains(content, E'|-\n') AND contains(content, E'|\n') FROM read_text('__TEST_DIR__/ml_default.yaml');
+----
+true
+
+# The cast to YAML goes through the same writer
+query I
+SELECT yaml_to_json(E'e: "l1\\nl2"\nf: 1'::YAML)::VARCHAR;
+----
+{"e":"l1\nl2","f":1}
+
+query I
+SELECT yaml_to_json(E'e: "\\n"\nf: 1'::YAML)::VARCHAR;
+----
+{"e":"\n","f":1}
+
+query I
+SELECT yaml_to_json(E'e: "  x\\ny"\nf: 1'::YAML::VARCHAR::YAML)::VARCHAR;
+----
+{"e":"  x\ny","f":1}
+
+# A value that really contains the private marker character still round-trips
+statement ok
+COPY (SELECT 1 AS id, E'a\nb' || chr(1114109) AS s) TO '__TEST_DIR__/ml_marker.yaml' (FORMAT yaml);
+
+query I
+SELECT s = E'a\nb' || chr(1114109) FROM read_yaml('__TEST_DIR__/ml_marker.yaml');
+----
+true
+
+# An ENUM value is a string: 'yes' written plain would read back as a boolean
+statement ok
+CREATE TYPE answer AS ENUM ('yes', 'no', 'maybe');
+
+query II
+SELECT value_to_yaml('yes'::answer), value_to_yaml('maybe'::answer);
+----
+"yes"	maybe
+
+statement ok
+COPY (SELECT 'no'::answer AS a) TO '__TEST_DIR__/enum_copy.yaml' (FORMAT yaml);
+
+query II
+SELECT typeof(a), a FROM read_yaml('__TEST_DIR__/enum_copy.yaml');
+----
+VARCHAR	no

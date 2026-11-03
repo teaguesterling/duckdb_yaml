@@ -140,6 +140,10 @@ std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {
 }
 
 YAMLStringStyle ResolveStringStyle(YAMLStringStyle style, YAMLFormat format) {
+	// A flow collection cannot hold a block scalar, so flow is always quoted.
+	if (format == YAMLFormat::FLOW) {
+		return YAMLStringStyle::QUOTED;
+	}
 	if (style != YAMLStringStyle::AUTO) {
 		return style;
 	}
@@ -170,6 +174,51 @@ static bool ChangesWhenPlain(const YAML::Node &node) {
 	       YAMLNodeToJSON(plain) != YAMLNodeToJSON(node);
 }
 
+// yaml-cpp writes every literal block as a bare `|`, which means "exactly one trailing newline". It has no way to
+// write `|-`. So a string with no trailing newline is emitted with this marker (U+10FFFD, a private-use character) in
+// front of it, and ApplyLiteralStripMarkers then turns `|`, newline, indent, marker into `|-`, newline, indent.
+static const std::string LITERAL_STRIP_MARKER = "\xF4\x8F\xBF\xBD";
+
+// Whether a literal block, with `|` or `|-`, reads back as exactly this string. A block cannot start with whitespace
+// without an indentation indicator, keep several trailing newlines without `|+`, or hold other control characters.
+static bool FitsLiteralBlock(const std::string &value) {
+	const char first = value[0];
+	if (first == ' ' || first == '\t' || first == '\n') {
+		return false;
+	}
+	const auto last_content = value.find_last_not_of(" \t");
+	if (last_content == std::string::npos || (value[last_content] == '\n' && last_content + 1 != value.size())) {
+		return false; // The last line is only spaces or tabs, which a block scalar does not keep.
+	}
+	if (value.size() >= 2 && value[value.size() - 1] == '\n' && value[value.size() - 2] == '\n') {
+		return false;
+	}
+	for (const char ch : value) {
+		if (static_cast<unsigned char>(ch) < 0x20 && ch != '\n' && ch != '\t') {
+			return false;
+		}
+	}
+	return value.find(LITERAL_STRIP_MARKER) == std::string::npos;
+}
+
+static std::string ApplyLiteralStripMarkers(std::string yaml) {
+	auto marker = yaml.find(LITERAL_STRIP_MARKER);
+	while (marker != std::string::npos) {
+		auto line_start = marker;
+		while (line_start > 0 && yaml[line_start - 1] == ' ') {
+			line_start--;
+		}
+		auto next_search = marker + LITERAL_STRIP_MARKER.size();
+		if (line_start >= 2 && yaml[line_start - 1] == '\n' && yaml[line_start - 2] == '|') {
+			yaml.erase(marker, LITERAL_STRIP_MARKER.size());
+			yaml.insert(line_start - 1, 1, '-');
+			next_search = marker + 1;
+		}
+		marker = yaml.find(LITERAL_STRIP_MARKER, next_search);
+	}
+	return yaml;
+}
+
 static void EmitNodeWithStringStyleImpl(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style,
                                         YAMLTraversalBudget &budget) {
 	YAMLBudgetScope scope(budget);
@@ -178,7 +227,13 @@ static void EmitNodeWithStringStyleImpl(YAML::Emitter &out, const YAML::Node &no
 		const auto &scalar = node.Scalar();
 		// Only apply Literal style to scalars that actually contain newlines
 		if (resolved_style == YAMLStringStyle::LITERAL && scalar.find('\n') != std::string::npos) {
-			out << YAML::Literal << scalar;
+			if (!FitsLiteralBlock(scalar)) {
+				out << YAML::DoubleQuoted << scalar;
+			} else if (scalar.back() == '\n') {
+				out << YAML::Literal << scalar;
+			} else {
+				out << YAML::Literal << (LITERAL_STRIP_MARKER + scalar);
+			}
 		} else if (IsStringScalar(node) && ChangesWhenPlain(node)) {
 			out << YAML::DoubleQuoted << scalar;
 		} else {
@@ -224,8 +279,9 @@ std::string EmitYAML(const YAML::Node &node, YAMLFormat format, YAMLStringStyle 
 	}
 	YAML::Emitter out;
 	ConfigureEmitter(out, format, indent);
-	EmitNodeWithStringStyle(out, node, ResolveStringStyle(string_style, format));
-	return out.c_str();
+	const auto resolved = ResolveStringStyle(string_style, format);
+	EmitNodeWithStringStyle(out, node, resolved);
+	return resolved == YAMLStringStyle::LITERAL ? ApplyLiteralStripMarkers(out.c_str()) : std::string(out.c_str());
 }
 
 std::string EmitYAMLMultiDoc(const std::vector<YAML::Node> &docs, YAMLFormat format) {
@@ -640,6 +696,11 @@ static YAML::Node ValueToYAMLNodeImpl(const Value &value, YAMLTraversalBudget &b
 	}
 
 	switch (value.type().id()) {
+	case LogicalTypeId::ENUM: {
+		YAML::Node enum_node(value.ToString());
+		enum_node.SetTag("!");
+		return enum_node;
+	}
 	case LogicalTypeId::VARCHAR: {
 		if (value.type().IsJSONType()) {
 			try {
@@ -724,11 +785,13 @@ std::string ValueToYAMLString(const Value &value, YAMLFormat format, YAMLStringS
 		// Now emit with proper format settings and string style
 		YAML::Emitter out;
 		ConfigureEmitter(out, format, indent);
-		EmitNodeWithStringStyle(out, node, ResolveStringStyle(string_style, format));
+		const auto resolved = ResolveStringStyle(string_style, format);
+		EmitNodeWithStringStyle(out, node, resolved);
 
 		// Check if we have a valid YAML string
 		if (out.good() && out.c_str() != nullptr) {
-			return out.c_str();
+			return resolved == YAMLStringStyle::LITERAL ? ApplyLiteralStripMarkers(out.c_str())
+			                                            : std::string(out.c_str());
 		} else {
 			// If emitter is in error state, return null as fallback
 			return "null";

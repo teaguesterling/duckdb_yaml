@@ -392,7 +392,7 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 | Value | Description |
 |-------|-------------|
 | `auto` (default) | Resolves to `literal` for block style, `quoted` for flow |
-| `literal` | Use YAML literal block scalars (`\|`) for multiline strings |
+| `literal` | Use YAML literal block scalars (`\|` or `\|-`) for multiline strings. A string that a block cannot hold exactly, such as one with leading whitespace, is quoted |
 | `quoted` | Use quoted strings with escape sequences |
 
 ### INDENT
