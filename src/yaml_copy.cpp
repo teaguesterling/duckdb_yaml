@@ -285,8 +285,8 @@ static void CopyFormatYAMLFunction(DataChunk &args, ExpressionState &state, Vect
 //   - YAMLRowsGlobalState::Write adds the separator before a buffer, under a lock, from the state of that file.
 
 static const char YAML_DOCUMENT_SEPARATOR[] = "---\n";
-// The size that the CSV writer flushes at. On DuckDB v1.5, rotation sees only bytes that a sink has written, so this
-// also limits how far a file can go over FILE_SIZE_BYTES.
+// The size that the CSV writer flushes at. Rotation sees only bytes that reached the file, so this also limits how far
+// a file can go over FILE_SIZE_BYTES.
 static constexpr idx_t YAML_ROWS_FLUSH_SIZE = 4096 * 8;
 
 struct YAMLRowsBindData : public FunctionData {
@@ -492,27 +492,6 @@ static idx_t YAMLRowsFileSizeBytes(GlobalFunctionData &gstate) {
 	return gstate.Cast<YAMLRowsGlobalState>().FileSize();
 }
 
-static bool YAMLRowsRotateFiles(FunctionData &, const optional_idx &file_size_bytes) {
-	return file_size_bytes.IsValid();
-}
-
-static bool YAMLRowsRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const optional_idx &file_size_bytes) {
-	return file_size_bytes.IsValid() && YAMLRowsFileSizeBytes(gstate) > file_size_bytes.GetIndex();
-}
-
-// DuckDB v2.0 replaced rotate_files and rotate_next_file with file_size_bytes. Selected by the member that exists,
-// as with the other cross-version helpers: the int overload wins where both are viable, and only one ever is.
-template <class FUNCTION>
-static auto SetYAMLRowsRotation(FUNCTION &function, int) -> decltype(function.file_size_bytes, void()) {
-	function.file_size_bytes = YAMLRowsFileSizeBytes;
-}
-
-template <class FUNCTION>
-static auto SetYAMLRowsRotation(FUNCTION &function, long) -> decltype(function.rotate_files, void()) {
-	function.rotate_files = YAMLRowsRotateFiles;
-	function.rotate_next_file = YAMLRowsRotateNextFile;
-}
-
 static CopyFunction GetYAMLRowsCopyFunction() {
 	CopyFunction function("yaml_rows");
 	function.extension = "yaml";
@@ -526,7 +505,7 @@ static CopyFunction GetYAMLRowsCopyFunction() {
 	function.execution_mode = YAMLRowsExecutionMode;
 	function.prepare_batch = YAMLRowsPrepareBatch;
 	function.flush_batch = YAMLRowsFlushBatch;
-	SetYAMLRowsRotation(function, 0);
+	function.file_size_bytes = YAMLRowsFileSizeBytes;
 	return function;
 }
 

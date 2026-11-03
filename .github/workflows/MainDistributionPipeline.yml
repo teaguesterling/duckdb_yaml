@@ -21,12 +21,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # THE PIN EQUALS THE REGISTRY DEFAULT COMMIT, AND THE WORKFLOW SHIPS THE DEFAULT
-  # AND THE VARIANT. Fleet rule (Teague, 2026-09-13): the duckdb submodule is
-  # pinned at exactly the commit the community registry builds every extension
-  # with by default (build.yml's duckdb_commit, built as its duckdb_version),
-  # and this workflow also ships the v1.5 variant the registry still builds
-  # (scripts/build.py's variegata route). Otherwise local builds and each repo's
+  # THE PIN EQUALS THE REGISTRY DEFAULT COMMIT, AND THE WORKFLOW SHIPS THE DEFAULT.
+  # Fleet rule (Teague, 2026-09-13): the duckdb submodule is pinned at exactly the
+  # commit the community registry builds every extension with by default (build.yml's
+  # duckdb_commit, built as its duckdb_version). This extension no longer ships for
+  # v1.5 (Teague, 2026-11-03): the registry's `variegata` ref stays at the last v1.5
+  # build and does not advance. Otherwise local builds and each repo's
   # own CI artifacts carry a different DuckDB than the served one, and extensions
   # built in different repos cannot co-load locally (the ABI is exact-version).
   # Measured 2026-09-13: five sibling repos were on a July dev commit, one on a
@@ -56,14 +56,9 @@ jobs:
       # (duckdb/community-extensions#3086).
       DUCKDB_VERSION: v2.0.0
       DUCKDB_CI_TOOLS: v2.0-cyanoptera
-      DUCKDB_VARIANT: v1.5.6
       # Flip day keeps a duckdb-legacy-build at the outgoing version for one
       # release; set this to that version then so the stray-literal scan exempts
       # it instead of flagging it. Empty the rest of the time.
-      #
-      # EMPTY at this flip: the outgoing version is v1.5.6, which is not leaving --
-      # it is DUCKDB_VARIANT above, built by duckdb-variegata-build and already
-      # exempt from the scan. So there is no legacy job to exempt.
       DUCKDB_LEGACY: ''
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +80,7 @@ jobs:
           # The build jobs must actually use this job's constants. The next leg is
           # absent on purpose: duckdb-next-ref resolves it, so no constant here
           # describes it and there is nothing for this loop to assert.
-          for want_line in "duckdb_commit: ${DUCKDB_COMMIT}" "duckdb_version: ${DUCKDB_VERSION}" "ci_tools_version: ${DUCKDB_CI_TOOLS}" "duckdb_version: ${DUCKDB_VARIANT}"; do
+          for want_line in "duckdb_commit: ${DUCKDB_COMMIT}" "duckdb_version: ${DUCKDB_VERSION}" "ci_tools_version: ${DUCKDB_CI_TOOLS}"; do
             c=$(grep -c "${want_line}$" "$wf" || true)
             [ "$c" -ge 1 ] || { echo "::error::no build job in this workflow uses ${want_line}; this job's constants have drifted"; exit 1; }
           done
@@ -144,7 +139,6 @@ jobs:
                 # A workflow input line (`duckdb_version:` etc.) is exempt when the
                 # value is one of the versions this job declares as shipped.
                 [ "$v" = "$DUCKDB_VERSION" ] && continue
-                [ "$v" = "${DUCKDB_VARIANT-}" ] && continue
                 [ -n "${DUCKDB_LEGACY-}" ] && [ "$v" = "$DUCKDB_LEGACY" ] && continue
               fi
               echo "::error::line ${lineno}: ${line} -- a DuckDB version literal outside a version declaration, or not that declaration's own value: derive it from the DUCKDB_* constants rather than hardcoding it"
@@ -231,22 +225,19 @@ jobs:
             reg_commit=$(grep -m1 -o "inputs.duckdb_commit || (inputs.duckdb_version == '' && '[0-9a-f]\{40\}'" "$f1.live" | grep -o '[0-9a-f]\{40\}' || true)
             reg_version=$(grep -m1 -oE "^[[:space:]]+duckdb_version: \\$\\{\\{ inputs.duckdb_version \\|\\| 'v[^']*'" "$f1.live" | grep -o "'v[^']*'" | tr -d "'" || true)
             reg_tools=$(grep -m1 -o "inputs.ci_tools_version || '[^']*'" "$f1.live" | grep -o "'[^']*'$" | tr -d "'" || true)
-            # build.py routes one DUCKDB_VERSION to each descriptor's `variegata`
-            # ref; the version sits in the condition on the line before.
-            reg_variant=$(grep -B1 "'variegata' in desc" "$f2" | grep -m1 -o "== 'v[0-9.]*'" | grep -o "v[0-9.]*" || true)
-            if [ -z "$reg_commit" ] || [ -z "$reg_version" ] || [ -z "$reg_tools" ] || [ -z "$reg_variant" ]; then
-              echo "::error::community-extensions at ${sha:-main} was fetched but build.yml/build.py carry no recognisable default (commit='${reg_commit}', version='${reg_version}', ci-tools='${reg_tools}', variant='${reg_variant}'); this check's parse is wrong about the registry, fix the check"
+            if [ -z "$reg_commit" ] || [ -z "$reg_version" ] || [ -z "$reg_tools" ]; then
+              echo "::error::community-extensions at ${sha:-main} was fetched but build.yml/build.py carry no recognisable default (commit='${reg_commit}', version='${reg_version}', ci-tools='${reg_tools}'); this check's parse is wrong about the registry, fix the check"
               echo "duckdb-pin: FAILED, registry files fetched but unparseable" >> "$summary"; exit 1
             fi
-            registry="${reg_commit}/${reg_version}/${reg_tools}/${reg_variant}"
-            repo="${DUCKDB_COMMIT}/${DUCKDB_VERSION}/${DUCKDB_CI_TOOLS}/${DUCKDB_VARIANT}"
+            registry="${reg_commit}/${reg_version}/${reg_tools}"
+            repo="${DUCKDB_COMMIT}/${DUCKDB_VERSION}/${DUCKDB_CI_TOOLS}"
             if [ "$registry" != "$repo" ]; then
               echo "::error::the community registry builds commit/version/ci-tools/variant ${registry} (at ${sha:-main}) but this repo ships ${repo}; update the pin, the constants and the build jobs to the registry's lines"
               echo "duckdb-pin: FAILED, registry ${registry} vs repo ${repo}" >> "$summary"; exit 1
             fi
-            mode="checked against the registry (default ${reg_commit:0:10} ${reg_version} on ${reg_tools}, variant ${reg_variant}, at ${sha:-main})"
+            mode="checked against the registry (default ${reg_commit:0:10} ${reg_version} on ${reg_tools}, at ${sha:-main})"
           fi
-          echo "duckdb-pin: OK, pin ${have:0:10} == ${DUCKDB_COMMIT:0:10} (${DUCKDB_VERSION}); jobs ship it and ${DUCKDB_VARIANT}; ${mode}" | tee -a "$summary"
+          echo "duckdb-pin: OK, pin ${have:0:10} == ${DUCKDB_COMMIT:0:10} (${DUCKDB_VERSION}); jobs ship it; ${mode}" | tee -a "$summary"
 
   # THE NEXT LINE RESOLVES, IT DOES NOT PIN (Teague, 2026-10-25; the merged
   # resolver is teaguesterling/plinking_duck#73, copied from that file).
@@ -444,26 +435,6 @@ jobs:
       # without it a leg that cannot load the extension reports success on all skips.
       test_config: '{"test_env_variables": {"T": "--test-flags \"--require yaml\" \"test/*\""}}'
 
-  # The v1.5 variant the registry still builds (scripts/build.py routes v1.5.6 to
-  # each descriptor's variegata ref). This was the stable job before the flip; it
-  # stays gating because v1.5.6 users are the bulk of current installs. The
-  # reusable workflow repoints DuckDB itself (`DUCKDB_GIT_VERSION=... make
-  # set_duckdb_version`), so this job builds the v1.5.6 RELEASE TAG even though the
-  # submodule gitlink is the v2.0.0 commit. Branch-tip builds would produce -dev
-  # extensions that will not load into a released CLI.
-  #
-  # No `test_config` here: on v1.5-variegata the `T` variable is silently ignored,
-  # so adding it would claim a guard this leg does not have (`make test-require` is
-  # the local equivalent).
-  duckdb-variegata-build:
-    name: Build extension binaries (DuckDB v1.5 variant)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
-    with:
-      duckdb_version: v1.5.6
-      ci_tools_version: v1.5-variegata
-      extension_name: yaml
-      exclude_archs: ''
-
   # Code-quality (clang-format) stays on the @main ci-tools target — the repo's
   # original, established config. Both targets install the same clang-format-11,
   # but they differ in scope: @main delegates to duckdb's git-diff-scoped
@@ -476,7 +447,7 @@ jobs:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
-      duckdb_version: v1.5.6
+      duckdb_version: v2.0.0
       ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
