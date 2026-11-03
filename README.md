@@ -402,7 +402,7 @@ COPY (
   - `document` (default): Each row as a separate YAML object/document
   - `sequence`: All rows as items in a YAML sequence (array)
 
-When using `LAYOUT document` with `STYLE block`, rows are separated by `---` (YAML document separator).
+When using `LAYOUT document` with `STYLE block`, rows are separated by `---` (YAML document separator). Each file starts with its first document. Set `EXPLICIT_START true` to write `---` before the first document too.
 
 ### Error Handling
 

@@ -198,7 +198,6 @@ COPY (
 
 Output:
 ```yaml
----
 id: 1
 name: Alice Smith
 address:
@@ -221,7 +220,6 @@ COPY (
 
 Output:
 ```yaml
----
 category: Electronics
 products:
   - Laptop
@@ -232,6 +230,12 @@ category: Books
 products:
   - Novel
   - Textbook
+```
+
+A `---` separates each pair of documents. To also write `---` before the first document of each file, set `EXPLICIT_START`:
+
+```sql
+COPY products TO 'products.yaml' (FORMAT yaml, EXPLICIT_START true);
 ```
 
 ## Examples

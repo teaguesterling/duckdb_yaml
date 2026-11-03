@@ -14,11 +14,11 @@ SELECT count(*), count(DISTINCT id), sum(id) FROM read_yaml('__TEST_DIR__/rows_b
 ----
 5000	5000	12497500
 
-# Each row is its own document, so the separators count the rows.
+# Each row is its own document, with a separator between each pair of documents.
 query I
 SELECT len(regexp_extract_all(content, '(?m)^---$')) FROM read_text('__TEST_DIR__/rows_block.yaml');
 ----
-5000
+4999
 
 # The boundary itself, with the row that was lost
 query II
@@ -28,6 +28,23 @@ SELECT id, name FROM read_yaml('__TEST_DIR__/rows_block.yaml') WHERE id IN (2047
 2048	row 2048
 4095	row 4095
 4096	row 4096
+
+# Exactly one data chunk, then one row into the next: the smallest output that lost a row
+statement ok
+COPY (SELECT i AS id FROM range(2048) t(i)) TO '__TEST_DIR__/rows_2048.yaml' (FORMAT yaml);
+
+query I
+SELECT count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rows_2048.yaml');
+----
+2048
+
+statement ok
+COPY (SELECT i AS id FROM range(2049) t(i)) TO '__TEST_DIR__/rows_2049.yaml' (FORMAT yaml);
+
+query I
+SELECT count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rows_2049.yaml');
+----
+2049
 
 # With several threads
 statement ok

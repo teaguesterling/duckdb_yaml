@@ -26,14 +26,6 @@ std::string ApplySequenceLayout(const std::string &yaml_str) {
 	return result;
 }
 
-std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_block_style) {
-	if (!is_block_style) {
-		return yaml_str;
-	}
-
-	return "---\n" + yaml_str;
-}
-
 std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout,
                                   yaml_utils::YAMLStringStyle string_style, idx_t indent) {
 	// Get the base YAML string
@@ -47,17 +39,12 @@ std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat for
 	return yaml_str;
 }
 
-std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout, yaml_utils::YAMLFormat format) {
+std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout) {
 	if (layout == YAMLLayout::SEQUENCE) {
 		return ApplySequenceLayout(yaml_str);
-	} else if (layout == YAMLLayout::DOCUMENT) {
-		// Every document gets a separator, including the first. This runs per data chunk, so it cannot tell which row
-		// is first in the file, and skipping the first row of each chunk merged that row into the previous document.
-		bool is_block_style = (format == yaml_utils::YAMLFormat::BLOCK);
-		return ApplyDocumentSeparator(yaml_str, is_block_style);
 	}
 
-	// Fallback - return as-is
+	// A DOCUMENT is written as-is. The COPY writer adds separators, because only it knows which row starts a file.
 	return yaml_str;
 }
 

@@ -25,17 +25,13 @@ enum class YAMLLayout {
 // Prepends "- " and indents continuation lines with 2 spaces
 std::string ApplySequenceLayout(const std::string &yaml_str);
 
-// Apply document separator for multi-document YAML
-// Prepends "---\n" for block style documents, including the first
-std::string ApplyDocumentSeparator(const std::string &yaml_str, bool is_block_style);
-
 // Format a single value with the specified layout
 std::string FormatValueWithLayout(const Value &value, yaml_utils::YAMLFormat format, YAMLLayout layout,
                                   yaml_utils::YAMLStringStyle string_style = yaml_utils::YAMLStringStyle::AUTO,
                                   idx_t indent = 2);
 
 // Post-process YAML output for multiple rows based on layout
-std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout, yaml_utils::YAMLFormat format);
+std::string PostProcessForLayout(const std::string &yaml_str, YAMLLayout layout);
 
 } // namespace yaml_formatting
 

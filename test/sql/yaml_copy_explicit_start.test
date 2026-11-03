@@ -1,0 +1,308 @@
+# name: test/sql/yaml_copy_explicit_start.test
+# description: COPY writes `---` between documents, and before the first document only with EXPLICIT_START
+# group: [sql]
+
+require yaml
+
+# The invariant in every case below: a separator comes before every document except, by default, the first document
+# of each FILE. A document with no separator anywhere but byte 0 merges into the previous one, and that row is lost.
+#
+# Reads of more than 32,767 ids set the column type: read_yaml takes SMALLINT from its sample, then reads larger values
+# as NULL. That is a reader defect, and this file tests the writer.
+
+statement ok
+SET threads=8;
+
+statement ok
+CREATE TABLE t AS SELECT i AS id, 'row ' || i AS name FROM range(100000) t(i);
+
+#--- Default: no leading separator, no trailing separator, one between each pair of documents
+statement ok
+COPY (SELECT * FROM t WHERE id < 5000 ORDER BY id) TO '__TEST_DIR__/default.yaml' (FORMAT yaml);
+
+query III
+SELECT content[1:3] = '---', len(regexp_extract_all(content, '(?m)^---$')), content[-4:-2] = '---'
+FROM read_text('__TEST_DIR__/default.yaml');
+----
+false	4999	false
+
+query III
+SELECT count(*), count(DISTINCT id), sum(id) FROM read_yaml('__TEST_DIR__/default.yaml');
+----
+5000	5000	12497500
+
+# The exact bytes, once
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/bytes.yaml' (FORMAT yaml);
+
+query I
+SELECT content = E'id: 0\n---\nid: 1\n' FROM read_text('__TEST_DIR__/bytes.yaml');
+----
+true
+
+#--- EXPLICIT_START
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/explicit.yaml' (FORMAT yaml, EXPLICIT_START true);
+
+query I
+SELECT content = E'---\nid: 0\n---\nid: 1\n' FROM read_text('__TEST_DIR__/explicit.yaml');
+----
+true
+
+# With no value, as with other boolean COPY options
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/explicit_bare.yaml' (FORMAT yaml, EXPLICIT_START);
+
+query I
+SELECT content = E'---\nid: 0\n---\nid: 1\n' FROM read_text('__TEST_DIR__/explicit_bare.yaml');
+----
+true
+
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/explicit_off.yaml' (FORMAT yaml, EXPLICIT_START false);
+
+query I
+SELECT content = E'id: 0\n---\nid: 1\n' FROM read_text('__TEST_DIR__/explicit_off.yaml');
+----
+true
+
+#--- Every document is separated when chunks reach the writer in parallel, in each execution mode
+statement ok
+COPY t TO '__TEST_DIR__/batch.yaml' (FORMAT yaml);
+
+query IIII
+SELECT count(*), count(DISTINCT id), min(id), max(id) FROM read_yaml('__TEST_DIR__/batch.yaml', columns={'id': 'BIGINT'});
+----
+100000	100000	0	99999
+
+# Insertion order is kept
+query I
+SELECT count(*) FROM (SELECT id, row_number() OVER () - 1 AS pos FROM read_yaml('__TEST_DIR__/batch.yaml', columns={'id': 'BIGINT'})) WHERE id <> pos;
+----
+0
+
+query II
+SELECT content[1:3] = '---', len(regexp_extract_all(content, '(?m)^---$')) FROM read_text('__TEST_DIR__/batch.yaml');
+----
+false	99999
+
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+COPY t TO '__TEST_DIR__/unordered.yaml' (FORMAT yaml);
+
+statement ok
+COPY t TO '__TEST_DIR__/unordered_explicit.yaml' (FORMAT yaml, EXPLICIT_START true);
+
+statement ok
+SET preserve_insertion_order=true;
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/unordered.yaml', columns={'id': 'BIGINT'});
+----
+100000	100000
+
+query II
+SELECT content[1:3] = '---', len(regexp_extract_all(content, '(?m)^---$')) FROM read_text('__TEST_DIR__/unordered.yaml');
+----
+false	99999
+
+query II
+SELECT content[1:3] = '---', len(regexp_extract_all(content, '(?m)^---$')) FROM read_text('__TEST_DIR__/unordered_explicit.yaml');
+----
+true	100000
+
+#--- First is per FILE: each rotated or per-thread file follows the same rule
+statement ok
+COPY t TO '__TEST_DIR__/rotated' (FORMAT yaml, FILE_SIZE_BYTES '200KB');
+
+query I
+SELECT count(*) > 1 FROM read_text('__TEST_DIR__/rotated/*.yaml');
+----
+true
+
+query I
+SELECT count(*) FROM read_text('__TEST_DIR__/rotated/*.yaml') WHERE content[1:3] = '---';
+----
+0
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated/*.yaml', columns={'id': 'BIGINT'});
+----
+100000	100000
+
+# A file stays near the requested size: over it by about one data chunk, not by a whole write buffer
+query I
+SELECT max(size) < 300000 FROM read_text('__TEST_DIR__/rotated/*.yaml');
+----
+true
+
+# The same through the other execution modes: range() has no batch index, and no insertion order runs in parallel
+statement ok
+COPY (SELECT i AS id, 'row ' || i AS name FROM range(100000) t(i)) TO '__TEST_DIR__/rotated_range' (FORMAT yaml, FILE_SIZE_BYTES '200KB');
+
+query IIII
+SELECT count(*) > 1, count(*) FILTER (content[1:3] = '---'), bool_and(content[-4:-2] <> '---'), max(size) < 300000 FROM read_text('__TEST_DIR__/rotated_range/*.yaml');
+----
+true	0	true	true
+
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+COPY t TO '__TEST_DIR__/rotated_unordered' (FORMAT yaml, FILE_SIZE_BYTES '200KB');
+
+statement ok
+SET preserve_insertion_order=true;
+
+query III
+SELECT count(*) > 1, count(*) FILTER (content[1:3] = '---'), max(size) < 300000 FROM read_text('__TEST_DIR__/rotated_unordered/*.yaml');
+----
+true	0	true
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/rotated_unordered/*.yaml', columns={'id': 'BIGINT'});
+----
+100000	100000
+
+statement ok
+COPY t TO '__TEST_DIR__/rotated_explicit' (FORMAT yaml, FILE_SIZE_BYTES '200KB', EXPLICIT_START true);
+
+query I
+SELECT bool_and(content[1:3] = '---') FROM read_text('__TEST_DIR__/rotated_explicit/*.yaml');
+----
+true
+
+statement ok
+COPY t TO '__TEST_DIR__/per_thread' (FORMAT yaml, PER_THREAD_OUTPUT true);
+
+query I
+SELECT count(*) FROM read_text('__TEST_DIR__/per_thread/*.yaml') WHERE content[1:3] = '---';
+----
+0
+
+query II
+SELECT count(*), count(DISTINCT id) FROM read_yaml('__TEST_DIR__/per_thread/*.yaml', columns={'id': 'BIGINT'});
+----
+100000	100000
+
+#--- Layouts with no separator are unchanged
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/sequence.yaml' (FORMAT yaml, LAYOUT sequence);
+
+query I
+SELECT content = E'- id: 0\n- id: 1\n' FROM read_text('__TEST_DIR__/sequence.yaml');
+----
+true
+
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/flow.yaml' (FORMAT yaml, STYLE flow);
+
+query I
+SELECT content = E'{id: 0}\n{id: 1}\n' FROM read_text('__TEST_DIR__/flow.yaml');
+----
+true
+
+# EXPLICIT_START has nothing to act on there, so asking for it is an error and not silently ignored
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, LAYOUT sequence, EXPLICIT_START true);
+----
+EXPLICIT_START
+
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, STYLE flow, EXPLICIT_START true);
+----
+EXPLICIT_START
+
+#--- No rows, no documents, no bytes
+statement ok
+COPY (SELECT * FROM t WHERE false) TO '__TEST_DIR__/zero.yaml' (FORMAT yaml);
+
+query I
+SELECT size FROM read_text('__TEST_DIR__/zero.yaml');
+----
+0
+
+#--- Writing over an existing file replaces it
+statement ok
+COPY (SELECT * FROM range(1000) t(id)) TO '__TEST_DIR__/over.yaml' (FORMAT yaml);
+
+statement ok
+COPY (SELECT * FROM range(2) t(id)) TO '__TEST_DIR__/over.yaml' (FORMAT yaml);
+
+query I
+SELECT content = E'id: 0\n---\nid: 1\n' FROM read_text('__TEST_DIR__/over.yaml');
+----
+true
+
+#--- Compression: read the lines back with the CSV reader, which decompresses
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp.yaml.gz' (FORMAT yaml);
+
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp_named.yaml' (FORMAT yaml, COMPRESSION 'gzip');
+
+query I
+SELECT string_agg(l, '|' ORDER BY rowid) FROM (
+	SELECT row_number() OVER () AS rowid, l FROM read_csv('__TEST_DIR__/comp.yaml.gz', columns={'l': 'VARCHAR'}, delim='\t', header=false, quote='', compression='gzip')
+);
+----
+id: 0|---|id: 1|---|id: 2
+
+query I
+SELECT string_agg(l, '|' ORDER BY rowid) FROM (
+	SELECT row_number() OVER () AS rowid, l FROM read_csv('__TEST_DIR__/comp_named.yaml', columns={'l': 'VARCHAR'}, delim='\t', header=false, quote='', compression='gzip')
+);
+----
+id: 0|---|id: 1|---|id: 2
+
+# With a directory of files, the file names take the extension of the compression
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp_dir' (FORMAT yaml, COMPRESSION 'gzip', PER_THREAD_OUTPUT true);
+
+query I
+SELECT bool_and(file LIKE '%.yaml.gz') FROM glob('__TEST_DIR__/comp_dir/*');
+----
+true
+
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, COMPRESSION 'not_a_codec');
+----
+not_a_codec
+
+#--- Options still validated
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, NOT_AN_OPTION 1);
+----
+Unknown option
+
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, ENCODING 'utf-8');
+----
+ENCODING
+
+#--- The internal writer takes one VARCHAR column of formatted rows, and rejects anything else
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml_rows);
+----
+one VARCHAR column
+
+statement error
+COPY (SELECT 'a' AS a, 'b' AS b) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml_rows);
+----
+one VARCHAR column
+
+statement error
+COPY (SELECT NULL::VARCHAR AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml_rows);
+----
+NULL
+
+# And it still works after those errors
+statement ok
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/after.yaml' (FORMAT yaml);
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/after.yaml');
+----
+1

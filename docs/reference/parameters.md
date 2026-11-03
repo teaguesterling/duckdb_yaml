@@ -403,6 +403,15 @@ SELECT filename, title FROM read_yaml_frontmatter('posts/*.md',
 |-------|-------------|
 | `1`-`10` (default: `2`) | Indentation width for block style output |
 
+### EXPLICIT_START
+
+| Value | Description |
+|-------|-------------|
+| `false` (default) | Each file starts with its first document. A `---` separates each pair of documents |
+| `true` | Also write `---` before the first document of each file |
+
+Requires `LAYOUT document` and `STYLE block`, because other output has no `---`. Any other combination is an error.
+
 **Example:**
 
 ```sql
