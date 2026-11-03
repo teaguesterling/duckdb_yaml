@@ -141,8 +141,20 @@ bool ParseCoreInteger(const std::string &value, int64_t &result);
 // A core float with a fraction or an exponent, or a core form of infinity or not-a-number.
 bool ParseCoreFloat(const std::string &value, double &result);
 
-// A timestamp with a UTC offset or Z, as the UTC instant. False without an offset, or with a time zone name.
-bool TryParseTimestampWithOffset(const std::string &value, timestamp_t &result);
+// Dates and times are DuckDB's addition to the core schema, and read_json sets the rule for them.
+enum class YAMLTemporalKind : uint8_t { NONE, DATE, TIME, TIMESTAMP, TIMESTAMP_TZ };
+
+struct YAMLTemporal {
+	YAMLTemporalKind kind = YAMLTemporalKind::NONE;
+	date_t date;
+	dtime_t time;
+	// With an offset or Z, the UTC instant
+	timestamp_t timestamp;
+};
+
+// What a scalar is, for type detection and for JSON. A value that would lose information, such as a time zone name or
+// a two-digit year, is NONE and stays text. A column with a declared type uses the looser rules in YAMLNodeToValue.
+YAMLTemporal DetectTemporal(const std::string &value);
 
 // Emit a YAML::Node tree, applying YAML::Literal to multiline scalars when style is LITERAL.
 // A string scalar that would read back as another type when written plain is double-quoted.

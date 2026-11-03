@@ -61,44 +61,17 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		}
 
 		// Dates and times are DuckDB's addition to the core schema. Like read_json, a quoted one is still detected.
-		// Skip numeric detection for values that might be dates/times
-		bool might_be_temporal = false;
-		if (scalar_value.find('-') != std::string::npos || scalar_value.find(':') != std::string::npos ||
-		    scalar_value.find('T') != std::string::npos) {
-			// Don't skip potential negative numbers - only temporal if it's not just a negative sign
-			might_be_temporal =
-			    (scalar_value.find(':') != std::string::npos || scalar_value.find('T') != std::string::npos) ||
-			    (scalar_value.find('-') != std::string::npos && scalar_value[0] != '-');
-
-			if (might_be_temporal) {
-				// Try to parse as date
-				idx_t pos = 0;
-				date_t date_result;
-				bool special = false;
-				auto date_cast_result =
-				    Date::TryConvertDate(scalar_value.c_str(), scalar_value.length(), pos, date_result, special, false);
-				if (date_cast_result == DateCastResult::SUCCESS && pos == scalar_value.length()) {
-					return LogicalType::DATE;
-				}
-
-				// Try to parse as timestamp. An offset gives an instant, which TIMESTAMP cannot hold.
-				timestamp_t timestamp_result;
-				if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result)) {
-					return LogicalType::TIMESTAMP_TZ;
-				}
-				if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result,
-				                                   false) == TimestampCastResult::SUCCESS) {
-					return LogicalType::TIMESTAMP;
-				}
-
-				// Try to parse as time
-				pos = 0;
-				dtime_t time_result;
-				if (Time::TryConvertTime(scalar_value.c_str(), scalar_value.length(), pos, time_result, false) &&
-				    pos == scalar_value.length()) {
-					return LogicalType::TIME;
-				}
-			}
+		switch (yaml_utils::DetectTemporal(scalar_value).kind) {
+		case yaml_utils::YAMLTemporalKind::DATE:
+			return LogicalType::DATE;
+		case yaml_utils::YAMLTemporalKind::TIME:
+			return LogicalType::TIME;
+		case yaml_utils::YAMLTemporalKind::TIMESTAMP:
+			return LogicalType::TIMESTAMP;
+		case yaml_utils::YAMLTemporalKind::TIMESTAMP_TZ:
+			return LogicalType::TIMESTAMP_TZ;
+		case yaml_utils::YAMLTemporalKind::NONE:
+			break;
 		}
 
 		return LogicalType::VARCHAR;
@@ -413,18 +386,16 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIMESTAMP) {
 			timestamp_t timestamp_result;
-			// With an offset, the instant in UTC, as a cast to TIMESTAMP gives
-			if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result) ||
-			    Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
-			        TimestampCastResult::SUCCESS) {
+			// With an offset, the instant in UTC, as a cast to TIMESTAMP gives. A zone other than UTC is a mismatch.
+			if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, true) ==
+			    TimestampCastResult::SUCCESS) {
 				return Value::TIMESTAMP(timestamp_result);
 			}
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIMESTAMP_TZ) {
 			timestamp_t timestamp_result;
-			if (yaml_utils::TryParseTimestampWithOffset(scalar_value, timestamp_result) ||
-			    Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
-			        TimestampCastResult::SUCCESS) {
+			if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, true) ==
+			    TimestampCastResult::SUCCESS) {
 				return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_result));
 			}
 			return MismatchedValue(node, target_type, strict);

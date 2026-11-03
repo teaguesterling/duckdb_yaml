@@ -65,6 +65,19 @@ ts3: 2024-01-15 14:30:00
 
 A timestamp with `Z` or a UTC offset is `TIMESTAMP WITH TIME ZONE`, so it keeps its instant: `2024-01-15T14:30:00+05:00` is `2024-01-15 09:30:00+00`. Without one, it is `TIMESTAMP`.
 
+`read_json` sets the rule for these values. A value that would lose information stays VARCHAR, so the text is kept:
+
+```yaml
+a: 2024-01-15 14:30:00 +05:00           # VARCHAR: a space before the offset
+b: 2024-01-15 14:30:00 America/New_York # VARCHAR: a time zone name
+c: 2024-01-15T14:30                     # VARCHAR: no seconds and no offset
+d: 24-01-15                             # VARCHAR: a two-digit year
+```
+
+With `columns`, a `TIMESTAMP` or `TIMESTAMP WITH TIME ZONE` column applies an offset and accepts `UTC`. Any other time zone name is a type mismatch.
+
+`read_json` also detects `01-15-2024` as a date and detects UUIDs. This extension reads those as VARCHAR.
+
 ### Numeric Types
 
 Numbers are detected with optimal precision:

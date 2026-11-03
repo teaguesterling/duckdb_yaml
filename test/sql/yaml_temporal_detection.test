@@ -1,0 +1,150 @@
+# name: test/sql/yaml_temporal_detection.test
+# description: Dates and times are detected as read_json detects them, and never lose information
+# group: [sql]
+
+require yaml
+
+# Dates and times are DuckDB's addition to the YAML 1.2 core schema, and read_json sets the rule for them.
+
+# Short forms read as read_json reads them
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 22:22');
+----
+TIME	22:22:00
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-1-3');
+----
+DATE	2026-01-03
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: "2026-11-03"');
+----
+DATE
+
+# An offset after a space was dropped, which moved the instant by hours. read_json keeps these as text.
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 +05:30');
+----
+VARCHAR	2026-11-03 10:00:00 +05:30
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 -05:00');
+----
+VARCHAR	2026-11-03 10:00:00 -05:00
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 -5');
+----
+VARCHAR	2026-11-03 10:00:00 -5
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 Z');
+----
+VARCHAR	2026-11-03 10:00:00 Z
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 UTC');
+----
+VARCHAR	2026-11-03 10:00:00 UTC
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00:00 America/New_York');
+----
+VARCHAR	2026-11-03 10:00:00 America/New_York
+
+# An offset with no space still gives the instant
+query II
+SELECT typeof(a), a = TIMESTAMPTZ '2026-11-03 04:30:00+00' FROM parse_yaml('a: 2026-11-03T10:00:00+05:30');
+----
+TIMESTAMP WITH TIME ZONE	true
+
+# read_json has no timestamp format without seconds
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03T10:00');
+----
+VARCHAR	2026-11-03T10:00
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026-11-03 10:00');
+----
+VARCHAR	2026-11-03 10:00
+
+# With an offset, read_json does accept a timestamp without seconds
+query II
+SELECT typeof(a), a = TIMESTAMPTZ '2026-11-03 04:30:00+00' FROM parse_yaml('a: 2026-11-03T10:00+05:30');
+----
+TIMESTAMP WITH TIME ZONE	true
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: 2026-11-03T10:00Z');
+----
+TIMESTAMP WITH TIME ZONE
+
+# read_json has no date format with slashes
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 2026/11/03');
+----
+VARCHAR	2026/11/03
+
+# A two-digit year read as the year 26. Text is better than a wrong date.
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 26-11-03');
+----
+VARCHAR	26-11-03
+
+# A column pinned as a timestamp must not drop an offset or a zone either
+statement ok
+COPY (SELECT unnest(['a: 2026-11-03 10:00:00 +05:30', 'a: 2026-11-03 10:00:00 America/New_York', 'a: 2026-11-03 10:00:00 UTC', 'a: 2026-11-03T10:00:00+05:30', 'a: 2026-11-03 10:00:00']) || chr(10) || '---') TO '__TEST_DIR__/pinned.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/pinned.yaml', columns={'a': 'TIMESTAMP'}, ignore_errors=true);
+----
+NULL
+NULL
+2026-11-03 10:00:00
+2026-11-03 04:30:00
+2026-11-03 10:00:00
+
+# yaml_to_json used a looser rule than the reader, so it changed plain strings
+query I
+SELECT yaml_to_json('a: epoch'::YAML);
+----
+{"a":"epoch"}
+
+query I
+SELECT yaml_to_json('a: inf'::YAML);
+----
+{"a":"inf"}
+
+query I
+SELECT yaml_to_json('a: Infinity'::YAML);
+----
+{"a":"Infinity"}
+
+query I
+SELECT yaml_to_json('a: "infinity"'::YAML);
+----
+{"a":"infinity"}
+
+query I
+SELECT yaml_to_json('a: 2026-11-03 10:00:00 -5'::YAML);
+----
+{"a":"2026-11-03 10:00:00 -5"}
+
+# A timestamp with no zone is not UTC, and only a timestamp with an offset says Z
+query I
+SELECT yaml_to_json('a: 2026-11-03T10:00:00'::YAML);
+----
+{"a":"2026-11-03 10:00:00"}
+
+query I
+SELECT yaml_to_json('a: 2026-11-03T10:00:00Z'::YAML);
+----
+{"a":"2026-11-03 10:00:00Z"}
+
+# The writer still quotes all of these, because a YAML 1.1 parser reads them as timestamps or dates
+query IIII
+SELECT value_to_yaml('2026-11-03 10:00:00 +05:30'), value_to_yaml('2026-11-03T10:00'), value_to_yaml('26-11-03'), value_to_yaml('22:22');
+----
+"2026-11-03 10:00:00 +05:30"	"2026-11-03T10:00"	"26-11-03"	"22:22"
