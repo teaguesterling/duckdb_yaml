@@ -308,8 +308,10 @@ YAMLTemporal DetectTemporal(const std::string &value) {
 		return result;
 	}
 
+	// A time needs seconds. read_json reads 22:22 as a time, but in YAML this form is often a port mapping or a ratio.
 	pos = 0;
-	if (Time::TryConvertTime(value.c_str(), value.size(), pos, result.time, false) && pos == value.size()) {
+	if (std::count(value.begin(), value.end(), ':') == 2 &&
+	    Time::TryConvertTime(value.c_str(), value.size(), pos, result.time, false) && pos == value.size()) {
 		result.kind = YAMLTemporalKind::TIME;
 	}
 	return result;
@@ -343,7 +345,8 @@ static bool IsAmbiguousAcrossYAMLVersions(const std::string &value) {
 		return false;
 	}
 	if (StringUtil::CharacterIsDigit(value[0])) {
-		// Not detected here, but a timestamp or a date to a YAML 1.1 parser or to DuckDB's casts
+		// Not detected here, but a timestamp, a date or a time to a YAML 1.1 parser or to DuckDB's casts. PyYAML reads
+		// 14:30 as the base-60 integer 870.
 		idx_t pos = 0;
 		date_t date_value;
 		bool special = false;
@@ -353,6 +356,11 @@ static bool IsAmbiguousAcrossYAMLVersions(const std::string &value) {
 		     pos == value.size()) ||
 		    Timestamp::TryConvertTimestamp(value.c_str(), value.size(), timestamp_value, false) ==
 		        TimestampCastResult::SUCCESS) {
+			return true;
+		}
+		pos = 0;
+		dtime_t time_value;
+		if (Time::TryConvertTime(value.c_str(), value.size(), pos, time_value, false) && pos == value.size()) {
 			return true;
 		}
 	}

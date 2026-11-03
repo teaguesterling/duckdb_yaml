@@ -36,13 +36,16 @@ Detected formats:
 |--------|---------|
 | Standard | `14:30:00` |
 | With milliseconds | `14:30:00.123` |
-| Short | `14:30` |
+
+A time needs seconds. `14:30` stays VARCHAR, because in YAML this form is often a port mapping or a ratio. To read it as a time, set the column type: `columns = {'at': 'TIME'}`. This is a deliberate difference from `read_json`.
 
 ```yaml
 # All detected as TIME
 time1: 14:30:00
 time2: 14:30:00.123
-time3: 09:00
+
+# Detected as VARCHAR
+port: 22:22
 ```
 
 #### TIMESTAMP
@@ -206,7 +209,7 @@ Dates and times are the exception. As in `read_json`, a quoted date or time is s
 
 ```yaml
 day: "2024-01-15"  # DATE
-at: "14:30"        # TIME
+at: "14:30:00"     # TIME
 ```
 
 To keep these values as text, set `auto_detect = false` or set the column type with `columns`. See [Controlling Type Detection](#controlling-type-detection).
