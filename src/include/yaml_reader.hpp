@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 #include "duckdb.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb_compat.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -53,6 +54,9 @@ enum class MultiDocumentMode {
  * - Type auto-detection
  * - Explicit column type specification
  */
+//! The format chosen for each date or timestamp column that DuckDB cannot cast directly
+using YAMLColumnFormats = unordered_map<string, StrpTimeFormat>;
+
 class YAMLReader {
 public:
 	// Structure to hold YAML read options
@@ -250,6 +254,17 @@ public:
 	static LogicalType DetectYAMLType(const YAML::Node &node);
 
 	/**
+	 * @brief Detect the type of a YAML node, with SQLNULL for a null
+	 *
+	 * A null says nothing about the type of a column, so a merge of types across rows must skip it. Call
+	 * ResolveNullTypes after the merge.
+	 */
+	static LogicalType DetectYAMLTypeWithNulls(const YAML::Node &node);
+
+	//! Replace each SQLNULL with VARCHAR: a column with only nulls
+	static LogicalType ResolveNullTypes(const LogicalType &type);
+
+	/**
 	 * @brief Detect YAML type across multiple documents with jagged schema support
 	 *
 	 * @param nodes Vector of YAML nodes to inspect for merged schema
@@ -265,7 +280,23 @@ public:
 	 * @return Value The converted value
 	 */
 	//! A non-null value that the type cannot hold is an error when strict, and NULL when not
-	static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict = false);
+	//! A date or timestamp at a path in `formats` is read with that format
+	static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict = false,
+	                             const YAMLColumnFormats *formats = nullptr, const string &path = string());
+
+	/**
+	 * @brief Make a VARCHAR a DATE or TIMESTAMP when one format fits every value, and record that format
+	 *
+	 * The candidates and their order are read_json's. Forms with a four-digit year are not among them, because
+	 * DetectTemporal already detects those. Lists and structs are searched too.
+	 *
+	 * @param type Detected type of the values, changed in place
+	 * @param nodes The sampled values
+	 * @param path Key in `formats`: the column name, or empty for a whole row
+	 * @param formats Output, from path to format
+	 */
+	static void DetectColumnFormats(LogicalType &type, const vector<YAML::Node> &nodes, const string &path,
+	                                YAMLColumnFormats &formats);
 
 	/**
 	 * @brief Read a YAML file and parse it into documents

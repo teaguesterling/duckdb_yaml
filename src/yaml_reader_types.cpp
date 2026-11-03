@@ -7,6 +7,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types.hpp"
 #include <algorithm>
 #include <cctype>
@@ -36,7 +37,7 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		if (!is_string) {
 			switch (yaml_utils::ClassifyPlainScalar(scalar_value)) {
 			case yaml_utils::YAMLCoreKind::NULL_VALUE:
-				return LogicalType::VARCHAR; // Will be NULL in the actual data
+				return LogicalType::SQLNULL; // Says nothing about the column. See ResolveNullTypes.
 			case yaml_utils::YAMLCoreKind::BOOLEAN:
 				return LogicalType::BOOLEAN;
 			case yaml_utils::YAMLCoreKind::INTEGER: {
@@ -61,6 +62,9 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		}
 
 		// Dates and times are DuckDB's addition to the core schema. Like read_json, a quoted one is still detected.
+		if (yaml_utils::IsCanonicalUUID(scalar_value)) {
+			return LogicalType::UUID;
+		}
 		switch (yaml_utils::DetectTemporal(scalar_value).kind) {
 		case yaml_utils::YAMLTemporalKind::DATE:
 			return LogicalType::DATE;
@@ -88,9 +92,11 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		for (size_t idx = 0; idx < node.size(); idx++) {
 			LogicalType element_type = DetectYAMLTypeImpl(node[idx], budget);
 
-			if (first_element) {
+			if (first_element || common_type.id() == LogicalTypeId::SQLNULL) {
 				common_type = element_type;
 				first_element = false;
+			} else if (element_type.id() == LogicalTypeId::SQLNULL) {
+				continue;
 			} else if (common_type.id() == element_type.id()) {
 				// If both are structs, merge their fields to handle optional fields
 				if (common_type.id() == LogicalTypeId::STRUCT) {
@@ -158,14 +164,38 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		}
 		return LogicalType::STRUCT(struct_children);
 	}
+	case YAML::NodeType::Null:
+		return LogicalType::SQLNULL;
 	default:
 		return LogicalType::VARCHAR;
 	}
 }
 
-LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+LogicalType YAMLReader::ResolveNullTypes(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		return LogicalType::VARCHAR;
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ResolveNullTypes(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (auto &child : StructType::GetChildTypes(type)) {
+			children.push_back(make_pair(child.first, ResolveNullTypes(child.second)));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	default:
+		return type;
+	}
+}
+
+LogicalType YAMLReader::DetectYAMLTypeWithNulls(const YAML::Node &node) {
 	yaml_utils::YAMLTraversalBudget budget;
 	return DetectYAMLTypeImpl(node, budget);
+}
+
+LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+	return ResolveNullTypes(DetectYAMLTypeWithNulls(node));
 }
 
 // Helper function to detect YAML type across multiple documents with jagged schema support
@@ -176,11 +206,19 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 	}
 
 	// Use first node as base type
-	LogicalType merged_type = DetectYAMLType(nodes[0]);
+	LogicalType merged_type = DetectYAMLTypeWithNulls(nodes[0]);
 
 	// Merge types from all subsequent documents
 	for (size_t i = 1; i < nodes.size(); i++) {
-		LogicalType node_type = DetectYAMLType(nodes[i]);
+		LogicalType node_type = DetectYAMLTypeWithNulls(nodes[i]);
+
+		if (node_type.id() == LogicalTypeId::SQLNULL) {
+			continue;
+		}
+		if (merged_type.id() == LogicalTypeId::SQLNULL) {
+			merged_type = node_type;
+			continue;
+		}
 
 		// If both are structs, merge them recursively
 		if (merged_type.id() == LogicalTypeId::STRUCT && node_type.id() == LogicalTypeId::STRUCT) {
@@ -209,7 +247,7 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 		}
 	}
 
-	return merged_type;
+	return ResolveNullTypes(merged_type);
 }
 
 // Helper function to convert YAML node to DuckDB value.
@@ -264,8 +302,31 @@ static std::string YAMLNodeToFlowText(const YAML::Node &node) {
 	return out.c_str();
 }
 
+// A path joins with a control character, so the column "a.b" and the field b of column a stay apart. So do the column
+// "a[]" and the elements of the list a.
+static string JoinFieldPath(const string &path, const string &field) {
+	return path.empty() ? field : path + '\x1f' + field;
+}
+
+static string JoinElementPath(const string &path) {
+	return path + '\x1e';
+}
+
+// A path only when there are formats to look up, so that other reads build no strings
+static string ListElementPath(const YAMLColumnFormats *formats, const string &path) {
+	return formats ? JoinElementPath(path) : string();
+}
+
+static string StructFieldPath(const YAMLColumnFormats *formats, const string &path, const string &field) {
+	if (!formats) {
+		return string();
+	}
+	return JoinFieldPath(path, field);
+}
+
 static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &target_type, bool strict,
-                                 yaml_utils::YAMLTraversalBudget &budget) {
+                                 yaml_utils::YAMLTraversalBudget &budget, const YAMLColumnFormats *formats,
+                                 const string &path) {
 	if (!node) {
 		return Value(target_type); // NULL value
 	}
@@ -317,8 +378,32 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 	case YAML::NodeType::Scalar: {
 		std::string scalar_value = node.Scalar();
 
+		if (formats && (target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIMESTAMP)) {
+			const auto format = formats->find(path);
+			if (format != formats->end()) {
+				string error_message;
+				date_t date_result;
+				timestamp_t timestamp_result;
+				if (target_type.id() == LogicalTypeId::DATE &&
+				    format->second.TryParseDate(string_t(scalar_value), date_result, error_message)) {
+					return Value::DATE(date_result);
+				}
+				if (target_type.id() == LogicalTypeId::TIMESTAMP &&
+				    format->second.TryParseTimestamp(string_t(scalar_value), timestamp_result, error_message)) {
+					return Value::TIMESTAMP(timestamp_result);
+				}
+				return MismatchedValue(node, target_type, strict);
+			}
+		}
+
 		if (target_type.id() == LogicalTypeId::VARCHAR) {
 			return Value(scalar_value);
+		} else if (target_type.id() == LogicalTypeId::UUID) {
+			hugeint_t uuid_result;
+			if (UUID::FromString(scalar_value, uuid_result)) {
+				return Value::UUID(uuid_result);
+			}
+			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::BOOLEAN) {
 			// Handle case-insensitive boolean values
 			std::string lower_value = scalar_value;
@@ -444,7 +529,8 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		// Create list of values - recursively convert each element
 		vector<Value> values;
 		for (size_t idx = 0; idx < node.size(); idx++) {
-			values.push_back(YAMLNodeToValueImpl(node[idx], child_type, strict, budget));
+			values.push_back(
+			    YAMLNodeToValueImpl(node[idx], child_type, strict, budget, formats, ListElementPath(formats, path)));
 		}
 
 		return Value::LIST(values);
@@ -466,7 +552,8 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			auto entry_name = CompatIdentifierName(entry.first);
 			if (node[entry_name]) {
 				struct_values.push_back(
-				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, strict, budget)));
+				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, strict, budget, formats,
+				                                               StructFieldPath(formats, path, entry_name))));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
 			}
@@ -479,9 +566,99 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 	}
 }
 
-Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict) {
+Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict,
+                                  const YAMLColumnFormats *formats, const string &path) {
 	yaml_utils::YAMLTraversalBudget budget;
-	return YAMLNodeToValueImpl(node, target_type, strict, budget);
+	return YAMLNodeToValueImpl(node, target_type, strict, budget, formats && !formats->empty() ? formats : nullptr,
+	                           path);
+}
+
+// read_json's formats that DuckDB cannot cast directly, most preferred first. It tries its list from back to front.
+static const char *const DATE_FORMAT_CANDIDATES[] = {"%y-%m-%d", "%d-%m-%y", "%d-%m-%Y", "%m-%d-%y", "%m-%d-%Y"};
+static const char *const TIMESTAMP_FORMAT_CANDIDATES[] = {"%y-%m-%d %H:%M:%S", "%d-%m-%y %H:%M:%S", "%d-%m-%Y %H:%M:%S",
+                                                          "%m-%d-%y %I:%M:%S %p", "%m-%d-%Y %I:%M:%S %p"};
+
+template <class FITS>
+static bool FitsEveryValue(const vector<string> &values, const FITS &fits) {
+	return std::all_of(values.begin(), values.end(), fits);
+}
+
+void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node> &nodes, const string &path,
+                                     YAMLColumnFormats &formats) {
+	if (type.id() == LogicalTypeId::LIST) {
+		vector<YAML::Node> elements;
+		for (const YAML::Node &node : nodes) {
+			if (node && node.IsSequence()) {
+				for (size_t idx = 0; idx < node.size(); idx++) {
+					elements.push_back(node[idx]);
+				}
+			}
+		}
+		auto child_type = ListType::GetChildType(type);
+		DetectColumnFormats(child_type, elements, JoinElementPath(path), formats);
+		type = LogicalType::LIST(child_type);
+		return;
+	}
+	if (type.id() == LogicalTypeId::STRUCT) {
+		child_list_t<LogicalType> children;
+		for (auto &entry : StructType::GetChildTypes(type)) {
+			const auto field = CompatIdentifierName(entry.first);
+			vector<YAML::Node> values;
+			for (const YAML::Node &node : nodes) {
+				if (node && node.IsMap() && node[field]) {
+					values.push_back(node[field]);
+				}
+			}
+			auto child_type = entry.second;
+			DetectColumnFormats(child_type, values, JoinFieldPath(path, field), formats);
+			children.push_back(make_pair(entry.first, child_type));
+		}
+		type = LogicalType::STRUCT(std::move(children));
+		return;
+	}
+	if (type.id() != LogicalTypeId::VARCHAR || type.HasAlias()) {
+		return;
+	}
+
+	vector<string> values;
+	for (const auto &node : nodes) {
+		if (!node || node.IsNull()) {
+			continue;
+		}
+		if (!node.IsScalar() || node.Scalar().empty() || !StringUtil::CharacterIsDigit(node.Scalar()[0])) {
+			return;
+		}
+		values.push_back(node.Scalar());
+	}
+	if (values.empty()) {
+		return;
+	}
+
+	string error_message;
+	for (const auto candidate : DATE_FORMAT_CANDIDATES) {
+		StrpTimeFormat format;
+		StrTimeFormat::ParseFormatSpecifier(candidate, format);
+		date_t date_result;
+		if (FitsEveryValue(values, [&](const string &value) {
+			    return format.TryParseDate(string_t(value), date_result, error_message);
+		    })) {
+			formats.emplace(path, std::move(format));
+			type = LogicalType::DATE;
+			return;
+		}
+	}
+	for (const auto candidate : TIMESTAMP_FORMAT_CANDIDATES) {
+		StrpTimeFormat format;
+		StrTimeFormat::ParseFormatSpecifier(candidate, format);
+		timestamp_t timestamp_result;
+		if (FitsEveryValue(values, [&](const string &value) {
+			    return format.TryParseTimestamp(string_t(value), timestamp_result, error_message);
+		    })) {
+			formats.emplace(path, std::move(format));
+			type = LogicalType::TIMESTAMP;
+			return;
+		}
+	}
 }
 
 } // namespace duckdb

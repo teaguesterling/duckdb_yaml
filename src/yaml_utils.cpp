@@ -298,7 +298,9 @@ YAMLTemporal DetectTemporal(const std::string &value) {
 			if (has_offset) {
 				result.kind = YAMLTemporalKind::TIMESTAMP_TZ;
 				return result;
-			} else if (first_colon != std::string::npos && value.find(':', first_colon + 1) != std::string::npos) {
+			} else if (first_colon != std::string::npos && value.find(':', first_colon + 1) != std::string::npos &&
+			           value.compare(first_colon - 2, 2, "24") != 0) {
+				// read_json has no timestamp at hour 24 without an offset
 				result.kind = YAMLTemporalKind::TIMESTAMP;
 				return result;
 			}
@@ -311,6 +313,19 @@ YAMLTemporal DetectTemporal(const std::string &value) {
 		result.kind = YAMLTemporalKind::TIME;
 	}
 	return result;
+}
+
+bool IsCanonicalUUID(const std::string &value) {
+	if (value.size() != 36) {
+		return false;
+	}
+	for (idx_t i = 0; i < value.size(); i++) {
+		const bool hyphen_position = i == 8 || i == 13 || i == 18 || i == 23;
+		if (hyphen_position ? value[i] != '-' : !std::isxdigit(static_cast<unsigned char>(value[i]))) {
+			return false;
+		}
+	}
+	return true;
 }
 
 // A string that is a string under the 1.2 core schema, but that a YAML 1.1 parser or a looser number parser reads as

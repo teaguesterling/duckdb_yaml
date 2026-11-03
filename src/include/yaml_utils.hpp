@@ -156,6 +156,9 @@ struct YAMLTemporal {
 // a two-digit year, is NONE and stays text. A column with a declared type uses the looser rules in YAMLNodeToValue.
 YAMLTemporal DetectTemporal(const std::string &value);
 
+// The hyphenated form of a UUID, the only form that read_json detects.
+bool IsCanonicalUUID(const std::string &value);
+
 // Emit a YAML::Node tree, applying YAML::Literal to multiline scalars when style is LITERAL.
 // A string scalar that would read back as another type when written plain is double-quoted.
 void EmitNodeWithStringStyle(YAML::Emitter &out, const YAML::Node &node, YAMLStringStyle resolved_style);
