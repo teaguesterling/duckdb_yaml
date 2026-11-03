@@ -65,6 +65,45 @@ ts3: 2024-01-15 14:30:00
 
 A timestamp with `Z` or a UTC offset is `TIMESTAMP WITH TIME ZONE`, so it keeps its instant: `2024-01-15T14:30:00+05:00` is `2024-01-15 09:30:00+00`. Without one, it is `TIMESTAMP`.
 
+`read_json` sets the rule for these values. A value that would lose information stays VARCHAR, so the text is kept:
+
+```yaml
+a: 2024-01-15 14:30:00 +05:00           # VARCHAR: a space before the offset
+b: 2024-01-15 14:30:00 America/New_York # VARCHAR: a time zone name
+c: 2024-01-15T14:30                     # VARCHAR: no seconds and no offset
+d: 2024-01-15T24:00:00                  # VARCHAR: hour 24 needs an offset or Z
+```
+
+With `columns`, a `TIMESTAMP` or `TIMESTAMP WITH TIME ZONE` column applies an offset and accepts `UTC`. Any other time zone name is a type mismatch.
+
+`epoch` and `infinity` stay VARCHAR, quoted or not. `read_json` reads them as dates.
+
+#### Dates in other orders
+
+A column also becomes `DATE` or `TIMESTAMP` when one format fits every sampled value. The formats are the ones `read_json` uses:
+
+| Type | Formats, most preferred first |
+|------|------|
+| DATE | `%y-%m-%d`, `%d-%m-%y`, `%d-%m-%Y`, `%m-%d-%y`, `%m-%d-%Y` |
+| TIMESTAMP | `%y-%m-%d %H:%M:%S`, `%d-%m-%y %H:%M:%S`, `%d-%m-%Y %H:%M:%S`, `%m-%d-%y %I:%M:%S %p`, `%m-%d-%Y %I:%M:%S %p` |
+
+The column keeps one format for all of its values, so one row can settle the order for the others:
+
+```yaml
+- a: 11-03-2026  # 2026-11-03: month first, because of the next row
+- a: 01-13-2026  # 2026-01-13
+```
+
+When several formats fit, the column takes the most preferred one, as `read_json` does. **Check columns of this kind.** A column that holds only `11-03-2026` reads as March 11. A code such as `1-2-3` reads as `2001-02-03`. To keep the text, set the column to `VARCHAR` with `columns`. To choose the order, read it as `VARCHAR` and use `strptime`.
+
+If no single format fits, the column stays text. A later value that does not fit the format from the sample is an error, or NULL with `ignore_errors`. `read_json` differs here: it can read two rows of one column in different orders.
+
+`yaml_to_json` has no column to look at, so it leaves these values as text.
+
+#### UUID
+
+A hyphenated UUID is `UUID`, as in `read_json`. Other forms, such as a UUID with no hyphens or in braces, are VARCHAR unless the column type is set.
+
 ### Numeric Types
 
 Numbers are detected with optimal precision:
@@ -139,6 +178,15 @@ name: John Doe
 email: john@example.com
 description: "A multi-line
   string value"
+```
+
+### Null Values
+
+A null says nothing about the type of a column, so `~` or `null` in some rows does not change it. A column with only nulls is VARCHAR.
+
+```yaml
+- id: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6  # the column is UUID
+- id: ~                                     # NULL
 ```
 
 ### Quoted Values

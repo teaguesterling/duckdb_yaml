@@ -270,12 +270,62 @@ YAMLCoreKind ClassifyPlainScalar(const std::string &value) {
 	return YAMLCoreKind::STRING;
 }
 
-bool TryParseTimestampWithOffset(const std::string &value, timestamp_t &result) {
-	bool has_offset = false;
-	string_t time_zone(nullptr, 0);
-	return Timestamp::TryConvertTimestampTZ(value.c_str(), value.size(), result, true, has_offset, time_zone) ==
-	           TimestampCastResult::SUCCESS &&
-	       has_offset && time_zone.GetSize() == 0;
+YAMLTemporal DetectTemporal(const std::string &value) {
+	YAMLTemporal result;
+	// DuckDB also parses epoch and infinity as dates. In YAML these are words.
+	if (value.empty() || !StringUtil::CharacterIsDigit(value[0])) {
+		return result;
+	}
+	idx_t pos = 0;
+	// Only YYYY-: DuckDB reads 26-11-03 as the year 26, and read_json has no format with slashes
+	if (value.find('-') == 4) {
+		bool special = false;
+		if (Date::TryConvertDate(value.c_str(), value.size(), pos, result.date, special, false) ==
+		        DateCastResult::SUCCESS &&
+		    pos == value.size()) {
+			result.kind = YAMLTemporalKind::DATE;
+			return result;
+		}
+
+		// A space before an offset parses as a time zone name, and a time zone name cannot be applied here, so it
+		// stays text. read_json has no timestamp format without seconds, unless it has an offset.
+		bool has_offset = false;
+		string_t time_zone(nullptr, 0);
+		if (Timestamp::TryConvertTimestampTZ(value.c_str(), value.size(), result.timestamp, true, has_offset,
+		                                     time_zone) == TimestampCastResult::SUCCESS &&
+		    time_zone.GetSize() == 0) {
+			const auto first_colon = value.find(':');
+			if (has_offset) {
+				result.kind = YAMLTemporalKind::TIMESTAMP_TZ;
+				return result;
+			} else if (first_colon != std::string::npos && value.find(':', first_colon + 1) != std::string::npos &&
+			           value.compare(first_colon - 2, 2, "24") != 0) {
+				// read_json has no timestamp at hour 24 without an offset
+				result.kind = YAMLTemporalKind::TIMESTAMP;
+				return result;
+			}
+		}
+		return result;
+	}
+
+	pos = 0;
+	if (Time::TryConvertTime(value.c_str(), value.size(), pos, result.time, false) && pos == value.size()) {
+		result.kind = YAMLTemporalKind::TIME;
+	}
+	return result;
+}
+
+bool IsCanonicalUUID(const std::string &value) {
+	if (value.size() != 36) {
+		return false;
+	}
+	for (idx_t i = 0; i < value.size(); i++) {
+		const bool hyphen_position = i == 8 || i == 13 || i == 18 || i == 23;
+		if (hyphen_position ? value[i] != '-' : !std::isxdigit(static_cast<unsigned char>(value[i]))) {
+			return false;
+		}
+	}
+	return true;
 }
 
 // A string that is a string under the 1.2 core schema, but that a YAML 1.1 parser or a looser number parser reads as
@@ -291,6 +341,20 @@ static bool IsAmbiguousAcrossYAMLVersions(const std::string &value) {
 	if (value.empty() ||
 	    (!StringUtil::CharacterIsDigit(value[0]) && value[0] != '-' && value[0] != '+' && value[0] != '.')) {
 		return false;
+	}
+	if (StringUtil::CharacterIsDigit(value[0])) {
+		// Not detected here, but a timestamp or a date to a YAML 1.1 parser or to DuckDB's casts
+		idx_t pos = 0;
+		date_t date_value;
+		bool special = false;
+		timestamp_t timestamp_value;
+		if ((Date::TryConvertDate(value.c_str(), value.size(), pos, date_value, special, false) ==
+		         DateCastResult::SUCCESS &&
+		     pos == value.size()) ||
+		    Timestamp::TryConvertTimestamp(value.c_str(), value.size(), timestamp_value, false) ==
+		        TimestampCastResult::SUCCESS) {
+			return true;
+		}
 	}
 	if (value.find_first_not_of("-+0123456789_") == std::string::npos ||
 	    (value.size() > 2 && lower_value.compare(0, 2, "0b") == 0)) {
@@ -457,42 +521,24 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node> &docs, YAMLFormat for
 
 // Helper function to check if a string might be a date/timestamp
 static bool TryDetectDateOrTimestamp(const std::string &value, std::string &json_value) {
-	// Try to parse as date first
-	idx_t pos = 0;
-	date_t date_result;
-	bool special = false;
-
-	auto date_cast_result = Date::TryConvertDate(value.c_str(), value.length(), pos, date_result, special, false);
-	if (date_cast_result == DateCastResult::SUCCESS && pos == value.length()) {
-		// Successfully parsed as date, format it in JSON date format
-		json_value = "\"" + Date::ToString(date_result) + "\"";
+	const auto temporal = DetectTemporal(value);
+	switch (temporal.kind) {
+	case YAMLTemporalKind::DATE:
+		json_value = "\"" + Date::ToString(temporal.date) + "\"";
 		return true;
-	}
-
-	// Try to parse as timestamp. With an offset, the instant in UTC.
-	timestamp_t timestamp_result;
-	if (TryParseTimestampWithOffset(value, timestamp_result) ||
-	    Timestamp::TryConvertTimestamp(value.c_str(), value.length(), timestamp_result, false) ==
-	        TimestampCastResult::SUCCESS) {
-		// Successfully parsed as timestamp, format it in ISO 8601 format with Z suffix for JSON compatibility
-		auto timestamp_str = Timestamp::ToString(timestamp_result);
-		// Check if timestamp already has timezone info
-		if (timestamp_str.find('+') == std::string::npos && timestamp_str.find('Z') == std::string::npos) {
-			timestamp_str += "Z"; // Add UTC timezone indicator
-		}
-		json_value = "\"" + timestamp_str + "\"";
+	case YAMLTemporalKind::TIME:
+		json_value = "\"" + Time::ToString(temporal.time) + "\"";
 		return true;
-	}
-
-	// Try to parse as time
-	pos = 0;
-	dtime_t time_result;
-	if (Time::TryConvertTime(value.c_str(), value.length(), pos, time_result, false) && pos == value.length()) {
-		// Successfully parsed as time, format it in JSON time format
-		json_value = "\"" + Time::ToString(time_result) + "\"";
+	case YAMLTemporalKind::TIMESTAMP:
+		// No zone in the input, so none in the output
+		json_value = "\"" + Timestamp::ToString(temporal.timestamp) + "\"";
 		return true;
+	case YAMLTemporalKind::TIMESTAMP_TZ:
+		json_value = "\"" + Timestamp::ToString(temporal.timestamp) + "Z\"";
+		return true;
+	case YAMLTemporalKind::NONE:
+		break;
 	}
-
 	return false;
 }
 

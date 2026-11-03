@@ -1,0 +1,341 @@
+# name: test/sql/yaml_column_formats.test
+# description: A column of dates in another form takes one format, chosen from every sampled value
+# group: [sql]
+
+require yaml
+
+require json
+
+#--- When only one format fits, the sample settles the order
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 13-01-2026');
+----
+DATE	2026-01-13
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 01-13-2026');
+----
+DATE	2026-01-13
+
+#--- One format for the whole column. read_json reads the first row here as March 11 and the second as month-first,
+#--- so the same column holds two orders. One row that only fits month-first settles it for all rows.
+statement ok
+COPY (SELECT unnest(['- a: 11-03-2026', '- a: 01-13-2026'])) TO '__TEST_DIR__/settled.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(a), a FROM read_yaml('__TEST_DIR__/settled.yaml');
+----
+DATE	2026-11-03
+DATE	2026-01-13
+
+#--- Each column settles on its own
+statement ok
+COPY (SELECT unnest(['- {m: 11-03-2026, d: 11-03-2026}', '- {m: 01-13-2026, d: 13-01-2026}'])) TO '__TEST_DIR__/two.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT m, d FROM read_yaml('__TEST_DIR__/two.yaml');
+----
+2026-11-03	2026-03-11
+2026-01-13	2026-01-13
+
+#--- When several fit, read_json's preference
+query I
+SELECT a FROM parse_yaml('a: 11-03-2026');
+----
+2026-03-11
+
+query I
+SELECT a FROM parse_yaml('a: 26-11-03');
+----
+2026-11-03
+
+query I
+SELECT a FROM parse_yaml('a: 1-2-3');
+----
+2001-02-03
+
+query I
+SELECT a FROM parse_yaml('a: 11-03-26');
+----
+2011-03-26
+
+#--- Quoted values too, as with other dates
+query I
+SELECT a FROM parse_yaml('a: "13-01-2026"');
+----
+2026-01-13
+
+#--- Timestamps in the same way
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 11-03-2026 10:00:00 PM');
+----
+TIMESTAMP	2026-11-03 22:00:00
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 13-01-2026 10:00:00');
+----
+TIMESTAMP	2026-01-13 10:00:00
+
+#--- Nested, in lists and in structs
+statement ok
+COPY (SELECT unnest(['- l: [11-03-2026, 01-13-2026]', '  s: {d: 13-01-2026}'])) TO '__TEST_DIR__/nested.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query IIII
+SELECT typeof(l), l, typeof(s), s.d FROM read_yaml('__TEST_DIR__/nested.yaml');
+----
+DATE[]	[2026-11-03, 2026-01-13]	STRUCT(d DATE)	2026-01-13
+
+#--- A column named a.b and the field b of column a have their own formats
+statement ok
+COPY (SELECT unnest(['- {a.b: 11-03-2026, a: {b: 11-03-2026}}', '- {a.b: 01-13-2026, a: {b: 13-01-2026}}'])) TO '__TEST_DIR__/dotted.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT "a.b", a.b FROM read_yaml('__TEST_DIR__/dotted.yaml');
+----
+2026-11-03	2026-03-11
+2026-01-13	2026-01-13
+
+#--- Rows that are not maps
+statement ok
+COPY (SELECT unnest(['- 11-03-2026', '- 01-13-2026'])) TO '__TEST_DIR__/scalars.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(value), value FROM read_yaml('__TEST_DIR__/scalars.yaml');
+----
+DATE	2026-11-03
+DATE	2026-01-13
+
+#--- multi_document list mode
+statement ok
+COPY (SELECT unnest(['a: 11-03-2026', '---', 'a: 01-13-2026'])) TO '__TEST_DIR__/docs.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT documents[1].a FROM read_yaml('__TEST_DIR__/docs.yaml', multi_document='list');
+----
+2026-11-03
+
+#--- Nulls do not count against a format
+statement ok
+COPY (SELECT unnest(['- a: 01-13-2026', '- a: ~', '- a: null', '- b: 1'])) TO '__TEST_DIR__/nulls.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(a), count(a) FROM read_yaml('__TEST_DIR__/nulls.yaml') GROUP BY 1;
+----
+DATE	1
+
+#--- No single format fits, so the column stays text with its values unchanged. A date and a string widen to yaml.
+statement ok
+COPY (SELECT unnest(['- a: 2026-11-03', '- a: 11-03-2026'])) TO '__TEST_DIR__/mixed.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(a), a FROM read_yaml('__TEST_DIR__/mixed.yaml');
+----
+yaml	2026-11-03
+yaml	11-03-2026
+
+statement ok
+COPY (SELECT unnest(['- a: 13-01-2026', '- a: 01-13-2026'])) TO '__TEST_DIR__/both_orders.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/both_orders.yaml');
+----
+13-01-2026
+01-13-2026
+
+statement ok
+COPY (SELECT unnest(['- a: 13-01-2026', '- a: hello'])) TO '__TEST_DIR__/text.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/text.yaml');
+----
+13-01-2026
+hello
+
+#--- A later value that does not fit is an error, or NULL with ignore_errors. It never reads in another order.
+statement ok
+COPY (SELECT string_agg(s, chr(10)) FROM (SELECT '- a: 11-03-2026' s FROM range(10) UNION ALL SELECT '- a: 13-13-2026')) TO '__TEST_DIR__/late.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late.yaml', sample_size=2);
+----
+DATE
+
+query II
+SELECT count(*), count(a) FROM read_yaml('__TEST_DIR__/late.yaml', sample_size=2, ignore_errors=true);
+----
+11	10
+
+#--- A declared type and auto_detect=false are not touched
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/settled.yaml', columns={'a': 'VARCHAR'});
+----
+11-03-2026
+01-13-2026
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/settled.yaml', auto_detect=false);
+----
+11-03-2026
+01-13-2026
+
+#--- yaml_to_json has no column, so it keeps the text
+query I
+SELECT yaml_to_json('a: 11-03-2026'::YAML);
+----
+{"a":"11-03-2026"}
+
+#--- Quoted or not, epoch and infinity stay words
+query II
+SELECT typeof(a), a FROM parse_yaml('a: epoch');
+----
+VARCHAR	epoch
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: "infinity"');
+----
+VARCHAR	infinity
+
+#--- UUIDs, as read_json detects them
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6');
+----
+UUID	0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: "0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6"');
+----
+UUID
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 0D6E7F3A1B2C4D5E8F90A1B2C3D4E5F6');
+----
+VARCHAR	0D6E7F3A1B2C4D5E8F90A1B2C3D4E5F6
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: "{0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6}"');
+----
+VARCHAR	{0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6}
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f');
+----
+VARCHAR	0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f
+
+statement ok
+COPY (SELECT unnest(['- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6', '- u: hello'])) TO '__TEST_DIR__/uuid_mixed.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT DISTINCT typeof(u) FROM read_yaml('__TEST_DIR__/uuid_mixed.yaml');
+----
+yaml
+
+# A later value that is not a UUID is an error, as for any type from a sample
+statement ok
+COPY (SELECT string_agg(s, chr(10)) FROM (SELECT '- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6' s FROM range(10) UNION ALL SELECT '- u: hello')) TO '__TEST_DIR__/uuid_late.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/uuid_late.yaml', sample_size=2);
+----
+UUID
+
+query II
+SELECT count(*), count(u) FROM read_yaml('__TEST_DIR__/uuid_late.yaml', sample_size=2, ignore_errors=true);
+----
+11	10
+
+# Pinned, a UUID column accepts the forms DuckDB casts
+query I
+SELECT u FROM read_yaml('__TEST_DIR__/uuid_mixed.yaml', columns={'u': 'UUID'}, ignore_errors=true);
+----
+0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6
+NULL
+
+# A UUID through COPY reads back as a UUID, and JSON keeps its text
+statement ok
+COPY (SELECT '0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6'::UUID AS u) TO '__TEST_DIR__/uuid_out.yaml' (FORMAT yaml);
+
+query II
+SELECT typeof(u), u FROM read_yaml('__TEST_DIR__/uuid_out.yaml');
+----
+UUID	0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6
+
+query I
+SELECT yaml_to_json('u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6'::YAML);
+----
+{"u":"0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6"}
+
+#--- A null says nothing about the type of a column. It counted as VARCHAR, so the column became yaml.
+statement ok
+COPY (SELECT unnest(['- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6', '- u: ~', '- u: null'])) TO '__TEST_DIR__/uuid_null.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(u), count(u) FROM read_yaml('__TEST_DIR__/uuid_null.yaml') GROUP BY 1;
+----
+UUID	1
+
+statement ok
+COPY (SELECT unnest(['- u: ~', '- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6'])) TO '__TEST_DIR__/uuid_null_first.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(u), count(u) FROM read_yaml('__TEST_DIR__/uuid_null_first.yaml') GROUP BY 1;
+----
+UUID	1
+
+statement ok
+COPY (SELECT unnest(['- {d: 2026-11-03, t: 2026-11-03T10:00:00Z, n: 1, f: 1.5, b: true, c: 10:00:00}', '- {d: ~, t: ~, n: ~, f: ~, b: ~, c: ~}'])) TO '__TEST_DIR__/null_types.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query IIIIII
+SELECT DISTINCT typeof(d), typeof(t), typeof(n), typeof(f), typeof(b), typeof(c) FROM read_yaml('__TEST_DIR__/null_types.yaml');
+----
+DATE	TIMESTAMP WITH TIME ZONE	TINYINT	DOUBLE	BOOLEAN	TIME
+
+statement ok
+COPY (SELECT unnest(['- s: {u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6}', '- s: {u: ~}', '- s: ~'])) TO '__TEST_DIR__/null_struct.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT DISTINCT typeof(s) FROM read_yaml('__TEST_DIR__/null_struct.yaml');
+----
+STRUCT(u UUID)
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: [0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6, ~]');
+----
+UUID[]
+
+# parse_yaml and rows that are not maps merge types in another path
+query I
+SELECT DISTINCT typeof(a) FROM parse_yaml(E'a: 2026-11-03\n---\na: ~');
+----
+DATE
+
+statement ok
+COPY (SELECT unnest(['- 2026-11-03', '- ~'])) TO '__TEST_DIR__/null_scalars.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT DISTINCT typeof(value) FROM read_yaml('__TEST_DIR__/null_scalars.yaml');
+----
+DATE
+
+# A column of nulls only is still VARCHAR, and a null is still NULL
+statement ok
+COPY (SELECT unnest(['- a: ~', '- a: null'])) TO '__TEST_DIR__/all_null.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT DISTINCT typeof(a), a FROM read_yaml('__TEST_DIR__/all_null.yaml');
+----
+VARCHAR	NULL
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: [~, ~]');
+----
+VARCHAR[]
+
+#--- A column named a[] and the elements of list a have their own formats
+statement ok
+COPY (SELECT unnest(['- {"a[]": 11-03-2026, a: [11-03-2026]}', '- {"a[]": 01-13-2026, a: [13-01-2026]}'])) TO '__TEST_DIR__/bracket.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT "a[]", a FROM read_yaml('__TEST_DIR__/bracket.yaml');
+----
+2026-11-03	[2026-03-11]
+2026-01-13	[2026-01-13]
