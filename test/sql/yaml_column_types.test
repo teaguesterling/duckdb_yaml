@@ -22,8 +22,8 @@ SELECT name, age FROM read_yaml('test/yaml/typed.yaml', columns={'name': 'VARCHA
 ----
 John Doe	30
 
-# Test with wrong type specification - should cast or error
-query TII
+# Test with wrong type specification - an integer column cannot hold 95.5 without changing it, so this is an error
+statement error
 SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml',
     columns={
         'name': 'VARCHAR',
@@ -31,7 +31,7 @@ SELECT name, age, score FROM read_yaml('test/yaml/typed.yaml',
         'score': 'BIGINT'
     });
 ----
-John Doe	30	95
+95.5
 
 # Test basic column type functionality with simple fields
 query T

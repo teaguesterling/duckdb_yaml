@@ -272,6 +272,8 @@ SELECT * FROM read_yaml('data/*.yaml', ignore_errors = true);
 | Invalid YAML | Skip document |
 | Type conversion | Value becomes NULL |
 
+With `ignore_errors=false`, a value that the column type cannot hold is an error. A `null` in the file and a missing key are NULL in both cases.
+
 ---
 
 ## maximum_object_size

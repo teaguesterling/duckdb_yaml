@@ -1,0 +1,259 @@
+# name: test/sql/yaml_reader/yaml_type_mismatch.test
+# description: read_yaml returns every value correctly or raises an error. It never silently reads a value as NULL.
+# group: [yaml_reader]
+
+require yaml
+
+# A column type comes from a sample of the rows. The rows after the sample can hold a value that the type cannot.
+# With ignore_errors, such a value is NULL. A null in the file is always NULL.
+
+#--- Integers widen when rows were not sampled, because a later row can be larger
+statement ok
+COPY (SELECT string_agg('- id: ' || i, E'\n' ORDER BY i) FROM range(1000) t(i)) TO '__TEST_DIR__/ids.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query IIII
+SELECT any_value(typeof(id)), count(*), count(id), max(id) FROM read_yaml('__TEST_DIR__/ids.yaml', sample_size=10);
+----
+BIGINT	1000	1000	999
+
+# Every row sampled: the exact type, as before
+query IIII
+SELECT any_value(typeof(id)), count(*), count(id), max(id) FROM read_yaml('__TEST_DIR__/ids.yaml', sample_size=1000);
+----
+SMALLINT	1000	1000	999
+
+query IIII
+SELECT any_value(typeof(id)), count(*), count(id), max(id) FROM read_yaml('__TEST_DIR__/ids.yaml', sample_size=-1);
+----
+SMALLINT	1000	1000	999
+
+query II
+SELECT any_value(typeof(id)), count(id) FROM read_yaml('__TEST_DIR__/ids.yaml');
+----
+SMALLINT	1000
+
+# Inside structs and lists too
+statement ok
+COPY (SELECT string_agg('- s: {n: ' || i || E'}\n  l: [' || i || ']', E'\n' ORDER BY i) FROM range(1000) t(i)) TO '__TEST_DIR__/nested.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query IIII
+SELECT any_value(typeof(s.n)), count(s.n), any_value(typeof(l[1])), max(l[1]) FROM read_yaml('__TEST_DIR__/nested.yaml', sample_size=10);
+----
+BIGINT	1000	BIGINT	999
+
+# Files that were not sampled count as rows that were not sampled
+statement ok
+COPY (SELECT 'id: 1') TO '__TEST_DIR__/files_a.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement ok
+COPY (SELECT 'id: 100000') TO '__TEST_DIR__/files_b.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query III
+SELECT any_value(typeof(id)), count(id), max(id) FROM read_yaml('__TEST_DIR__/files_*.yaml', maximum_sample_files=1);
+----
+BIGINT	2	100000
+
+query III
+SELECT any_value(typeof(id)), count(id), max(id) FROM read_yaml('__TEST_DIR__/files_*.yaml');
+----
+INTEGER	2	100000
+
+#--- The user's own type is never widened: a value that does not fit is an error
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/ids.yaml', sample_size=10, columns={'id': 'TINYINT'});
+----
+TINYINT
+
+query III
+SELECT any_value(typeof(id)), count(*), count(id) FROM read_yaml('__TEST_DIR__/ids.yaml', sample_size=10, columns={'id': 'TINYINT'}, ignore_errors=true);
+----
+TINYINT	1000	128
+
+#--- A later value of another kind is an error that names the value and the way out
+statement ok
+COPY (SELECT string_agg('- v: ' || i, E'\n' ORDER BY i) || E'\n- v: not a number' FROM range(20) t(i)) TO '__TEST_DIR__/text_late.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/text_late.yaml', sample_size=10);
+----
+not a number
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/text_late.yaml', sample_size=10);
+----
+sample_size
+
+# ignore_errors keeps the row, and only that value is NULL
+query II
+SELECT count(*), count(v) FROM read_yaml('__TEST_DIR__/text_late.yaml', sample_size=10, ignore_errors=true);
+----
+21	20
+
+# The ways out that the error names
+query II
+SELECT count(v), any_value(typeof(v)) FROM read_yaml('__TEST_DIR__/text_late.yaml', sample_size=-1);
+----
+21	yaml
+
+query I
+SELECT count(v) FROM read_yaml('__TEST_DIR__/text_late.yaml', sample_size=10, columns={'v': 'VARCHAR'});
+----
+21
+
+#--- Each other type
+statement ok
+COPY (SELECT E'- b: true\n  d: 2024-01-15\n  t: 14:30:00\n  ts: 2024-01-15T14:30:00\n  s: {x: 1}\n  l: [1]\n  f: 1.5\n- b: maybe\n  d: 2024-01-15\n  t: 14:30:00\n  ts: 2024-01-15T14:30:00\n  s: {x: 1}\n  l: [1]\n  f: 1.5') TO '__TEST_DIR__/late_bool.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_bool.yaml', sample_size=1);
+----
+maybe
+
+query II
+SELECT count(*), count(b) FROM read_yaml('__TEST_DIR__/late_bool.yaml', sample_size=1, ignore_errors=true);
+----
+2	1
+
+statement ok
+COPY (SELECT E'- d: 2024-01-15\n- d: soon') TO '__TEST_DIR__/late_date.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_date.yaml', sample_size=1);
+----
+soon
+
+statement ok
+COPY (SELECT E'- t: 14:30:00\n- t: soon') TO '__TEST_DIR__/late_time.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_time.yaml', sample_size=1);
+----
+soon
+
+statement ok
+COPY (SELECT E'- t: 2024-01-15T14:30:00\n- t: soon') TO '__TEST_DIR__/late_ts.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_ts.yaml', sample_size=1);
+----
+soon
+
+statement ok
+COPY (SELECT E'- f: 1.5\n- f: much') TO '__TEST_DIR__/late_double.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_double.yaml', sample_size=1);
+----
+much
+
+# A scalar where a struct or a list was sampled, and the other way around
+statement ok
+COPY (SELECT E'- s: {x: 1}\n- s: flat') TO '__TEST_DIR__/late_struct.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_struct.yaml', sample_size=1);
+----
+flat
+
+statement ok
+COPY (SELECT E'- l: [1, 2]\n- l: flat') TO '__TEST_DIR__/late_list.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_list.yaml', sample_size=1);
+----
+flat
+
+statement ok
+COPY (SELECT E'- n: 1\n- n: {x: 1}') TO '__TEST_DIR__/late_map.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_map.yaml', sample_size=1);
+----
+sample_size
+
+statement ok
+COPY (SELECT E'- n: 1\n- n: [1, 2]') TO '__TEST_DIR__/late_seq.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_seq.yaml', sample_size=1);
+----
+sample_size
+
+#--- A null in the file is NULL, and a missing key is NULL. Neither is an error.
+statement ok
+COPY (SELECT E'- n: 1\n  o: 1\n- n: null\n- n: ~\n- n:\n- o: 2') TO '__TEST_DIR__/nulls.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT count(*), count(n) FROM read_yaml('__TEST_DIR__/nulls.yaml', sample_size=1);
+----
+5	1
+
+#--- A VARCHAR column keeps a map or a list as text, because the text is the value
+statement ok
+COPY (SELECT E'- a: {x: 1}\n  b: [1, 2]\n- a: flat\n  b: flat') TO '__TEST_DIR__/nested_text.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT a, b FROM read_yaml('__TEST_DIR__/nested_text.yaml', auto_detect=false);
+----
+{x: 1}	[1, 2]
+flat	flat
+
+#--- Numbers read as the value detection saw, and a partial number is not a number
+statement ok
+COPY (SELECT E'- a: 0x1F\n  b: 1e3\n  c: 1.0') TO '__TEST_DIR__/forms.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query III
+SELECT a, b, c FROM read_yaml('__TEST_DIR__/forms.yaml');
+----
+31	1000	1
+
+statement ok
+COPY (SELECT E'- a: 1\n- a: 12abc') TO '__TEST_DIR__/partial_int.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/partial_int.yaml', sample_size=1);
+----
+12abc
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/partial_int.yaml', columns={'a': 'INTEGER'});
+----
+12abc
+
+statement ok
+COPY (SELECT E'- a: 1.5\n- a: 1.5abc') TO '__TEST_DIR__/partial_double.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/partial_double.yaml', sample_size=1);
+----
+1.5abc
+
+statement ok
+COPY (SELECT E'- a: 1.5') TO '__TEST_DIR__/fraction.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/fraction.yaml', columns={'a': 'INTEGER'});
+----
+1.5
+
+#--- read_yaml_objects follows the same rules
+statement ok
+COPY (SELECT string_agg('id: ' || i, E'\n---\n' ORDER BY i) FROM range(1000) t(i)) TO '__TEST_DIR__/docs.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT count(*), count(yaml.id) FROM read_yaml_objects('__TEST_DIR__/docs.yaml', sample_size=10);
+----
+1000	1000
+
+statement ok
+COPY (SELECT E'v: 1\n---\nv: not a number') TO '__TEST_DIR__/docs_text.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml_objects('__TEST_DIR__/docs_text.yaml', sample_size=1);
+----
+not a number
+
+query II
+SELECT count(*), count(yaml.v) FROM read_yaml_objects('__TEST_DIR__/docs_text.yaml', sample_size=1, ignore_errors=true);
+----
+2	1

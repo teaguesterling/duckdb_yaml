@@ -275,7 +275,61 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 // Helper function to convert YAML node to DuckDB value.
 // Budget-carrying worker (see DetectYAMLTypeImpl) — bounds recursion depth and
 // total node expansion so alias-bombed / deeply-nested input fails cleanly.
-static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &target_type,
+// The same rules as number detection in DetectYAMLTypeImpl, so that a value reads as what detection saw: 0x1F is 31 and
+// 1e3 is 1000. A partial number, such as 12abc, is not a number.
+static bool TryParseYAMLInteger(const std::string &scalar_value, int64_t &result) {
+	const char *number_start = scalar_value.c_str();
+	const char *number_end = number_start + scalar_value.size();
+	char *parse_end;
+	errno = 0;
+	const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
+	if (parse_end == number_start) {
+		return false;
+	}
+	if (parse_end == number_end) {
+		result = int_val;
+		return errno != ERANGE;
+	}
+	errno = 0;
+	const double double_val = std::strtod(number_start, &parse_end);
+	if (parse_end != number_end || errno == ERANGE || double_val != std::floor(double_val)) {
+		return false;
+	}
+	// 2^63 is the first double that does not fit
+	if (double_val < -9223372036854775808.0 || double_val >= 9223372036854775808.0) {
+		return false;
+	}
+	result = static_cast<int64_t>(double_val);
+	return true;
+}
+
+// A value that the column type cannot hold. Strict callers raise an error, because NULL here is data lost in silence.
+static Value MismatchedValue(const YAML::Node &node, const LogicalType &target_type, bool strict) {
+	if (!strict) {
+		return Value(target_type);
+	}
+	std::string description;
+	if (node.IsScalar()) {
+		description = "\"" + node.Scalar().substr(0, 100) + "\"";
+	} else if (node.IsMap()) {
+		description = "a map";
+	} else {
+		description = "a sequence";
+	}
+	throw InvalidInputException("Cannot read %s as %s. A column type comes from a sample of the rows. Set 'columns', "
+	                            "increase 'sample_size' (-1 reads every row), or set 'ignore_errors' to read this "
+	                            "value as NULL.",
+	                            description, target_type.ToString());
+}
+
+static std::string YAMLNodeToFlowText(const YAML::Node &node) {
+	YAML::Emitter out;
+	yaml_utils::ConfigureEmitter(out, yaml_utils::YAMLFormat::FLOW);
+	yaml_utils::EmitNodeWithStringStyle(out, node, yaml_utils::YAMLStringStyle::QUOTED);
+	return out.c_str();
+}
+
+static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &target_type, bool strict,
                                  yaml_utils::YAMLTraversalBudget &budget) {
 	if (!node) {
 		return Value(target_type); // NULL value
@@ -342,43 +396,23 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			           lower_value == "f") {
 				return Value::BOOLEAN(false);
 			}
-			return Value(target_type); // NULL if not valid boolean
-		} else if (target_type.id() == LogicalTypeId::TINYINT) {
-			try {
-				int64_t val = std::stoll(scalar_value);
-				if (val >= -128 && val <= 127) {
-					return Value::TINYINT(static_cast<int8_t>(val));
-				}
-				return Value(target_type); // NULL if out of range
-			} catch (...) {
-				return Value(target_type); // NULL if conversion fails
+			return MismatchedValue(node, target_type, strict);
+		} else if (target_type.id() == LogicalTypeId::TINYINT || target_type.id() == LogicalTypeId::SMALLINT ||
+		           target_type.id() == LogicalTypeId::INTEGER || target_type.id() == LogicalTypeId::BIGINT) {
+			int64_t val;
+			if (!TryParseYAMLInteger(scalar_value, val)) {
+				return MismatchedValue(node, target_type, strict);
 			}
-		} else if (target_type.id() == LogicalTypeId::SMALLINT) {
-			try {
-				int64_t val = std::stoll(scalar_value);
-				if (val >= -32768 && val <= 32767) {
-					return Value::SMALLINT(static_cast<int16_t>(val));
-				}
-				return Value(target_type); // NULL if out of range
-			} catch (...) {
-				return Value(target_type); // NULL if conversion fails
+			if (target_type.id() == LogicalTypeId::TINYINT && val >= -128 && val <= 127) {
+				return Value::TINYINT(static_cast<int8_t>(val));
+			} else if (target_type.id() == LogicalTypeId::SMALLINT && val >= -32768 && val <= 32767) {
+				return Value::SMALLINT(static_cast<int16_t>(val));
+			} else if (target_type.id() == LogicalTypeId::INTEGER && val >= -2147483648LL && val <= 2147483647LL) {
+				return Value::INTEGER(static_cast<int32_t>(val));
+			} else if (target_type.id() == LogicalTypeId::BIGINT) {
+				return Value::BIGINT(val);
 			}
-		} else if (target_type.id() == LogicalTypeId::INTEGER) {
-			try {
-				int64_t val = std::stoll(scalar_value);
-				if (val >= -2147483648LL && val <= 2147483647LL) {
-					return Value::INTEGER(static_cast<int32_t>(val));
-				}
-				return Value(target_type); // NULL if out of range
-			} catch (...) {
-				return Value(target_type); // NULL if conversion fails
-			}
-		} else if (target_type.id() == LogicalTypeId::BIGINT) {
-			try {
-				return Value::BIGINT(std::stoll(scalar_value));
-			} catch (...) {
-				return Value(target_type); // NULL if conversion fails
-			}
+			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::DOUBLE) {
 			// Handle special floating point values
 			std::string lower_val = scalar_value;
@@ -392,12 +426,14 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 				return Value::DOUBLE(std::numeric_limits<double>::quiet_NaN());
 			}
 
-			try {
-				double val = std::stod(scalar_value);
-				return Value::DOUBLE(val);
-			} catch (...) {
-				return Value(target_type); // NULL if conversion fails
+			const char *number_start = scalar_value.c_str();
+			char *parse_end;
+			errno = 0;
+			const double val = std::strtod(number_start, &parse_end);
+			if (parse_end == number_start || parse_end != number_start + scalar_value.size() || errno == ERANGE) {
+				return MismatchedValue(node, target_type, strict);
 			}
+			return Value::DOUBLE(val);
 		} else if (target_type.id() == LogicalTypeId::DATE) {
 			idx_t pos = 0;
 			date_t date_result;
@@ -407,14 +443,14 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			if (date_cast_result == DateCastResult::SUCCESS && pos == scalar_value.length()) {
 				return Value::DATE(date_result);
 			}
-			return Value(target_type); // NULL if conversion fails
+			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIMESTAMP) {
 			timestamp_t timestamp_result;
 			if (Timestamp::TryConvertTimestamp(scalar_value.c_str(), scalar_value.length(), timestamp_result, false) ==
 			    TimestampCastResult::SUCCESS) {
 				return Value::TIMESTAMP(timestamp_result);
 			}
-			return Value(target_type); // NULL if conversion fails
+			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::TIME) {
 			idx_t pos = 0;
 			dtime_t time_result;
@@ -422,18 +458,21 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			    pos == scalar_value.length()) {
 				return Value::TIME(time_result);
 			}
-			return Value(target_type); // NULL if conversion fails
+			return MismatchedValue(node, target_type, strict);
 		}
 		// If target type is STRUCT or LIST but we have a scalar, return NULL
 		// This handles type mismatches where schema detection saw a different type
 		if (target_type.id() == LogicalTypeId::STRUCT || target_type.id() == LogicalTypeId::LIST) {
-			return Value(target_type); // NULL for type mismatch
+			return MismatchedValue(node, target_type, strict);
 		}
 		return Value(scalar_value); // Default to string
 	}
 	case YAML::NodeType::Sequence: {
+		if (target_type.id() == LogicalTypeId::VARCHAR) {
+			return Value(YAMLNodeToFlowText(node));
+		}
 		if (target_type.id() != LogicalTypeId::LIST) {
-			return Value(target_type); // NULL if not expecting a list
+			return MismatchedValue(node, target_type, strict);
 		}
 		// Get child type for list (used by both the empty-list and non-empty branches).
 		auto child_type = ListType::GetChildType(target_type);
@@ -457,14 +496,17 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		// Create list of values - recursively convert each element
 		vector<Value> values;
 		for (size_t idx = 0; idx < node.size(); idx++) {
-			values.push_back(YAMLNodeToValueImpl(node[idx], child_type, budget));
+			values.push_back(YAMLNodeToValueImpl(node[idx], child_type, strict, budget));
 		}
 
 		return Value::LIST(values);
 	}
 	case YAML::NodeType::Map: {
+		if (target_type.id() == LogicalTypeId::VARCHAR) {
+			return Value(YAMLNodeToFlowText(node));
+		}
 		if (target_type.id() != LogicalTypeId::STRUCT) {
-			return Value(target_type); // NULL if not expecting a struct
+			return MismatchedValue(node, target_type, strict);
 		}
 
 		// Get struct children
@@ -476,7 +518,7 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			auto entry_name = CompatIdentifierName(entry.first);
 			if (node[entry_name]) {
 				struct_values.push_back(
-				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, budget)));
+				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, strict, budget)));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
 			}
@@ -489,9 +531,9 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 	}
 }
 
-Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type) {
+Value YAMLReader::YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict) {
 	yaml_utils::YAMLTraversalBudget budget;
-	return YAMLNodeToValueImpl(node, target_type, budget);
+	return YAMLNodeToValueImpl(node, target_type, strict, budget);
 }
 
 } // namespace duckdb
