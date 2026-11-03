@@ -19,20 +19,13 @@ FROM read_yaml('data.yaml');
 
 #### DATE
 
-Detected formats:
+Detected format: ISO 8601, `2024-01-15`.
 
-| Format | Example |
-|--------|---------|
-| ISO 8601 | `2024-01-15` |
-| Slash (US) | `01/15/2024` |
-| Slash (EU) | `15/01/2024` |
-| Dot | `15.01.2024` |
+Other forms, such as `01/15/2024` and `15.01.2024`, read as VARCHAR. To parse them, use `strptime`.
 
 ```yaml
-# All detected as DATE
-date1: 2024-01-15
-date2: 01/15/2024
-date3: 15.01.2024
+date1: 2024-01-15  # DATE
+date2: 01/15/2024  # VARCHAR
 ```
 
 #### TIME
@@ -70,6 +63,10 @@ ts2: 2024-01-15T14:30:00+05:00
 ts3: 2024-01-15 14:30:00
 ```
 
+!!! warning "UTC offsets are not applied"
+    `2024-01-15T14:30:00+05:00` reads as `2024-01-15 14:30:00`, so the offset is lost and the instant is wrong.
+    To keep the offset, read the column as VARCHAR with `columns` and convert it to `TIMESTAMPTZ` yourself.
+
 ### Numeric Types
 
 Numbers are detected with optimal precision:
@@ -94,15 +91,19 @@ large: 9223372036854775807
 
 # Detected as DOUBLE
 decimal: 3.14159
-scientific: 1.23e-4
 ```
+
+A number in another form reads as the number that it means, with the smallest type that holds it. `1e3` is SMALLINT `1000`, and `0x1F` is TINYINT `31`.
+
+A number with `-` in its exponent, such as `1.23e-4`, reads as VARCHAR. To read it as a number, set the column type with `columns`.
 
 #### Special Float Values
 
+`inf`, `-inf` and `nan` read as DOUBLE. The YAML forms `.inf`, `-.inf` and `.nan` read as VARCHAR.
+
 ```yaml
-infinity: .inf
-negative_infinity: -.inf
-not_a_number: .nan
+infinity: inf   # DOUBLE
+yaml_form: .inf # VARCHAR
 ```
 
 ### Boolean Type
@@ -288,8 +289,9 @@ SELECT * FROM read_yaml('data/*.yaml',
 ```
 
 !!! warning "Schema Mismatch Errors"
-    If sampling misses files with different structures, you may see cast errors.
-    Increase sampling parameters or use explicit `columns` to handle this.
+    A value after the sample that the column type cannot hold is an error, and the error names the value.
+    Increase sampling parameters, use explicit `columns`, or set `ignore_errors = true` to read it as NULL.
+    Integer columns are `BIGINT` when the sample stops before the end of the input, so a larger integer is not an error.
 
 ## Type Coercion
 

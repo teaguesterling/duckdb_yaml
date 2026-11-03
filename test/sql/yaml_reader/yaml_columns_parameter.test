@@ -136,7 +136,7 @@ columns parameter must be a struct (e.g., {name: 'VARCHAR', id: 'INTEGER'})
 # Test with DATE type (if supported by type detection)
 statement ok
 CREATE TABLE date_columns AS 
-SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'DATE'});
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'DATE'}, ignore_errors=true);
 
 query IIIIII
 DESCRIBE date_columns;
@@ -148,7 +148,7 @@ is_active	BOOLEAN	YES	NULL	NULL	NULL
 # Test with TIMESTAMP type
 statement ok
 CREATE TABLE timestamp_columns AS 
-SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'TIMESTAMP'});
+SELECT * FROM read_yaml('test/yaml/simple.yaml', columns={'name': 'VARCHAR', 'age': 'TIMESTAMP'}, ignore_errors=true);
 
 query IIIIII
 DESCRIBE timestamp_columns;

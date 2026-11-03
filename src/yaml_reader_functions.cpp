@@ -10,6 +10,29 @@
 
 namespace duckdb {
 
+// When the sample stopped before the end of the input, a later integer can be larger than any sampled one. The type of
+// a column cannot change after bind, so take BIGINT, as read_json does. Input that fits in the sample keeps its exact
+// type. A mismatch that this cannot cover, such as text after numbers, is an error at scan time.
+static LogicalType WidenSampledIntegers(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+		return LogicalType::BIGINT;
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(WidenSampledIntegers(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (auto &child : StructType::GetChildTypes(type)) {
+			children.push_back(make_pair(child.first, WidenSampledIntegers(child.second)));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	default:
+		return type;
+	}
+}
+
 // Helper function to parse multi_document parameter (bool or string) into MultiDocumentMode
 static MultiDocumentMode ParseMultiDocumentMode(const Value &value) {
 	if (value.type().id() == LogicalTypeId::BOOLEAN) {
@@ -269,6 +292,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	vector<YAML::Node> sample_docs; // for FRONTMATTER / LIST mode
 	idx_t sampled_rows = 0;
 	idx_t sampled_files = 0;
+	bool sample_truncated = false;
 
 	for (const auto &current_file : files) {
 		try {
@@ -313,6 +337,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			    options.multi_document_mode == MultiDocumentMode::FIRST) {
 				for (const auto &node : file_nodes) {
 					if (sampled_rows >= options.sample_size) {
+						sample_truncated = true;
 						break;
 					}
 					sample_nodes.push_back(node);
@@ -320,6 +345,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 				}
 				sampled_files++;
 				if (sampled_files >= options.maximum_sample_files || sampled_rows >= options.sample_size) {
+					if (&current_file != &files.back()) {
+						sample_truncated = true;
+					}
 					break;
 				}
 			}
@@ -365,6 +393,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			auto row_nodes = ExtractRowNodes(data_docs, options.expand_root_sequence);
 			for (const auto &node : row_nodes) {
 				if (sampled_rows >= options.sample_size) {
+					sample_truncated = true;
 					break;
 				}
 				sample_nodes.push_back(node);
@@ -374,12 +403,16 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	} else if (options.multi_document_mode == MultiDocumentMode::LIST) {
 		for (const auto &doc : sample_docs) {
 			if (sampled_rows >= options.sample_size) {
+				sample_truncated = true;
 				break;
 			}
 			sample_nodes.push_back(doc);
 			sampled_rows++;
 		}
 		LogicalType list_element_type = DetectJaggedYAMLType(sample_nodes);
+		if (sample_truncated) {
+			list_element_type = WidenSampledIntegers(list_element_type);
+		}
 		names.push_back(CompatMakeName(options.list_column_name));
 		return_types.push_back(LogicalType::LIST(list_element_type));
 		result->names = CompatNameStrings(names);
@@ -457,7 +490,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// Build the final schema in document order
 	for (const auto &col : column_order) {
 		names.push_back(CompatMakeName(col));
-		return_types.push_back(detected_types[col]);
+		const bool user_specified = user_specified_types.find(col) != user_specified_types.end();
+		return_types.push_back(sample_truncated && !user_specified ? WidenSampledIntegers(detected_types[col])
+		                                                           : detected_types[col]);
 	}
 
 	// Special handling for non-map documents
@@ -594,6 +629,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 	vector<YAML::Node> sample_docs;
 	idx_t sampled_rows = 0;
 	idx_t sampled_files = 0;
+	bool sample_truncated = false;
 
 	for (const auto &file_path : files) {
 		try {
@@ -601,6 +637,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 			if (sampled_files < options.maximum_sample_files && sampled_rows < options.sample_size) {
 				for (const auto &doc : docs) {
 					if (sampled_rows >= options.sample_size) {
+						sample_truncated = true;
 						break;
 					}
 					sample_docs.push_back(doc);
@@ -609,6 +646,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 				sampled_files++;
 			}
 			if (sampled_files >= options.maximum_sample_files || sampled_rows >= options.sample_size) {
+				if (&file_path != &files.back()) {
+					sample_truncated = true;
+				}
 				break;
 			}
 		} catch (const std::exception &e) {
@@ -638,7 +678,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		if (options.auto_detect_types) {
 			names.emplace_back("yaml");
 			auto doc_type = DetectJaggedYAMLType(sample_docs);
-			return_types.emplace_back(doc_type);
+			return_types.emplace_back(sample_truncated ? WidenSampledIntegers(doc_type) : doc_type);
 		} else {
 			names.emplace_back("yaml");
 			return_types.emplace_back(LogicalType::VARCHAR);
@@ -742,8 +782,8 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 									string raw_key = bind_data.frontmatter_names[i].substr(5); // strip "meta_"
 									YAML::Node val = fm[raw_key];
 									if (val) {
-										lstate.frontmatter_values.push_back(
-										    YAMLNodeToValue(val, bind_data.frontmatter_types[i]));
+										lstate.frontmatter_values.push_back(YAMLNodeToValue(
+										    val, bind_data.frontmatter_types[i], !bind_data.options.ignore_errors));
 									} else {
 										lstate.frontmatter_values.push_back(Value(bind_data.frontmatter_types[i]));
 									}
@@ -807,7 +847,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 						element_type = bind_data.types[0];
 					}
 					for (const auto &doc : lstate.file_nodes) {
-						doc_values.push_back(YAMLNodeToValue(doc, element_type));
+						doc_values.push_back(YAMLNodeToValue(doc, element_type, !bind_data.options.ignore_errors));
 					}
 					Value list_value = Value::LIST(element_type, doc_values);
 					output.SetValue(0, output_idx, list_value);
@@ -822,7 +862,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 					if (bind_data.names.size() == 1 && bind_data.names[0] == "value") {
-						Value val = YAMLNodeToValue(node, bind_data.types[0]);
+						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 						output.SetValue(0, output_idx, val);
 					} else {
 						idx_t col_idx = 0;
@@ -838,7 +878,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 							YAML::Node value = node[col_name];
 							Value duckdb_value;
 							if (value) {
-								duckdb_value = YAMLNodeToValue(value, type);
+								duckdb_value = YAMLNodeToValue(value, type, !bind_data.options.ignore_errors);
 							} else {
 								duckdb_value = Value(type);
 							}
@@ -976,7 +1016,7 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 				if (bind_data.names.size() == 1 && bind_data.names[0] == "yaml") {
-					Value val = YAMLNodeToValue(node, bind_data.types[0]);
+					Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 					output.SetValue(0, output_idx, val);
 				} else {
 					if (node.IsMap()) {
@@ -986,14 +1026,14 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 							YAML::Node value = node[col_name];
 							Value duckdb_value;
 							if (value) {
-								duckdb_value = YAMLNodeToValue(value, col_type);
+								duckdb_value = YAMLNodeToValue(value, col_type, !bind_data.options.ignore_errors);
 							} else {
 								duckdb_value = Value(col_type);
 							}
 							output.SetValue(col_idx, output_idx, duckdb_value);
 						}
 					} else if (bind_data.types.size() == 1) {
-						Value val = YAMLNodeToValue(node, bind_data.types[0]);
+						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 						output.SetValue(0, output_idx, val);
 					}
 				}
