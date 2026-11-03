@@ -288,8 +288,9 @@ SELECT * FROM read_yaml('data/*.yaml',
 ```
 
 !!! warning "Schema Mismatch Errors"
-    If sampling misses files with different structures, you may see cast errors.
-    Increase sampling parameters or use explicit `columns` to handle this.
+    A value after the sample that the column type cannot hold is an error, and the error names the value.
+    Increase sampling parameters, use explicit `columns`, or set `ignore_errors = true` to read it as NULL.
+    Integer columns are `BIGINT` when the sample stops before the end of the input, so a larger integer is not an error.
 
 ## Type Coercion
 

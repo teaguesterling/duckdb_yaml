@@ -211,6 +211,8 @@ SELECT * FROM read_yaml('data/*.yaml',
     If you see type mismatch errors, some files may have different schemas.
     Increase `sample_size` or `maximum_sample_files` to capture all variations.
 
+If the sample stops before the end of the input, integer columns are `BIGINT`, because a later row can be larger than any sampled row. Input that fits in the sample keeps its exact type, such as `SMALLINT`. A later value that the column type cannot hold, such as text in a number column, is an error. Set `ignore_errors = true` to read it as NULL.
+
 ## Column Type Specification
 
 Explicitly define column types to ensure consistent schemas:

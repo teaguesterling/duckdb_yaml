@@ -264,7 +264,8 @@ public:
 	 * @param target_type Target type to convert to
 	 * @return Value The converted value
 	 */
-	static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type);
+	//! A non-null value that the type cannot hold is an error when strict, and NULL when not
+	static Value YAMLNodeToValue(const YAML::Node &node, const LogicalType &target_type, bool strict = false);
 
 	/**
 	 * @brief Read a YAML file and parse it into documents
