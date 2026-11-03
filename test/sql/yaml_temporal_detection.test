@@ -6,12 +6,45 @@ require yaml
 
 # Dates and times are DuckDB's addition to the YAML 1.2 core schema, and read_json sets the rule for them.
 
-# Short forms read as read_json reads them
+# A time needs seconds. read_json reads 22:22 as a time, but in YAML this form is often a port mapping or a ratio,
+# and detection must not turn it into 22:22:00.
 query II
 SELECT typeof(a), a FROM parse_yaml('a: 22:22');
 ----
+VARCHAR	22:22
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: "22:22"');
+----
+VARCHAR	22:22
+
+query II
+SELECT typeof(a), a FROM parse_yaml('a: 22:22:00');
+----
 TIME	22:22:00
 
+# Port mappings stay one type, also when only some of them could be times
+query III
+SELECT typeof(p), p[1], p[2] FROM parse_yaml('p: [22:22, 8080:80]');
+----
+VARCHAR[]	22:22	8080:80
+
+# yaml_to_json uses the same rule, so it keeps the text
+query I
+SELECT yaml_to_json('a: 22:22'::YAML);
+----
+{"a":"22:22"}
+
+# A column set to TIME still accepts the short form
+statement ok
+COPY (SELECT '22:22' AS a) TO '__TEST_DIR__/short_time.yaml' (FORMAT yaml);
+
+query II
+SELECT typeof(a), a FROM read_yaml('__TEST_DIR__/short_time.yaml', columns={'a': 'TIME'});
+----
+TIME	22:22:00
+
+# Other short forms read as read_json reads them
 query II
 SELECT typeof(a), a FROM parse_yaml('a: 2026-1-3');
 ----
