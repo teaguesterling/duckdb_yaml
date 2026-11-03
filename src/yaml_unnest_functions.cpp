@@ -377,7 +377,7 @@ static unique_ptr<FunctionData> YAMLEachBind(ClientContext &context, TableFuncti
 					out.SetIndent(2);
 					out.SetMapFormat(YAML::Flow);
 					out.SetSeqFormat(YAML::Flow);
-					out << it->second;
+					yaml_utils::EmitNodeWithStringStyle(out, it->second, yaml_utils::YAMLStringStyle::QUOTED);
 
 					result->entries.push_back({key, out.c_str()});
 				}
@@ -481,7 +481,7 @@ static void YAMLBuildObjectFunction(DataChunk &args, ExpressionState &state, Vec
 		out.SetIndent(2);
 		out.SetMapFormat(YAML::Flow);
 		out.SetSeqFormat(YAML::Flow);
-		out << obj_node;
+		yaml_utils::EmitNodeWithStringStyle(out, obj_node, yaml_utils::YAMLStringStyle::QUOTED);
 
 		string yaml_str = out.c_str();
 		result.SetValue(row_idx, Value(yaml_str));
@@ -642,7 +642,7 @@ static void YAMLAggFinalize(Vector &state_vector, DUCKDB_AGG_FINALIZE_INPUT_TYPE
 		out.SetIndent(2);
 		out.SetMapFormat(YAML::Flow);
 		out.SetSeqFormat(YAML::Flow);
-		out << array_node;
+		yaml_utils::EmitNodeWithStringStyle(out, array_node, yaml_utils::YAMLStringStyle::QUOTED);
 
 		result.SetValue(offset + i, Value(out.c_str()));
 	}

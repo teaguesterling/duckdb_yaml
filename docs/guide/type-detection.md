@@ -156,6 +156,30 @@ description: "A multi-line
   string value"
 ```
 
+### Quoted Values
+
+Quotes decide the type. A quoted or block scalar is a string, so it never becomes a number, boolean or NULL:
+
+```yaml
+zip: "01234"       # VARCHAR '01234'
+zip: 01234         # SMALLINT 1234
+country: "NO"      # VARCHAR 'NO'
+country: NO        # BOOLEAN false
+missing: "null"    # VARCHAR 'null'
+missing: null      # NULL
+```
+
+Dates and times are the exception. As in `read_json`, a quoted date or time is still detected:
+
+```yaml
+day: "2024-01-15"  # DATE
+at: "14:30"        # TIME
+```
+
+To keep these values as text, set `auto_detect = false` or set the column type with `columns`. See [Controlling Type Detection](#controlling-type-detection).
+
+Writing keeps this rule. `value_to_yaml` and `COPY ... (FORMAT yaml)` quote a VARCHAR when its plain form would read back as a different type.
+
 ## Array Detection
 
 Arrays are typed based on their elements:

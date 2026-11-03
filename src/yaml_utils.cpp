@@ -649,7 +649,29 @@ static YAML::Node ValueToYAMLNodeImpl(const Value &value, YAMLTraversalBudget &b
 				return YAML::Node(value.ToString());
 			}
 		}
-		return YAML::Node(value.ToString());
+		if (value.type().HasAlias() && value.type().GetAlias() == "yaml") {
+			// Already YAML, so write it as itself. Several documents become a sequence, as in yaml_to_json.
+			try {
+				const auto docs = ParseYAML(value.GetValue<string>(), true);
+				if (docs.empty()) {
+					return YAML::Node(YAML::NodeType::Null);
+				}
+				if (docs.size() == 1) {
+					return docs[0];
+				}
+				YAML::Node doc_list(YAML::NodeType::Sequence);
+				for (const auto &doc : docs) {
+					doc_list.push_back(doc);
+				}
+				return doc_list;
+			} catch (...) {
+				return YAML::Node(value.ToString());
+			}
+		}
+		// A string, so tag it as one: EmitNodeWithStringStyle quotes it if plain output would read back differently.
+		YAML::Node string_node(value.ToString());
+		string_node.SetTag("!");
+		return string_node;
 	}
 	case LogicalTypeId::BOOLEAN:
 		return YAML::Node(value.GetValue<bool>());
@@ -702,12 +724,7 @@ std::string ValueToYAMLString(const Value &value, YAMLFormat format, YAMLStringS
 		// Now emit with proper format settings and string style
 		YAML::Emitter out;
 		ConfigureEmitter(out, format, indent);
-		auto resolved = ResolveStringStyle(string_style, format);
-		if (resolved == YAMLStringStyle::LITERAL) {
-			EmitNodeWithStringStyle(out, node, resolved);
-		} else {
-			out << node;
-		}
+		EmitNodeWithStringStyle(out, node, ResolveStringStyle(string_style, format));
 
 		// Check if we have a valid YAML string
 		if (out.good() && out.c_str() != nullptr) {
