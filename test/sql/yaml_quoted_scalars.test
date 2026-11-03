@@ -63,14 +63,14 @@ SELECT yaml_to_json(yaml_merge_patch('a: "123"', 'b: 1'))::VARCHAR;
 
 # yaml_each, for a scalar value and inside a nested one
 query II
-SELECT key, value FROM yaml_each(E'a: "123"\nm: {x: "5", y: 5}\np: 7') ORDER BY key;
+SELECT key, value FROM yaml_each(E'a: "123"\nm: {x: "5", y: 5}\np: 7'::YAML) ORDER BY key;
 ----
 a	"123"
 m	{x: "5", y: 5}
 p	7
 
 query I
-SELECT yaml_to_json(value)::VARCHAR FROM yaml_each('a: "123"');
+SELECT yaml_to_json(value)::VARCHAR FROM yaml_each('a: "123"'::YAML);
 ----
 "123"
 
