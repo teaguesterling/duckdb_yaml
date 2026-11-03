@@ -285,7 +285,9 @@ static void CopyFormatYAMLFunction(DataChunk &args, ExpressionState &state, Vect
 //   - YAMLRowsGlobalState::Write adds the separator before a buffer, under a lock, from the state of that file.
 
 static const char YAML_DOCUMENT_SEPARATOR[] = "---\n";
-static constexpr idx_t YAML_ROWS_FLUSH_SIZE = 1 << 20;
+// The size that the CSV writer flushes at. On DuckDB v1.5, rotation sees only bytes that a sink has written, so this
+// also limits how far a file can go over FILE_SIZE_BYTES.
+static constexpr idx_t YAML_ROWS_FLUSH_SIZE = 4096 * 8;
 
 struct YAMLRowsBindData : public FunctionData {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;

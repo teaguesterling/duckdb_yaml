@@ -1,0 +1,27 @@
+# name: test/sql/yaml_copy_zstd.test
+# description: COPY writes zstd files with the separators in place. DuckDB takes zstd from the parquet extension.
+# group: [sql]
+
+require yaml
+
+require parquet
+
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp_zstd.yaml.zst' (FORMAT yaml);
+
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp_zstd_named.yaml' (FORMAT yaml, COMPRESSION 'zstd');
+
+query I
+SELECT string_agg(l, '|' ORDER BY rowid) FROM (
+	SELECT row_number() OVER () AS rowid, l FROM read_csv('__TEST_DIR__/comp_zstd.yaml.zst', columns={'l': 'VARCHAR'}, delim='\t', header=false, quote='', compression='zstd')
+);
+----
+id: 0|---|id: 1|---|id: 2
+
+query I
+SELECT string_agg(l, '|' ORDER BY rowid) FROM (
+	SELECT row_number() OVER () AS rowid, l FROM read_csv('__TEST_DIR__/comp_zstd_named.yaml', columns={'l': 'VARCHAR'}, delim='\t', header=false, quote='', compression='zstd')
+);
+----
+id: 0|---|id: 1|---|id: 2

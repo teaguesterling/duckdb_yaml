@@ -257,6 +257,20 @@ SELECT string_agg(l, '|' ORDER BY rowid) FROM (
 ----
 id: 0|---|id: 1|---|id: 2
 
+# With a directory of files, the file names take the extension of the compression
+statement ok
+COPY (SELECT * FROM range(3) t(id)) TO '__TEST_DIR__/comp_dir' (FORMAT yaml, COMPRESSION 'gzip', PER_THREAD_OUTPUT true);
+
+query I
+SELECT bool_and(file LIKE '%.yaml.gz') FROM glob('__TEST_DIR__/comp_dir/*');
+----
+true
+
+statement error
+COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, COMPRESSION 'not_a_codec');
+----
+not_a_codec
+
 #--- Options still validated
 statement error
 COPY (SELECT 1 AS a) TO '__TEST_DIR__/bad.yaml' (FORMAT yaml, NOT_AN_OPTION 1);
