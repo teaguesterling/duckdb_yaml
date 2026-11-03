@@ -6,6 +6,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include <sstream>
 #include <algorithm>
@@ -446,24 +447,18 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 			}
 
 			if (!might_be_temporal) {
-				// Check if it's an integer using DuckDB's Value casting
-				try {
-					Value string_val(value);
-					Value int_val = string_val.DefaultCastAs(LogicalType::BIGINT);
-					// If casting succeeded and the result converts back to the same string, it's a valid integer
-					if (int_val.ToString() == value) {
-						return value; // It's an integer, return as is
-					}
-				} catch (...) {
-					// Not a valid integer, continue
+				// TryCast, not Value::DefaultCastAs: that throws for every string that is not a number, which is the
+				// common case, and this runs once per scalar.
+				const string_t value_str(value.c_str(), static_cast<uint32_t>(value.size()));
+				int64_t int_val;
+				// If casting succeeded and the result converts back to the same string, it's a valid integer
+				if (TryCast::Operation<string_t, int64_t>(value_str, int_val, false) &&
+				    Value::BIGINT(int_val).ToString() == value) {
+					return value; // It's an integer, return as is
 				}
 
-				// Check if it's a double using DuckDB's Value casting
-				try {
-					Value string_val(value);
-					Value double_val = string_val.DefaultCastAs(LogicalType::DOUBLE);
-					double numeric_val = double_val.GetValue<double>();
-
+				double numeric_val;
+				if (TryCast::Operation<string_t, double>(value_str, numeric_val, false)) {
 					// Check for special floating point values
 					if (std::isinf(numeric_val)) {
 						return value[0] == '-' ? "\"-Infinity\"" : "\"Infinity\"";
@@ -472,11 +467,9 @@ static std::string YAMLNodeToJSONImpl(const YAML::Node &node, YAMLTraversalBudge
 					}
 
 					// Check if the double converts back to the same string representation
-					if (double_val.ToString() == value) {
+					if (Value::DOUBLE(numeric_val).ToString() == value) {
 						return value; // It's a double, return as is
 					}
-				} catch (...) {
-					// Not a valid double, continue
 				}
 			}
 		} catch (...) {

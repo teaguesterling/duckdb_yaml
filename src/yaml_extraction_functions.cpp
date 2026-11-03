@@ -7,6 +7,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "yaml-cpp/yaml.h"
+#include <cerrno>
+#include <cstdlib>
 
 namespace duckdb {
 
@@ -330,27 +332,23 @@ static string DetectScalarTypeName(const string &scalar_value) {
 		return "DOUBLE";
 	}
 
+	// strtoll and strtod, not std::stoll and std::stod: those throw for every string that is not a number.
+	const char *number_start = scalar_value.c_str();
+	const char *number_end = number_start + scalar_value.size();
+	char *parse_end;
+
 	// Try integer
-	try {
-		size_t pos;
-		int64_t int_val = std::stoll(scalar_value, &pos);
-		if (pos == scalar_value.size()) {
-			if (int_val >= 0) {
-				return "UBIGINT";
-			}
-			return "BIGINT";
-		}
-	} catch (...) {
+	errno = 0;
+	const int64_t int_val = std::strtoll(number_start, &parse_end, 10);
+	if (parse_end != number_start && parse_end == number_end && errno != ERANGE) {
+		return int_val >= 0 ? "UBIGINT" : "BIGINT";
 	}
 
 	// Try double
-	try {
-		size_t pos;
-		std::stod(scalar_value, &pos);
-		if (pos == scalar_value.size()) {
-			return "DOUBLE";
-		}
-	} catch (...) {
+	errno = 0;
+	std::strtod(number_start, &parse_end);
+	if (parse_end != number_start && parse_end == number_end && errno != ERANGE) {
+		return "DOUBLE";
 	}
 
 	return "VARCHAR";
