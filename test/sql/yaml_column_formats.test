@@ -263,3 +263,79 @@ query I
 SELECT yaml_to_json('u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6'::YAML);
 ----
 {"u":"0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6"}
+
+#--- A null says nothing about the type of a column. It counted as VARCHAR, so the column became yaml.
+statement ok
+COPY (SELECT unnest(['- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6', '- u: ~', '- u: null'])) TO '__TEST_DIR__/uuid_null.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(u), count(u) FROM read_yaml('__TEST_DIR__/uuid_null.yaml') GROUP BY 1;
+----
+UUID	1
+
+statement ok
+COPY (SELECT unnest(['- u: ~', '- u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6'])) TO '__TEST_DIR__/uuid_null_first.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT typeof(u), count(u) FROM read_yaml('__TEST_DIR__/uuid_null_first.yaml') GROUP BY 1;
+----
+UUID	1
+
+statement ok
+COPY (SELECT unnest(['- {d: 2026-11-03, t: 2026-11-03T10:00:00Z, n: 1, f: 1.5, b: true, c: 10:00:00}', '- {d: ~, t: ~, n: ~, f: ~, b: ~, c: ~}'])) TO '__TEST_DIR__/null_types.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query IIIIII
+SELECT DISTINCT typeof(d), typeof(t), typeof(n), typeof(f), typeof(b), typeof(c) FROM read_yaml('__TEST_DIR__/null_types.yaml');
+----
+DATE	TIMESTAMP WITH TIME ZONE	TINYINT	DOUBLE	BOOLEAN	TIME
+
+statement ok
+COPY (SELECT unnest(['- s: {u: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6}', '- s: {u: ~}', '- s: ~'])) TO '__TEST_DIR__/null_struct.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT DISTINCT typeof(s) FROM read_yaml('__TEST_DIR__/null_struct.yaml');
+----
+STRUCT(u UUID)
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: [0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6, ~]');
+----
+UUID[]
+
+# parse_yaml and rows that are not maps merge types in another path
+query I
+SELECT DISTINCT typeof(a) FROM parse_yaml(E'a: 2026-11-03\n---\na: ~');
+----
+DATE
+
+statement ok
+COPY (SELECT unnest(['- 2026-11-03', '- ~'])) TO '__TEST_DIR__/null_scalars.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query I
+SELECT DISTINCT typeof(value) FROM read_yaml('__TEST_DIR__/null_scalars.yaml');
+----
+DATE
+
+# A column of nulls only is still VARCHAR, and a null is still NULL
+statement ok
+COPY (SELECT unnest(['- a: ~', '- a: null'])) TO '__TEST_DIR__/all_null.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT DISTINCT typeof(a), a FROM read_yaml('__TEST_DIR__/all_null.yaml');
+----
+VARCHAR	NULL
+
+query I
+SELECT typeof(a) FROM parse_yaml('a: [~, ~]');
+----
+VARCHAR[]
+
+#--- A column named a[] and the elements of list a have their own formats
+statement ok
+COPY (SELECT unnest(['- {"a[]": 11-03-2026, a: [11-03-2026]}', '- {"a[]": 01-13-2026, a: [13-01-2026]}'])) TO '__TEST_DIR__/bracket.yaml' (FORMAT csv, HEADER false, QUOTE '');
+
+query II
+SELECT "a[]", a FROM read_yaml('__TEST_DIR__/bracket.yaml');
+----
+2026-11-03	[2026-03-11]
+2026-01-13	[2026-01-13]

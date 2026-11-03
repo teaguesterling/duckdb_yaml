@@ -254,6 +254,17 @@ public:
 	static LogicalType DetectYAMLType(const YAML::Node &node);
 
 	/**
+	 * @brief Detect the type of a YAML node, with SQLNULL for a null
+	 *
+	 * A null says nothing about the type of a column, so a merge of types across rows must skip it. Call
+	 * ResolveNullTypes after the merge.
+	 */
+	static LogicalType DetectYAMLTypeWithNulls(const YAML::Node &node);
+
+	//! Replace each SQLNULL with VARCHAR: a column with only nulls
+	static LogicalType ResolveNullTypes(const LogicalType &type);
+
+	/**
 	 * @brief Detect YAML type across multiple documents with jagged schema support
 	 *
 	 * @param nodes Vector of YAML nodes to inspect for merged schema

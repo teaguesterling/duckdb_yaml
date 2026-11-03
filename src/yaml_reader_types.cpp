@@ -37,7 +37,7 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		if (!is_string) {
 			switch (yaml_utils::ClassifyPlainScalar(scalar_value)) {
 			case yaml_utils::YAMLCoreKind::NULL_VALUE:
-				return LogicalType::VARCHAR; // Will be NULL in the actual data
+				return LogicalType::SQLNULL; // Says nothing about the column. See ResolveNullTypes.
 			case yaml_utils::YAMLCoreKind::BOOLEAN:
 				return LogicalType::BOOLEAN;
 			case yaml_utils::YAMLCoreKind::INTEGER: {
@@ -92,9 +92,11 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		for (size_t idx = 0; idx < node.size(); idx++) {
 			LogicalType element_type = DetectYAMLTypeImpl(node[idx], budget);
 
-			if (first_element) {
+			if (first_element || common_type.id() == LogicalTypeId::SQLNULL) {
 				common_type = element_type;
 				first_element = false;
+			} else if (element_type.id() == LogicalTypeId::SQLNULL) {
+				continue;
 			} else if (common_type.id() == element_type.id()) {
 				// If both are structs, merge their fields to handle optional fields
 				if (common_type.id() == LogicalTypeId::STRUCT) {
@@ -162,14 +164,38 @@ static LogicalType DetectYAMLTypeImpl(const YAML::Node &node, yaml_utils::YAMLTr
 		}
 		return LogicalType::STRUCT(struct_children);
 	}
+	case YAML::NodeType::Null:
+		return LogicalType::SQLNULL;
 	default:
 		return LogicalType::VARCHAR;
 	}
 }
 
-LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+LogicalType YAMLReader::ResolveNullTypes(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		return LogicalType::VARCHAR;
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ResolveNullTypes(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (auto &child : StructType::GetChildTypes(type)) {
+			children.push_back(make_pair(child.first, ResolveNullTypes(child.second)));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	default:
+		return type;
+	}
+}
+
+LogicalType YAMLReader::DetectYAMLTypeWithNulls(const YAML::Node &node) {
 	yaml_utils::YAMLTraversalBudget budget;
 	return DetectYAMLTypeImpl(node, budget);
+}
+
+LogicalType YAMLReader::DetectYAMLType(const YAML::Node &node) {
+	return ResolveNullTypes(DetectYAMLTypeWithNulls(node));
 }
 
 // Helper function to detect YAML type across multiple documents with jagged schema support
@@ -180,11 +206,19 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 	}
 
 	// Use first node as base type
-	LogicalType merged_type = DetectYAMLType(nodes[0]);
+	LogicalType merged_type = DetectYAMLTypeWithNulls(nodes[0]);
 
 	// Merge types from all subsequent documents
 	for (size_t i = 1; i < nodes.size(); i++) {
-		LogicalType node_type = DetectYAMLType(nodes[i]);
+		LogicalType node_type = DetectYAMLTypeWithNulls(nodes[i]);
+
+		if (node_type.id() == LogicalTypeId::SQLNULL) {
+			continue;
+		}
+		if (merged_type.id() == LogicalTypeId::SQLNULL) {
+			merged_type = node_type;
+			continue;
+		}
 
 		// If both are structs, merge them recursively
 		if (merged_type.id() == LogicalTypeId::STRUCT && node_type.id() == LogicalTypeId::STRUCT) {
@@ -213,7 +247,7 @@ LogicalType YAMLReader::DetectJaggedYAMLType(const vector<YAML::Node> &nodes) {
 		}
 	}
 
-	return merged_type;
+	return ResolveNullTypes(merged_type);
 }
 
 // Helper function to convert YAML node to DuckDB value.
@@ -268,14 +302,19 @@ static std::string YAMLNodeToFlowText(const YAML::Node &node) {
 	return out.c_str();
 }
 
-// A path joins with a control character, so the column "a.b" and the field b of column a stay apart
+// A path joins with a control character, so the column "a.b" and the field b of column a stay apart. So do the column
+// "a[]" and the elements of the list a.
 static string JoinFieldPath(const string &path, const string &field) {
 	return path.empty() ? field : path + '\x1f' + field;
 }
 
+static string JoinElementPath(const string &path) {
+	return path + '\x1e';
+}
+
 // A path only when there are formats to look up, so that other reads build no strings
 static string ListElementPath(const YAMLColumnFormats *formats, const string &path) {
-	return formats ? path + "[]" : string();
+	return formats ? JoinElementPath(path) : string();
 }
 
 static string StructFieldPath(const YAMLColumnFormats *formats, const string &path, const string &field) {
@@ -556,7 +595,7 @@ void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node>
 			}
 		}
 		auto child_type = ListType::GetChildType(type);
-		DetectColumnFormats(child_type, elements, path + "[]", formats);
+		DetectColumnFormats(child_type, elements, JoinElementPath(path), formats);
 		type = LogicalType::LIST(child_type);
 		return;
 	}

@@ -180,6 +180,15 @@ description: "A multi-line
   string value"
 ```
 
+### Null Values
+
+A null says nothing about the type of a column, so `~` or `null` in some rows does not change it. A column with only nulls is VARCHAR.
+
+```yaml
+- id: 0d6e7f3a-1b2c-4d5e-8f90-a1b2c3d4e5f6  # the column is UUID
+- id: ~                                     # NULL
+```
+
 ### Quoted Values
 
 Quotes decide the type. A quoted or block scalar is a string, so it never becomes a number, boolean or NULL:

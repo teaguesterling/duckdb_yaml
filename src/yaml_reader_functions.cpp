@@ -72,6 +72,12 @@ static MultiDocumentMode ParseMultiDocumentMode(const Value &value) {
 // Genuinely incompatible types (e.g. number vs string) still fall back to YAML to preserve data.
 // (issue #42: cross-row numeric type degradation)
 LogicalType YAMLReader::WidenConflictingScalarTypes(const LogicalType &a, const LogicalType &b) {
+	if (a.id() == LogicalTypeId::SQLNULL) {
+		return b;
+	}
+	if (b.id() == LogicalTypeId::SQLNULL) {
+		return a;
+	}
 	if (a.IsNumeric() && b.IsNumeric()) {
 		if (a.id() == LogicalTypeId::DOUBLE || b.id() == LogicalTypeId::DOUBLE || a.id() == LogicalTypeId::FLOAT ||
 		    b.id() == LogicalTypeId::FLOAT) {
@@ -496,7 +502,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			} else if (detected_types.find(key) == detected_types.end()) {
 				LogicalType value_type;
 				if (options.auto_detect_types) {
-					value_type = DetectYAMLType(value);
+					value_type = DetectYAMLTypeWithNulls(value);
 				} else {
 					value_type = LogicalType::VARCHAR;
 				}
@@ -504,7 +510,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			} else {
 				LogicalType value_type;
 				if (options.auto_detect_types) {
-					value_type = DetectYAMLType(value);
+					value_type = DetectYAMLTypeWithNulls(value);
 				} else {
 					value_type = LogicalType::VARCHAR;
 				}
@@ -523,6 +529,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		names.push_back(CompatMakeName(col));
 		const bool user_specified = user_specified_types.find(col) != user_specified_types.end();
 		if (options.auto_detect_types && !user_specified) {
+			detected_types[col] = ResolveNullTypes(detected_types[col]);
 			vector<YAML::Node> column_values;
 			for (const YAML::Node &node : sample_nodes) {
 				if (node.IsMap() && node[col]) {
