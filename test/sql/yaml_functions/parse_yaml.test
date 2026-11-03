@@ -78,11 +78,10 @@ Bob	87
 Carol	92
 
 # Test: expand_root_sequence=false treats sequence as a single document (not expanded)
-# Note: Currently only map documents are returned as rows
 query I
 SELECT count(*) FROM parse_yaml('[{a: 1}, {a: 2}]', expand_root_sequence=false);
 ----
-0
+1
 
 #
 # ============================================================================

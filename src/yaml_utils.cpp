@@ -212,8 +212,8 @@ bool ParseCoreFloat(const std::string &value, double &result) {
 		result = value[0] == '-' ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
 		return true;
 	}
-	// [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, with a fraction or an exponent. strtod alone is wider: it also
-	// reads hexadecimal floats and the words inf and nan.
+	// [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, with a fraction or an exponent. strtod alone is wider: it
+	// also reads hexadecimal floats and the words inf and nan.
 	const auto skip_digits = [&]() {
 		const size_t start = pos;
 		while (pos < value.size() && value[pos] >= '0' && value[pos] <= '9') {
@@ -288,7 +288,8 @@ static bool IsAmbiguousAcrossYAMLVersions(const std::string &value) {
 	    lower_value == "null") {
 		return true;
 	}
-	if (value.empty() || (!StringUtil::CharacterIsDigit(value[0]) && value[0] != '-' && value[0] != '+' && value[0] != '.')) {
+	if (value.empty() ||
+	    (!StringUtil::CharacterIsDigit(value[0]) && value[0] != '-' && value[0] != '+' && value[0] != '.')) {
 		return false;
 	}
 	if (value.find_first_not_of("-+0123456789_") == std::string::npos ||

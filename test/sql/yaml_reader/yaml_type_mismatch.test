@@ -257,3 +257,92 @@ query II
 SELECT count(*), count(yaml.v) FROM read_yaml_objects('__TEST_DIR__/docs_text.yaml', sample_size=1, ignore_errors=true);
 ----
 2	1
+
+#--- Rows that are not maps are data. A file of them, or a file that mixes them with maps, has one `value` column.
+statement ok
+COPY (SELECT E'- 1\n- 1000\n- 100000') TO '__TEST_DIR__/scalars_int.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query III
+SELECT any_value(typeof(value)), count(value), max(value) FROM read_yaml('__TEST_DIR__/scalars_int.yaml');
+----
+INTEGER	3	100000
+
+statement ok
+COPY (SELECT E'1\n---\n1000\n---\ntext') TO '__TEST_DIR__/scalar_docs.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT any_value(typeof(value)), count(value) FROM read_yaml('__TEST_DIR__/scalar_docs.yaml');
+----
+VARCHAR	3
+
+statement ok
+COPY (SELECT E'- a: 1\n- 5\n- a: 2') TO '__TEST_DIR__/mixed_rows.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT typeof(value), value::VARCHAR FROM read_yaml('__TEST_DIR__/mixed_rows.yaml');
+----
+yaml	{a: 1}
+yaml	5
+yaml	{a: 2}
+
+# Sequence documents expand into rows by default, and each is one row without that
+statement ok
+COPY (SELECT E'[1, 2]\n---\n[3]') TO '__TEST_DIR__/seq_docs.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query I
+SELECT value FROM read_yaml('__TEST_DIR__/seq_docs.yaml');
+----
+1
+2
+3
+
+query I
+SELECT value FROM read_yaml('__TEST_DIR__/seq_docs.yaml', expand_root_sequence=false);
+----
+[1, 2]
+[3]
+
+# A real key called `value` is an ordinary column
+statement ok
+COPY (SELECT E'- value: 3\n- value: 4') TO '__TEST_DIR__/value_key.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT typeof(value), value FROM read_yaml('__TEST_DIR__/value_key.yaml');
+----
+TINYINT	3
+TINYINT	4
+
+# A non-map row after the sample does not fit the columns, so it is an error
+statement ok
+COPY (SELECT E'- a: 1\n- a: 2\n- 5') TO '__TEST_DIR__/late_scalar.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/late_scalar.yaml', sample_size=1);
+----
+"5"
+
+# ignore_errors skips that row and keeps the others
+query II
+SELECT count(*), count(a) FROM read_yaml('__TEST_DIR__/late_scalar.yaml', sample_size=1, ignore_errors=true);
+----
+2	2
+
+# With explicit columns, the same
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/mixed_rows.yaml', columns={'a': 'INTEGER'});
+----
+"5"
+
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/mixed_rows.yaml', columns={'a': 'INTEGER'}, ignore_errors=true);
+----
+2
+
+# A null row holds no data, and is skipped as before
+statement ok
+COPY (SELECT E'- a: 1\n- ~\n- a: 2') TO '__TEST_DIR__/null_row.yaml' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER E'\n');
+
+query II
+SELECT count(*), count(a) FROM read_yaml('__TEST_DIR__/null_row.yaml');
+----
+2	2
