@@ -4,6 +4,8 @@
 
 require yaml
 
+require json
+
 # Quoting decides int/float/bool/null. A date is not a core-schema type, so, as read_json does for
 # JSON strings, a quoted date is still detected (yaml_type_detection_current.test pins that).
 query IIIIIIIIIIII
@@ -46,3 +48,103 @@ query II
 SELECT yaml_extract('a: "123"', '$.a'), yaml_extract('a: 123', '$.a');
 ----
 "123"	123
+
+# Every path that writes YAML has to keep the quotes, or a string silently becomes a number or
+# boolean for whoever reads the result next. yaml_merge_patch keeps them from both documents:
+query I
+SELECT yaml_merge_patch('a: "123"', 'b: "true"');
+----
+{a: "123", b: "true"}
+
+query I
+SELECT yaml_to_json(yaml_merge_patch('a: "123"', 'b: 1'))::VARCHAR;
+----
+{"a":"123","b":1}
+
+# yaml_each, for a scalar value and inside a nested one
+query II
+SELECT key, value FROM yaml_each(E'a: "123"\nm: {x: "5", y: 5}\np: 7') ORDER BY key;
+----
+a	"123"
+m	{x: "5", y: 5}
+p	7
+
+query I
+SELECT yaml_to_json(value)::VARCHAR FROM yaml_each('a: "123"');
+----
+"123"
+
+# yaml_build_object and yaml_agg, for a value that is already YAML
+query I
+SELECT yaml_build_object('a', '"123"'::YAML, 'b', '5'::YAML);
+----
+{a: "123", b: 5}
+
+query I
+SELECT yaml_agg(x) FROM (VALUES ('"123"'::YAML), ('5'::YAML)) t(x);
+----
+["123", 5]
+
+# A VARCHAR is a string: written plain, '123' would read back as a number and 'yes' as a boolean.
+query I
+SELECT value_to_yaml('123'::VARCHAR);
+----
+"123"
+
+query I
+SELECT value_to_yaml({'s': '123', 'b': 'yes', 'n': 5, 'x': 'text', 'l': ['1', 'y']});
+----
+{s: "123", b: "yes", n: 5, x: text, l: ["1", "y"]}
+
+# A JSON string is a string too
+query I
+SELECT value_to_yaml('{"a":"123","b":123}'::JSON);
+----
+{a: "123", b: 123}
+
+# A YAML value is already YAML: it is written as itself, not wrapped in a string.
+query III
+SELECT value_to_yaml('5'::YAML), value_to_yaml('"5"'::YAML), value_to_yaml('a: 1'::YAML);
+----
+5	"5"	{a: 1}
+
+# Several documents become a sequence, as in yaml_to_json. An empty value has no documents, so it is null.
+query II
+SELECT value_to_yaml(E'a: 1\n---\nb: "2"'::YAML), value_to_yaml(''::YAML);
+----
+[{a: 1}, {b: "2"}]	~
+
+# COPY: the "Norway problem" and leading zeros survive a write and a read.
+statement ok
+COPY (SELECT 'NO' AS country, '01234' AS zip, '2.0' AS v, 'yes' AS flag, 5 AS n, true AS b) TO '__TEST_DIR__/quoted_copy.yaml' (FORMAT yaml);
+
+query IIIIIIIIII
+SELECT typeof(country), typeof(zip), typeof(v), typeof(flag), typeof(b), country, zip, v, flag, b FROM read_yaml('__TEST_DIR__/quoted_copy.yaml');
+----
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	BOOLEAN	NO	01234	2.0	yes	true
+
+# Reading a file, writing it and reading it again gives the same types and values.
+statement ok
+COPY (SELECT * FROM read_yaml('test/yaml/quoted_scalars.yaml')) TO '__TEST_DIR__/quoted_rewrite.yaml' (FORMAT yaml);
+
+query IIIIIIIIIIII
+SELECT typeof(plain_int), typeof(dq_int), typeof(sq_int), typeof(plain_float), typeof(dq_float), typeof(sq_float),
+       typeof(plain_bool), typeof(dq_bool), typeof(sq_bool), typeof(plain_date), typeof(dq_date), typeof(tagged)
+FROM read_yaml('__TEST_DIR__/quoted_rewrite.yaml');
+----
+TINYINT	VARCHAR	VARCHAR	DOUBLE	VARCHAR	VARCHAR	BOOLEAN	VARCHAR	VARCHAR	DATE	DATE	VARCHAR
+
+query IIIII
+SELECT dq_int, sq_float, dq_bool, sq_bool, tagged FROM read_yaml('__TEST_DIR__/quoted_rewrite.yaml');
+----
+123	0.5	true	yes	7
+
+# A column with both a number and a string has type YAML (see above). COPY writes each value as itself.
+statement ok
+COPY (SELECT a FROM parse_yaml(E'- a: 1\n- a: "2"')) TO '__TEST_DIR__/quoted_mixed.yaml' (FORMAT yaml);
+
+query II
+SELECT typeof(a), a FROM read_yaml('__TEST_DIR__/quoted_mixed.yaml') ORDER BY a;
+----
+yaml	"2"
+yaml	1

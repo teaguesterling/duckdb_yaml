@@ -635,7 +635,7 @@ static void YAMLMergePatchFunction(DataChunk &args, ExpressionState &state, Vect
 			    out.SetIndent(2);
 			    out.SetMapFormat(YAML::Flow);
 			    out.SetSeqFormat(YAML::Flow);
-			    out << merged;
+			    yaml_utils::EmitNodeWithStringStyle(out, merged, yaml_utils::YAMLStringStyle::QUOTED);
 
 			    return StringVector::AddString(result, out.c_str());
 		    } catch (const std::exception &e) {

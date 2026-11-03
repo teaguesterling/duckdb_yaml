@@ -23,12 +23,12 @@ INSERT INTO test_values VALUES
 query I
 SELECT value_to_yaml(v) AS yaml_value FROM test_values ORDER BY v;
 ----
-1234
+"1234"
 "has: colon"
 needs "quotes"
 "null"
 simple string
-true
+"true"
 
 # Test boolean value emission
 query I
@@ -130,12 +130,12 @@ String with "quotes" and 'apostrophes'
 query I
 SELECT value_to_yaml('yes') AS yaml_keyword;
 ----
-yes
+"yes"
 
 query I
 SELECT value_to_yaml('no') AS yaml_keyword;
 ----
-no
+"no"
 
 query I
 SELECT value_to_yaml('[]') AS yaml_symbol;
