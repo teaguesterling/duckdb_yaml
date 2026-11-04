@@ -85,7 +85,12 @@ static vector<string> ParseYAMLPath(const string &path) {
 	return components;
 }
 
+// A path that does not exist gives an undefined node, and a key with a null value gives a null node. A missing map key
+// is a yaml-cpp zombie node, which throws on any use other than the check for existence, so it must not go further.
 static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &path_components, size_t index = 0) {
+	if (!node) {
+		return YAML::Node(YAML::NodeType::Undefined);
+	}
 	if (index >= path_components.size()) {
 		return node;
 	}
@@ -95,14 +100,14 @@ static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &
 	// Handle array index
 	if (!component.empty() && component[0] == '[') {
 		if (!node.IsSequence()) {
-			return YAML::Node(); // Return null node
+			return YAML::Node(YAML::NodeType::Undefined);
 		}
 
 		string index_str = component.substr(1, component.length() - 2);
 		try {
 			size_t arr_index = std::stoul(index_str);
 			if (arr_index >= node.size()) {
-				return YAML::Node();
+				return YAML::Node(YAML::NodeType::Undefined);
 			}
 			return ExtractFromYAML(node[arr_index], path_components, index + 1);
 		} catch (...) {
@@ -112,7 +117,7 @@ static YAML::Node ExtractFromYAML(const YAML::Node &node, const vector<string> &
 
 	// Handle map key
 	if (!node.IsMap()) {
-		return YAML::Node();
+		return YAML::Node(YAML::NodeType::Undefined);
 	}
 
 	auto child = node[component];
@@ -727,6 +732,8 @@ void YAMLUnnestFunctions::Register(ExtensionLoader &loader) {
 	// yaml_build_object function - variadic function
 	auto yaml_build_object_fun = ScalarFunction("yaml_build_object", {}, yaml_type, YAMLBuildObjectFunction);
 	CompatSetScalarVarArgs(yaml_build_object_fun, LogicalType::ANY);
+	// A NULL value is a key with a null value, as in json_object, so the function must see it
+	CompatSetScalarNullHandling(yaml_build_object_fun, FunctionNullHandling::SPECIAL_HANDLING);
 	CompatSetFallible(yaml_build_object_fun);
 	{
 		CreateScalarFunctionInfo info(std::move(yaml_build_object_fun));

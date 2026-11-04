@@ -1,0 +1,22 @@
+# name: test/sql/yaml_frontmatter_yaml_type.test
+# description: The frontmatter column of as_yaml_objects is the YAML type, so the yaml functions accept it with no cast
+# group: [yaml]
+
+require yaml
+
+query I
+SELECT typeof(frontmatter) FROM read_yaml_frontmatter('test/yaml/frontmatter_simple_values.md', as_yaml_objects := true);
+----
+yaml
+
+query II
+SELECT yaml_extract_string(frontmatter, '$.title'), yaml_extract(frontmatter, '$.count')
+FROM read_yaml_frontmatter('test/yaml/frontmatter_simple_values.md', as_yaml_objects := true);
+----
+T	3
+
+query I
+SELECT yaml_exists(frontmatter, '$.missing.key')
+FROM read_yaml_frontmatter('test/yaml/frontmatter_simple_values.md', as_yaml_objects := true);
+----
+false

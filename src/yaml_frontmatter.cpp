@@ -1,5 +1,6 @@
 #include "yaml_reader.hpp"
 #include "named_parameter_compat.hpp"
+#include "yaml_types.hpp"
 #include "yaml_utils.hpp"
 #include "duckdb_compat.hpp"
 #include "yaml_extension.hpp"
@@ -286,14 +287,7 @@ static unique_ptr<FunctionData> YAMLFrontmatterBind(ClientContext &context, Tabl
 	} else {
 		// Single frontmatter column as YAML type
 		names.push_back("frontmatter");
-		// Use VARCHAR with YAML alias.
-		// CompatWithAlias, not SetAlias: v2.0 removed LogicalType::SetAlias.
-		// NOTE: the alias here is uppercase "YAML" while YAMLTypes::YAMLType()
-		// (yaml_types.cpp) uses lowercase "yaml", and every GetAlias() check in
-		// this extension compares case-sensitively against "yaml". Preserved
-		// verbatim by this port so the compat change does not move behaviour;
-		// see the PR description for the casing discrepancy.
-		return_types.push_back(CompatWithAlias(LogicalType::VARCHAR, "YAML"));
+		return_types.push_back(YAMLTypes::YAMLType());
 	}
 
 	if (result->options.include_content) {

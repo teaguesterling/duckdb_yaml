@@ -44,9 +44,9 @@ SELECT yaml_build_object(
 );
 -- Returns: {string: hello, number: 42, boolean: true}
 
--- A NULL argument makes the result NULL
-SELECT yaml_build_object('a', 1, 'b', NULL::INTEGER);
--- Returns: NULL
+-- A NULL value is a key with a null value, as in json_object
+SELECT yaml_build_object('a', 1, 'b', NULL);
+-- Returns: {a: 1, b: ~}
 ```
 
 #### Nested Objects

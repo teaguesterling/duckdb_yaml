@@ -14,7 +14,7 @@ INSTALL yaml FROM community;
 LOAD yaml;
 ```
 
-v1.12.0 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
+v1.12.1 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
 
 ### From Source
 
@@ -648,10 +648,6 @@ To read `yes` and `no` as booleans, set the column type: `columns = {'enabled': 
   `read_yaml` can only produce one column per name, so the **first** occurrence wins and
   later ones are dropped without warning. Deduplicate upstream if your input may contain
   repeated keys.
-- `read_yaml` on a file of only `{}` is an INTERNAL error.
-- A path through a missing key is an error in `yaml_extract`, `yaml_extract_string` and `yaml_type`: `yaml_extract('a: 1', '$.b.c')`. A missing last key, `'$.b'`, is NULL. `yaml_exists` returns false for both.
-- The `frontmatter` column from `read_yaml_frontmatter(..., as_yaml_objects := true)` needs a cast before a `yaml_*` function: `frontmatter::YAML`.
-- `parse_yaml(E'a: 1\n---\n5')` reads the map as NULL.
 
 ## Advanced YAML Functions
 

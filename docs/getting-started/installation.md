@@ -17,7 +17,7 @@ This method:
 - Provides signed, pre-built binaries
 - Handles platform detection automatically
 
-v1.12.0 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
+v1.12.1 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
 
 ## From Source
 

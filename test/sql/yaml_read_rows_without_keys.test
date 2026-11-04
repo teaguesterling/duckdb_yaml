@@ -1,0 +1,71 @@
+# name: test/sql/yaml_read_rows_without_keys.test
+# description: Maps with no keys and maps among other rows keep their data, in read_yaml and in parse_yaml
+# group: [yaml]
+
+require yaml
+
+# Only empty maps was an INTERNAL error: "Table function must return at least one column"
+query I
+SELECT * FROM read_yaml('test/yaml/only_empty_maps.yaml');
+----
+{}
+{}
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM read_yaml('test/yaml/only_empty_maps.yaml'));
+----
+value
+
+# Declared columns still give the schema
+query I
+SELECT a FROM read_yaml('test/yaml/only_empty_maps.yaml', columns = {'a': 'INTEGER'});
+----
+NULL
+NULL
+
+# An empty map among maps with keys is a row of NULLs, as in read_json
+query I
+SELECT a FROM parse_yaml(E'{}\n---\na: 1');
+----
+NULL
+1
+
+query I
+SELECT yaml FROM parse_yaml('{}');
+----
+{}
+
+# A map among scalars lost its data, and read as NULL
+query I
+SELECT yaml IS NULL FROM parse_yaml(E'a: 1\n---\n5');
+----
+false
+false
+
+query I
+SELECT yaml FROM parse_yaml(E'a: 1\n---\n5');
+----
+{a: 1}
+5
+
+# A map whose key has the name of the column is the whole map, not that key
+query I
+SELECT yaml FROM parse_yaml(E'yaml: 1\n---\n5');
+----
+{yaml: 1}
+5
+
+# A null among them is NULL
+query I
+SELECT yaml IS NULL FROM parse_yaml(E'a: 1\n---\n~\n---\n5');
+----
+false
+true
+false
+
+# A sequence among maps
+query I
+SELECT yaml FROM parse_yaml(E'a: 1\n---\n[1, 2]', expand_root_sequence = false);
+----
+{a: 1}
+[1, 2]
