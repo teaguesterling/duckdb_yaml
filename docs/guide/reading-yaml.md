@@ -65,7 +65,8 @@ The function accepts several input formats:
 | `multi_document` | BOOLEAN | `true` | Handle multiple YAML documents |
 | `expand_root_sequence` | BOOLEAN | `true` | Expand top-level sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on parsing errors |
-| `maximum_object_size` | INTEGER | 16777216 | Maximum file size in bytes (16MB) |
+| `compression` | VARCHAR | `'auto'` | `auto`, `gzip`, `zstd` or `none`. See [compression](../reference/parameters.md#compression) |
+| `maximum_object_size` | INTEGER | 16777216 | Maximum size of the text of a file in bytes, after decompression (16MB) |
 | `sample_size` | INTEGER | 20480 | Rows to sample for schema detection |
 | `maximum_sample_files` | INTEGER | 32 | Files to sample for schema detection |
 

@@ -57,7 +57,7 @@ SELECT yaml_valid('name: John');  -- true
 SELECT yaml_valid('name: : bad: syntax');  -- false
 
 -- NULL handling
-SELECT yaml_valid(NULL);  -- NULL
+SELECT yaml_valid(NULL::VARCHAR);  -- NULL
 ```
 
 ### Validating Before Processing
