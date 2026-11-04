@@ -33,7 +33,10 @@ Complete reference for all configurable parameters.
 | `expand_root_sequence` | BOOLEAN | `true` | Expand sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on errors |
 | `compression` | VARCHAR | `'auto'` | `auto`, `gzip`, `zstd` or `none` |
-| `maximum_object_size` | INTEGER | `16777216` | Max size of the text of a file (16MB) |
+| `maximum_object_size` | INTEGER | `16777216` | Max size of the text of a file (16MB). `maximum_file_size` is an alias |
+| `strip_document_suffixes` | BOOLEAN | `true` | Remove non-standard words from `---` lines, such as Unity's `stripped` |
+| `frontmatter_as_columns` | BOOLEAN | `true` | With `multi_document = 'frontmatter'`, add `meta_` columns. If false, add one `frontmatter` column |
+| `list_column_name` | VARCHAR | `'documents'` | With `multi_document = 'list'`, the name of the column |
 
 ---
 

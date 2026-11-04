@@ -188,8 +188,8 @@ FROM read_yaml_frontmatter('content/**/*.md',
 -- Astro component analysis
 SELECT
     filename,
-    yaml_extract_string(frontmatter, '$.layout') as layout,
-    yaml_extract_string(frontmatter, '$.title') as title
+    yaml_extract_string(frontmatter::YAML, '$.layout') as layout,
+    yaml_extract_string(frontmatter::YAML, '$.title') as title
 FROM read_yaml_frontmatter('src/pages/*.astro',
     filename := true,
     as_yaml_objects := true
@@ -207,9 +207,9 @@ When using `as_yaml_objects := true`, you can use extraction functions:
 ```sql
 SELECT
     filename,
-    yaml_extract_string(frontmatter, '$.title') as title,
-    yaml_extract(frontmatter, '$.tags') as tags,
-    yaml_exists(frontmatter, '$.draft') as has_draft_field
+    yaml_extract_string(frontmatter::YAML, '$.title') as title,
+    yaml_extract(frontmatter::YAML, '$.tags') as tags,
+    yaml_exists(frontmatter::YAML, '$.draft') as has_draft_field
 FROM read_yaml_frontmatter('posts/*.md',
     filename := true,
     as_yaml_objects := true
@@ -218,15 +218,14 @@ FROM read_yaml_frontmatter('posts/*.md',
 
 ## Error Handling
 
-Files without frontmatter or with invalid YAML are handled gracefully:
+`read_yaml_frontmatter` has no `ignore_errors` parameter, because it does not need one:
+
+- A file without frontmatter (no `---` at the start) gives no row.
+- A file with invalid YAML in its frontmatter gives a row of NULLs.
 
 ```sql
--- Skip files with invalid frontmatter
-SELECT *
-FROM read_yaml_frontmatter('mixed/*.md', ignore_errors := true);
+SELECT * FROM read_yaml_frontmatter('mixed/*.md');
 ```
-
-Files without frontmatter (no `---` at start) return NULL for all frontmatter columns.
 
 ## See Also
 

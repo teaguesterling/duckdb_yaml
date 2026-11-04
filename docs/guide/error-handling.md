@@ -81,7 +81,7 @@ WHERE NOT yaml_valid(yaml_column);
 ```sql
 -- Missing file
 SELECT * FROM read_yaml('nonexistent.yaml');
--- Error: File 'nonexistent.yaml' not found
+-- IO Error: File or directory does not exist: nonexistent.yaml
 
 -- With error recovery
 SELECT * FROM read_yaml(['exists.yaml', 'nonexistent.yaml'], ignore_errors = true);
@@ -154,9 +154,9 @@ FROM read_yaml(['file1.yaml', 'file2.yaml']);
 The extension provides descriptive error messages:
 
 ```
-Invalid YAML at line 5, column 10: expected scalar value
-File 'data.yaml': Invalid YAML at line 3: tab characters not allowed
-Type conversion error: Cannot cast 'abc' to INTEGER for column 'count'
+IO Error: File or directory does not exist: nonexistent.yaml
+Invalid Input Error: Failed to parse YAML: yaml-cpp: error at line 1, column 10: illegal map value
+Invalid Input Error: Cannot read "x" as BIGINT. A column type comes from a sample of the rows. ...
 ```
 
 ## Defensive Patterns
@@ -167,12 +167,9 @@ Type conversion error: Cannot cast 'abc' to INTEGER for column 'count'
 -- Check files before processing
 CREATE OR REPLACE MACRO check_yaml_files(pattern) AS TABLE
 SELECT
-    file,
+    filename AS file,
     yaml_valid(content) AS is_valid
-FROM (
-    SELECT file, read_text(file) AS content
-    FROM glob(pattern)
-);
+FROM read_text(pattern);
 
 -- Use it
 SELECT * FROM check_yaml_files('data/*.yaml')
@@ -220,7 +217,7 @@ FROM configs;
 SELECT filename
 FROM (
     SELECT filename, yaml_valid(content) AS valid
-    FROM read_yaml_objects('data/*.yaml', filename := true)
+    FROM (SELECT filename, content::YAML AS data FROM read_text('data/*.yaml'))
 )
 WHERE NOT valid;
 ```
@@ -233,7 +230,7 @@ SELECT
     yaml_type(data) AS root_type,
     yaml_type(data, '$.items') AS items_type,
     yaml_keys(data) AS top_level_keys
-FROM read_yaml_objects('config.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('config.yaml'));
 ```
 
 ## Best Practices
@@ -261,10 +258,7 @@ SELECT
     yaml_extract_string(data, '$.name') AS name,
     TRY_CAST(yaml_extract_string(data, '$.value') AS DOUBLE) AS value,
     filename AS source_file
-FROM read_yaml_objects('input/*.yaml',
-    filename := true,
-    ignore_errors := true
-)
+FROM (SELECT filename, TRY_CAST(content AS YAML) AS data FROM read_text('input/*.yaml'))
 WHERE yaml_valid(data)
   AND yaml_exists(data, '$.id');
 ```

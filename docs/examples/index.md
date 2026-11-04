@@ -40,7 +40,7 @@ Real-world examples and use cases for the YAML extension.
 SELECT
     yaml_extract_string(data, '$.database.host') AS db_host,
     yaml_extract(data, '$.database.port') AS db_port
-FROM read_yaml_objects('config.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('config.yaml'));
 ```
 
 ### Analyze Blog Posts
@@ -101,11 +101,8 @@ FROM configs;
 ### Flatten Nested Data
 
 ```sql
-SELECT
-    yaml_extract_string(item, '$.name') AS name,
-    yaml_extract(item, '$.price')::DOUBLE AS price
-FROM read_yaml_objects('products.yaml'),
-     yaml_array_elements(yaml_extract(data, '$.items')) AS item;
+SELECT name, price
+FROM read_yaml('products.yaml', records = 'items');
 ```
 
 ### Aggregate into YAML

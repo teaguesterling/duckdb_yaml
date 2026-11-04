@@ -39,8 +39,8 @@ CREATE TABLE settings(name VARCHAR, config YAML);
 
 -- Insert YAML data
 INSERT INTO settings VALUES
-    ('app', 'port: 8080\ndebug: true'),
-    ('db', 'host: localhost\nport: 5432');
+    ('app', E'port: 8080\ndebug: true'),
+    ('db', E'host: localhost\nport: 5432');
 
 -- Query using extraction functions
 SELECT

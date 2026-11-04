@@ -26,7 +26,7 @@ JSON - The equivalent JSON value.
 
 ```sql
 -- Simple object
-SELECT yaml_to_json('name: John\nage: 30'::YAML);
+SELECT yaml_to_json(E'name: John\nage: 30'::YAML);
 -- Returns: {"name":"John","age":30}
 
 -- Array
@@ -82,31 +82,18 @@ YAML - The value formatted as YAML.
 ```sql
 -- Struct to YAML
 SELECT value_to_yaml({'name': 'John', 'age': 30});
--- Returns:
--- name: John
--- age: 30
+-- Returns: {name: John, age: 30}
 
 -- List to YAML
 SELECT value_to_yaml([1, 2, 3, 4, 5]);
--- Returns:
--- - 1
--- - 2
--- - 3
--- - 4
--- - 5
+-- Returns: [1, 2, 3, 4, 5]
 
 -- Nested structure
 SELECT value_to_yaml({
     'user': {'name': 'John', 'email': 'john@example.com'},
     'roles': ['admin', 'user']
 });
--- Returns:
--- user:
---   name: John
---   email: john@example.com
--- roles:
---   - admin
---   - user
+-- Returns: {user: {name: John, email: john@example.com}, roles: [admin, user]}
 
 -- NULL value
 SELECT value_to_yaml(NULL);
@@ -159,11 +146,11 @@ VARCHAR - The formatted YAML string.
 
 ```sql
 -- Flow style (compact)
-SELECT format_yaml('{name: John, items: [1, 2, 3]}'::YAML, 'flow');
+SELECT format_yaml('{name: John, items: [1, 2, 3]}'::YAML, style := 'flow');
 -- Returns: {name: John, items: [1, 2, 3]}
 
 -- Block style (readable)
-SELECT format_yaml('{name: John, items: [1, 2, 3]}'::YAML, 'block');
+SELECT format_yaml('{name: John, items: [1, 2, 3]}'::YAML, style := 'block');
 -- Returns:
 -- name: John
 -- items:
@@ -186,28 +173,28 @@ SELECT format_yaml('{name: John, items: [1, 2, 3]}'::YAML, 'block');
 ### YAML to JSON Cast
 
 ```sql
-SELECT yaml_value::JSON FROM table;
+SELECT yaml_value::JSON FROM my_table;
 SELECT CAST('name: John' AS YAML)::JSON;
 ```
 
 ### JSON to YAML Cast
 
 ```sql
-SELECT json_value::YAML FROM table;
+SELECT json_value::YAML FROM my_table;
 SELECT '{"name":"John"}'::JSON::YAML;
 ```
 
 ### YAML to VARCHAR Cast
 
 ```sql
-SELECT yaml_value::VARCHAR FROM table;
+SELECT yaml_value::VARCHAR FROM my_table;
 ```
 
 ### VARCHAR to YAML Cast
 
 ```sql
 SELECT 'name: John'::YAML;
-SELECT varchar_column::YAML FROM table;
+SELECT varchar_column::YAML FROM my_table;
 ```
 
 ### Examples
@@ -250,15 +237,15 @@ SELECT yaml_set_default_style(style);
 -- Set block style as default
 SELECT yaml_set_default_style('block');
 
--- Now value_to_yaml uses block style
-SELECT value_to_yaml({'name': 'John'});
+-- Now format_yaml uses block style. value_to_yaml is always flow style.
+SELECT format_yaml({'name': 'John'});
 -- Returns:
 -- name: John
 
 -- Switch to flow style
 SELECT yaml_set_default_style('flow');
 
-SELECT value_to_yaml({'name': 'John'});
+SELECT format_yaml({'name': 'John'});
 -- Returns: {name: John}
 ```
 
@@ -305,7 +292,7 @@ SELECT yaml_to_json(value_to_yaml({'a': 1}));
 -- Store YAML, query as JSON
 CREATE TABLE configs (id INT, data YAML);
 
-INSERT INTO configs VALUES (1, 'name: app\nversion: 1.0');
+INSERT INTO configs VALUES (1, E'name: app\nversion: 1.0');
 
 SELECT id, data::JSON AS json_data FROM configs;
 ```

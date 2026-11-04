@@ -29,7 +29,7 @@ BOOLEAN - `true` if valid YAML, `false` otherwise. Returns `NULL` for NULL input
 SELECT yaml_valid('name: John');
 -- Returns: true
 
-SELECT yaml_valid('items:\n  - one\n  - two');
+SELECT yaml_valid(E'items:\n  - one\n  - two');
 -- Returns: true
 
 -- Invalid YAML
@@ -113,7 +113,7 @@ SELECT yaml_set_default_style(style);
 
 ### Returns
 
-VARCHAR - Confirmation message.
+VARCHAR - The style that was set.
 
 ### Styles
 
@@ -128,8 +128,8 @@ VARCHAR - Confirmation message.
 -- Set block style (more readable)
 SELECT yaml_set_default_style('block');
 
--- Now value_to_yaml uses block style
-SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]});
+-- Now format_yaml uses block style. value_to_yaml is always flow style.
+SELECT format_yaml({'name': 'John', 'items': [1, 2, 3]});
 -- Returns:
 -- name: John
 -- items:
@@ -140,7 +140,7 @@ SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]});
 -- Switch to flow style (compact)
 SELECT yaml_set_default_style('flow');
 
-SELECT value_to_yaml({'name': 'John', 'items': [1, 2, 3]});
+SELECT format_yaml({'name': 'John', 'items': [1, 2, 3]});
 -- Returns: {name: John, items: [1, 2, 3]}
 ```
 
@@ -226,8 +226,8 @@ SELECT yaml_get_default_style() AS original_style;
 SELECT yaml_set_default_style('block');
 
 -- Generate readable YAML
-COPY (SELECT value_to_yaml(config) FROM configs)
-TO 'output.yaml';
+COPY (SELECT format_yaml(config) FROM configs)
+TO 'output.txt' (HEADER false, QUOTE '');
 
 -- Restore original style
 SELECT yaml_set_default_style(
@@ -260,7 +260,7 @@ The `yaml_valid` function does not provide detailed error messages. For debuggin
 ```sql
 -- This will show the parse error
 SELECT * FROM parse_yaml('invalid: : syntax');
--- Error: YAML parsing error at line 1, column 10: ...
+-- Invalid Input Error: Failed to parse YAML: yaml-cpp: error at line 1, column 10: illegal map value
 ```
 
 ## See Also

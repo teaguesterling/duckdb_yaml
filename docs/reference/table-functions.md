@@ -24,7 +24,10 @@ read_yaml(path VARCHAR, [options...]) → TABLE
 | `expand_root_sequence` | BOOLEAN | `true` | Expand top-level sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on parsing errors |
 | `compression` | VARCHAR | `'auto'` | `auto`, `gzip`, `zstd` or `none` |
-| `maximum_object_size` | INTEGER | 16777216 | Maximum size of the text of a file in bytes, after decompression |
+| `maximum_object_size` | INTEGER | 16777216 | Maximum size of the text of a file in bytes, after decompression. `maximum_file_size` is an alias |
+| `strip_document_suffixes` | BOOLEAN | `true` | Remove non-standard words from `---` lines, such as Unity's `stripped` |
+| `frontmatter_as_columns` | BOOLEAN | `true` | With `multi_document = 'frontmatter'`, add `meta_` columns. If false, add one `frontmatter` column |
+| `list_column_name` | VARCHAR | `'documents'` | With `multi_document = 'list'`, the name of the column |
 | `sample_size` | INTEGER | 20480 | Rows to sample for schema detection |
 | `maximum_sample_files` | INTEGER | 32 | Files to sample for schema detection |
 
@@ -62,7 +65,7 @@ SELECT * FROM read_yaml('app.yaml', records = 'config.database.tables');
 
 ## read_yaml_objects
 
-Reads YAML files preserving document structure.
+Reads each YAML document as one value, in one column called `yaml`. The column has a detected type, such as a STRUCT.
 
 ### Signature
 
@@ -72,27 +75,26 @@ read_yaml_objects(path VARCHAR, [options...]) → TABLE
 
 ### Parameters
 
-Same as `read_yaml`, plus:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `filename` | BOOLEAN | `false` | Include source filename column |
+`auto_detect`, `columns`, `ignore_errors`, `compression`, `maximum_object_size`, `multi_document`, `sample_size`, `maximum_sample_files` and `strip_document_suffixes`, as for `read_yaml`.
 
 ### Returns
 
-TABLE with one row per file/document, preserving nested structure.
+TABLE with one row per document, and one column called `yaml`.
 
 ### Examples
 
 ```sql
--- Read with filename
-SELECT * FROM read_yaml_objects('configs/*.yaml', filename = true);
+-- Read each document as a value
+SELECT yaml FROM read_yaml_objects('configs/*.yaml');
 
 -- Access nested data
+SELECT yaml.database.host FROM read_yaml_objects('config.yaml');
+
+-- Get the file name and a YAML value
 SELECT
     filename,
-    yaml_extract_string(data, '$.name') AS name
-FROM read_yaml_objects('data/*.yaml', filename = true);
+    yaml_extract_string(content::YAML, '$.name') AS name
+FROM read_text('data/*.yaml');
 ```
 
 ---
@@ -182,6 +184,8 @@ SELECT * FROM parse_yaml('- item: one
 
 ## yaml_each
 
+The argument must be a constant. It cannot be a column. For a column, use `unnest(yaml_keys(config))`.
+
 Returns key-value pairs from a YAML object.
 
 ### Signature
@@ -212,7 +216,7 @@ SELECT * FROM yaml_each('{a: 1, b: 2, c: 3}'::YAML);
 
 -- With value processing
 SELECT key, yaml_type(value) AS type
-FROM yaml_each(config);
+FROM yaml_each('{a: 1, b: [2]}'::YAML);
 ```
 
 ---

@@ -101,7 +101,7 @@ Used by extraction functions:
 
 ## Error Handling
 
-Most functions return `NULL` on error. Use `ignore_errors` parameter in read functions to continue on errors.
+Text that is not valid YAML is an error, except in `yaml_valid`, which returns false. `from_yaml` and `parse_yaml` read a value that does not fit its type as NULL. Use the `ignore_errors` parameter in read functions to continue on errors.
 
 ## Performance Notes
 
