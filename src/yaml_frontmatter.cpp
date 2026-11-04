@@ -168,16 +168,14 @@ static pair<string, string> ExtractFrontmatter(const string &content) {
 // Read file content
 static string ReadFileContent(ClientContext &context, const string &file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
-	auto file_size = handle->GetFileSize();
-
+	string content;
+	idx_t size = 0;
 	// Enforce the input-size cap here too — the frontmatter reader previously
 	// read the whole file with no limit (GHSA-h5hw-g5m6-vmjj, finding #3).
-	yaml_utils::CheckInputSize(file_size, "read_yaml_frontmatter");
-
-	string content;
-	content.resize(file_size);
-	handle->Read((void *)content.data(), file_size);
+	if (!yaml_utils::ReadFileText(fs, file_path, FileCompressionType::AUTO_DETECT,
+	                              yaml_utils::YAMLSettings::GetMaxInputSize(), content, size)) {
+		yaml_utils::CheckInputSize(size, "read_yaml_frontmatter");
+	}
 
 	return content;
 }

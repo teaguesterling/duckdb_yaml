@@ -167,12 +167,27 @@ public:
 	}
 };
 
+// The parser cannot pause inside a document, and a root sequence is one document. A throw from the handler is the way
+// to stop it, and a read for a sample never needs to continue.
+struct RowLimitReached {};
+
 // Builds the tree of each document. YAML::LoadAll does this too, but it stops at the first null document, and the
 // builder it uses is private. Node handles are copied, never assigned: assignment rebinds and an alias must share.
 class DocumentBuilder : public YAML::EventHandler {
 public:
+	DocumentBuilder(bool expand_root_sequence, idx_t row_limit)
+	    : expand_root_sequence(expand_root_sequence), row_limit(row_limit) {
+	}
+
 	YAML::Mark start;
 	std::vector<YAML::Node> documents;
+
+	// After a stop, the root sequence of the current document is still open
+	void KeepOpenRoot() {
+		if (!open.empty()) {
+			documents.push_back(open.front().node);
+		}
+	}
 
 	void OnDocumentStart(const YAML::Mark &mark) override {
 		start = mark;
@@ -236,14 +251,26 @@ private:
 			anchors.emplace(anchor, node);
 		}
 	}
+	// The same count as YAMLReader::ExtractRowNodes: a null is not a row, and an expanded sequence is its items
+	void CountRow(const YAML::Node &node) {
+		if (!node.IsNull() && ++rows > row_limit) {
+			throw RowLimitReached();
+		}
+	}
 	void Add(const YAML::Node &node) {
 		if (open.empty()) {
 			documents.push_back(node);
+			if (!(expand_root_sequence && node.IsSequence())) {
+				CountRow(node);
+			}
 			return;
 		}
 		auto &parent = open.back();
 		if (parent.node.IsSequence()) {
 			parent.node.push_back(node);
+			if (expand_root_sequence && open.size() == 1) {
+				CountRow(node);
+			}
 		} else if (parent.has_key) {
 			parent.node.force_insert(keys.back(), node);
 			keys.pop_back();
@@ -254,19 +281,30 @@ private:
 		}
 	}
 
+	const bool expand_root_sequence;
+	const idx_t row_limit;
+	idx_t rows = 0;
 	std::vector<OpenCollection> open;
 	std::vector<YAML::Node> keys;
 	std::unordered_map<YAML::anchor_t, YAML::Node> anchors;
 };
 } // namespace
 
-std::vector<YAML::Node> LoadAllDocuments(std::istream &input) {
+std::vector<YAML::Node> LoadDocumentsForSample(std::istream &input, bool expand_root_sequence, idx_t row_limit) {
 	YAML::Parser parser(input);
-	DocumentBuilder builder;
+	DocumentBuilder builder(expand_root_sequence, row_limit);
 	int previous_start = -1;
-	while (ReadNextDocument(parser, builder, previous_start)) {
+	try {
+		while (ReadNextDocument(parser, builder, previous_start)) {
+		}
+	} catch (const RowLimitReached &) {
+		builder.KeepOpenRoot();
 	}
 	return std::move(builder.documents);
+}
+
+std::vector<YAML::Node> LoadAllDocuments(std::istream &input) {
+	return LoadDocumentsForSample(input, true, NumericLimits<idx_t>::Maximum());
 }
 
 bool IsValidYAML(const std::string &yaml_str) {
@@ -283,6 +321,49 @@ bool IsValidYAML(const std::string &yaml_str) {
 	} catch (...) {
 		return false;
 	}
+}
+
+bool ReadFileText(FileSystem &fs, const std::string &path, FileCompressionType compression, idx_t limit,
+                  std::string &text, idx_t &size) {
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | compression);
+	// For a compressed file this is the compressed size, so it only sets the first capacity. Read until the end.
+	size = handle->GetFileSize();
+	if (size > limit) {
+		return false;
+	}
+	text.resize(size + 1);
+	idx_t total = 0;
+	while (true) {
+		if (total == text.size()) {
+			if (total > limit) {
+				size = total;
+				return false;
+			}
+			text.resize(MinValue<idx_t>(total * 2, limit + 1));
+		}
+		const auto bytes_read = handle->Read(&text[total], text.size() - total);
+		if (bytes_read <= 0) {
+			break;
+		}
+		total += static_cast<idx_t>(bytes_read);
+	}
+	text.resize(total);
+	size = total;
+	return true;
+}
+
+FileCompressionType ParseFileCompression(const std::string &name) {
+	const auto lower_name = StringUtil::Lower(name);
+	if (lower_name == "auto" || lower_name == "infer") {
+		return FileCompressionType::AUTO_DETECT;
+	} else if (lower_name == "gzip") {
+		return FileCompressionType::GZIP;
+	} else if (lower_name == "zstd") {
+		return FileCompressionType::ZSTD;
+	} else if (lower_name == "uncompressed" || lower_name == "none" || lower_name.empty()) {
+		return FileCompressionType::UNCOMPRESSED;
+	}
+	throw ParserException("Unrecognized file compression type \"%s\"", lower_name);
 }
 
 std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {

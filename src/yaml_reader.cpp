@@ -37,6 +37,7 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	DeclareNamedParameters(read_yaml, {
 	                                      {"auto_detect", LogicalType::BOOLEAN},
 	                                      {"ignore_errors", LogicalType::BOOLEAN},
+	                                      {"compression", LogicalType::VARCHAR},
 	                                      {"maximum_object_size", LogicalType::BIGINT},
 	                                      {"maximum_file_size", LogicalType::BIGINT},
 	                                      {"multi_document", LogicalType::ANY}, // Accepts BOOLEAN or VARCHAR for mode
@@ -72,6 +73,7 @@ void YAMLReader::RegisterFunction(ExtensionLoader &loader) {
 	                       {
 	                           {"auto_detect", LogicalType::BOOLEAN},
 	                           {"ignore_errors", LogicalType::BOOLEAN},
+	                           {"compression", LogicalType::VARCHAR},
 	                           {"maximum_object_size", LogicalType::BIGINT},
 	                           {"maximum_file_size", LogicalType::BIGINT},
 	                           {"multi_document", LogicalType::ANY}, // Accepts BOOLEAN or VARCHAR for mode
