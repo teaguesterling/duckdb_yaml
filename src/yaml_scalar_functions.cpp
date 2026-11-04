@@ -37,15 +37,7 @@ void YAMLFunctions::RegisterValidationFunction(ExtensionLoader &loader) {
 
 		                                  UnaryExecutor::Execute<string_t, bool>(
 		                                      input_vector, result, args.size(), [&](string_t yaml_str) {
-			                                      try {
-				                                      // Check if it's a multi-document YAML by trying to load all
-				                                      // documents
-				                                      std::stringstream yaml_stream(yaml_str.GetString());
-				                                      std::vector<YAML::Node> docs = YAML::LoadAll(yaml_stream);
-				                                      return !docs.empty();
-			                                      } catch (...) {
-				                                      return false;
-			                                      }
+			                                      return yaml_utils::IsValidYAML(yaml_str.GetString());
 		                                      });
 	                                  });
 

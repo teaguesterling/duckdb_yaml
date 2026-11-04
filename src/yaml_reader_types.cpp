@@ -550,9 +550,10 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 		child_list_t<Value> struct_values;
 		for (auto &entry : struct_children) {
 			auto entry_name = CompatIdentifierName(entry.first);
-			if (node[entry_name]) {
+			const YAML::Node field_value = node[entry_name];
+			if (field_value) {
 				struct_values.push_back(
-				    make_pair(entry.first, YAMLNodeToValueImpl(node[entry_name], entry.second, strict, budget, formats,
+				    make_pair(entry.first, YAMLNodeToValueImpl(field_value, entry.second, strict, budget, formats,
 				                                               StructFieldPath(formats, path, entry_name))));
 			} else {
 				struct_values.push_back(make_pair(entry.first, Value(entry.second))); // NULL value
@@ -605,8 +606,11 @@ void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node>
 			const auto field = CompatIdentifierName(entry.first);
 			vector<YAML::Node> values;
 			for (const YAML::Node &node : nodes) {
-				if (node && node.IsMap() && node[field]) {
-					values.push_back(node[field]);
+				if (node && node.IsMap()) {
+					const YAML::Node value = node[field];
+					if (value) {
+						values.push_back(value);
+					}
 				}
 			}
 			auto child_type = entry.second;

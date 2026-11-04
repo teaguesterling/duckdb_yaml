@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_utils.hpp"
 #include <algorithm>
 #include "duckdb_compat.hpp"
 #include "yaml_types.hpp"
@@ -524,19 +525,51 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		}
 	}
 
+	// Only text and nested columns can take a date format. One pass over the sample collects their values, because
+	// node[col] scans the whole map for each column.
+	struct FormatColumn {
+		vector<YAML::Node> values;
+		idx_t last_row = DConstants::INVALID_INDEX;
+	};
+	unordered_map<string, FormatColumn> format_columns;
+	if (options.auto_detect_types) {
+		for (const auto &col : column_order) {
+			if (user_specified_types.find(col) != user_specified_types.end()) {
+				continue;
+			}
+			detected_types[col] = ResolveNullTypes(detected_types[col]);
+			const auto &type = detected_types[col];
+			if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::STRUCT ||
+			    (type.id() == LogicalTypeId::VARCHAR && !type.HasAlias())) {
+				format_columns[col];
+			}
+		}
+		for (idx_t row = 0; row < sample_nodes.size() && !format_columns.empty(); row++) {
+			const YAML::Node &node = sample_nodes[row];
+			if (!node.IsMap()) {
+				continue;
+			}
+			for (auto it = node.begin(); it != node.end(); ++it) {
+				if (!it->first.IsScalar()) {
+					continue;
+				}
+				auto column = format_columns.find(it->first.Scalar());
+				// Of a repeated key, node[key] finds the first
+				if (column != format_columns.end() && column->second.last_row != row) {
+					column->second.last_row = row;
+					column->second.values.push_back(it->second);
+				}
+			}
+		}
+	}
+
 	// Build the final schema in document order
 	for (const auto &col : column_order) {
 		names.push_back(CompatMakeName(col));
 		const bool user_specified = user_specified_types.find(col) != user_specified_types.end();
-		if (options.auto_detect_types && !user_specified) {
-			detected_types[col] = ResolveNullTypes(detected_types[col]);
-			vector<YAML::Node> column_values;
-			for (const YAML::Node &node : sample_nodes) {
-				if (node.IsMap() && node[col]) {
-					column_values.push_back(node[col]);
-				}
-			}
-			DetectColumnFormats(detected_types[col], column_values, col, result->column_formats);
+		auto format_column = format_columns.find(col);
+		if (format_column != format_columns.end()) {
+			DetectColumnFormats(detected_types[col], format_column->second.values, col, result->column_formats);
 		}
 		return_types.push_back(sample_truncated && !user_specified ? WidenSampledIntegers(detected_types[col])
 		                                                           : detected_types[col]);
@@ -781,7 +814,7 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 				if (bind_data.options.multi_document_mode != MultiDocumentMode::FIRST) {
 					try {
 						std::stringstream yaml_stream(content);
-						docs = YAML::LoadAll(yaml_stream);
+						docs = yaml_utils::LoadAllDocuments(yaml_stream);
 					} catch (const YAML::Exception &e) {
 						if (!bind_data.options.ignore_errors) {
 							throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
@@ -897,6 +930,13 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 			} else {
 				idx_t fm_col_count = lstate.frontmatter_values.size();
 
+				// node[key] scans the whole map, so each row is one pass over its keys instead of one scan per column
+				unordered_map<string, idx_t> column_by_key;
+				for (idx_t col_idx = fm_col_count; col_idx < bind_data.names.size(); col_idx++) {
+					column_by_key.emplace(bind_data.names[col_idx], col_idx);
+				}
+				vector<idx_t> filled_row(bind_data.names.size(), DConstants::INVALID_INDEX);
+
 				while (lstate.current_row_index < lstate.file_nodes.size() && output_idx < STANDARD_VECTOR_SIZE) {
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
@@ -925,18 +965,25 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 								col_idx++;
 							}
 						}
-						for (; col_idx < bind_data.names.size(); col_idx++) {
-							const string &col_name = bind_data.names[col_idx];
-							const LogicalType &type = bind_data.types[col_idx];
-							YAML::Node value = node[col_name];
-							Value duckdb_value;
-							if (value) {
-								duckdb_value = YAMLNodeToValue(value, type, !bind_data.options.ignore_errors,
-								                               &bind_data.column_formats, col_name);
-							} else {
-								duckdb_value = Value(type);
+						for (auto it = node.begin(); it != node.end(); ++it) {
+							if (!it->first.IsScalar()) {
+								continue;
 							}
-							output.SetValue(col_idx, output_idx, duckdb_value);
+							auto column = column_by_key.find(it->first.Scalar());
+							// Of a repeated key, node[key] finds the first
+							if (column == column_by_key.end() || filled_row[column->second] == output_idx) {
+								continue;
+							}
+							filled_row[column->second] = output_idx;
+							output.SetValue(column->second, output_idx,
+							                YAMLNodeToValue(it->second, bind_data.types[column->second],
+							                                !bind_data.options.ignore_errors, &bind_data.column_formats,
+							                                bind_data.names[column->second]));
+						}
+						for (; col_idx < bind_data.names.size(); col_idx++) {
+							if (filled_row[col_idx] != output_idx) {
+								output.SetValue(col_idx, output_idx, Value(bind_data.types[col_idx]));
+							}
 						}
 					}
 
@@ -1039,7 +1086,8 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				if (bind_data.options.multi_document_mode != MultiDocumentMode::FIRST) {
 					try {
 						std::stringstream yaml_stream(content);
-						docs = YAML::LoadAll(yaml_stream);
+						// A null document holds no data, as in read_yaml
+						docs = ExtractRowNodes(yaml_utils::LoadAllDocuments(yaml_stream), false);
 					} catch (const YAML::Exception &e) {
 						if (!bind_data.options.ignore_errors) {
 							throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
@@ -1199,7 +1247,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		vector<YAML::Node> docs;
 		if (result->multi_document_mode != MultiDocumentMode::FIRST) {
 			std::stringstream ss(yaml_str);
-			docs = YAML::LoadAll(ss);
+			docs = yaml_utils::LoadAllDocuments(ss);
 		} else {
 			docs.push_back(YAML::Load(yaml_str));
 		}

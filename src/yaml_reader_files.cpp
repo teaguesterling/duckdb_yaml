@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_utils.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -253,7 +254,7 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 		try {
 			// First try to parse the entire file at once
 			std::stringstream yaml_stream(content);
-			docs = YAML::LoadAll(yaml_stream);
+			docs = yaml_utils::LoadAllDocuments(yaml_stream);
 		} catch (const YAML::Exception &e) {
 			if (!options.ignore_errors) {
 				throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
