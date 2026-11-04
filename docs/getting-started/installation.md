@@ -17,21 +17,7 @@ This method:
 - Provides signed, pre-built binaries
 - Handles platform detection automatically
 
-## From GitHub Release
-
-You can install directly from a GitHub release:
-
-```sql
-INSTALL yaml FROM 'https://github.com/teaguesterling/duckdb_yaml/releases/download/v0.1.0/yaml.duckdb_extension';
-LOAD yaml;
-```
-
-!!! note "Unsigned Extensions"
-    When installing from GitHub releases, you may need to enable unsigned extensions:
-
-    ```sql
-    SET allow_unsigned_extensions = true;
-    ```
+v1.12.0 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
 
 ## From Source
 

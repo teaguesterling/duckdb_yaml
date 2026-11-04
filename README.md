@@ -14,13 +14,7 @@ INSTALL yaml FROM community;
 LOAD yaml;
 ```
 
-### From GitHub Release
-
-```sql
--- Install directly from GitHub releases
-INSTALL yaml FROM 'https://github.com/teaguesterling/duckdb_yaml/releases/download/v0.1.0/yaml.duckdb_extension';
-LOAD yaml;
-```
+v1.12.0 builds for DuckDB v2.0.0. v1.10.1 is the last release for DuckDB v1.5.6.
 
 ### From Source
 
@@ -41,7 +35,8 @@ Claude.ai wrote 99% of the code in this project as an experiment. The original w
 - **YAML File Reading**: Read YAML files into DuckDB tables with `read_yaml` and `read_yaml_objects`
 - **Frontmatter Extraction**: Extract YAML frontmatter from Markdown, MDX, Astro, RST, and other text files
 - **Native YAML Type**: Full YAML type support with seamless conversion between YAML, JSON, and VARCHAR
-- **Type Detection**: Comprehensive automatic type detection including temporal types (DATE, TIME, TIMESTAMP) and optimal numeric types
+- **Compressed Files**: Read gzip and zstd files, detected from the file extension or set with `compression`
+- **Type Detection**: Automatic type detection that follows the YAML 1.2 core schema, with temporal types (DATE, TIME, TIMESTAMP) and optimal numeric types
 - **YAML Extraction**: Query YAML data with extraction functions (`yaml_extract`, `yaml_type`, `yaml_exists`)
 - **YAML Parsing**: Parse YAML strings with `parse_yaml` (table) and `from_yaml` (scalar)
 - **Column Type Specification**: Explicitly define column types when reading YAML files
@@ -118,7 +113,7 @@ SELECT * FROM read_yaml('events.yaml');
 --   count: 42
 --   active: true
 --   score: 3.14
--- Results in columns: date DATE, time TIME, timestamp TIMESTAMP, count TINYINT, active BOOLEAN, score DOUBLE
+-- Results in columns: date DATE, time TIME, timestamp TIMESTAMP WITH TIME ZONE, count TINYINT, active BOOLEAN, score DOUBLE
 ```
 
 #### With Parameters
@@ -136,8 +131,12 @@ SELECT * FROM read_yaml('file.yaml', expand_root_sequence=true);
 -- Ignore parsing errors (default: false)
 SELECT * FROM read_yaml('file.yaml', ignore_errors=true);
 
--- Set maximum file size in bytes (default: 16MB)
+-- Set maximum size of the text of a file in bytes, after decompression (default: 16MB)
 SELECT * FROM read_yaml('file.yaml', maximum_object_size=1048576);
+
+-- Read a compressed file (default: auto, from the file extension)
+SELECT * FROM read_yaml('file.yaml.gz');
+SELECT * FROM read_yaml('file.backup', compression='gzip');
 
 -- Control schema detection sampling (default: 20480 rows from up to 32 files)
 SELECT * FROM read_yaml('data/*.yaml', sample_size=1000);
@@ -161,7 +160,9 @@ When reading multiple YAML files, the extension samples a subset of files and ro
 | `sample_size` | 20480 | Number of rows to sample for schema detection. Use `-1` for unlimited. |
 | `maximum_sample_files` | 32 | Maximum number of files to sample for schema detection. Use `-1` for unlimited. |
 
-**Note**: If sampling doesn't capture all type variations (e.g., some files have struct fields, others have scalars), you may see cast errors. Increase `sample_size` or `maximum_sample_files`, or use `-1` for unlimited sampling to ensure all variations are detected.
+**Note**: A value after the sample that does not fit its column is an error that names the value. To fix this, increase `sample_size` or `maximum_sample_files`, use `-1` for unlimited sampling, or set the column type with `columns`. With `ignore_errors=true`, the value reads as NULL.
+
+Bind parses a file only as far as the sample, so a large file binds quickly. A syntax error after the sample is an error when you read the rows, and `DESCRIBE` does not show it.
 
 ### Reading Frontmatter
 
@@ -508,6 +509,12 @@ name: Jane
 
 Both formats produce the same result when read with `read_yaml()`.
 
+A null document is a row of NULLs, as in `read_json`. This includes `~`, a document with only a comment, and an empty document after the last `---`. A null item of a top-level sequence is the same. To remove these rows, filter on a column:
+
+```sql
+SELECT * FROM read_yaml('manifests.yaml') WHERE kind IS NOT NULL;
+```
+
 ### Extended Multi-Document Modes
 
 The `multi_document` parameter supports four modes for flexible handling of multi-document YAML files:
@@ -599,37 +606,28 @@ For a file with 3 YAML documents:
 
 ## Type Detection
 
-The YAML extension includes comprehensive automatic type detection:
+Type detection follows the [YAML 1.2 core schema](https://yaml.org/spec/1.2.2/#103-core-schema): a plain value that the schema does not call a null, a boolean or a number is a string. Dates, times and UUIDs are also detected, as in `read_json`. See the [type detection guide](docs/guide/type-detection.md) for all forms.
 
 ### Temporal Types
-- **DATE**: ISO format (2024-01-15), slash format (01/15/2024), dot format (15.01.2024)
-- **TIME**: Standard format (14:30:00), with milliseconds (14:30:00.123)
-- **TIMESTAMP**: ISO 8601 with timezone (2024-01-15T14:30:00Z), without timezone
+- **DATE**: ISO format (2024-01-15). Other forms, such as 01/15/2024 and 15.01.2024, are VARCHAR
+- **TIME**: Standard format (14:30:00), with milliseconds (14:30:00.123). A time needs seconds, so 14:30 is VARCHAR
+- **TIMESTAMP**: ISO 8601 without a time zone (2024-01-15T14:30:00)
+- **TIMESTAMP WITH TIME ZONE**: ISO 8601 with `Z` or an offset (2024-01-15T14:30:00Z)
 
 ### Numeric Types
 - **TINYINT**: -128 to 127
 - **SMALLINT**: -32,768 to 32,767
 - **INTEGER**: -2,147,483,648 to 2,147,483,647
 - **BIGINT**: Larger integers
-- **DOUBLE**: Decimals, scientific notation (1.23e-4), special values (inf, -inf, nan)
+- **DOUBLE**: Decimals, scientific notation (1.23e-4), special values (.inf, -.inf, .nan)
 
 ### Other Types
-- **BOOLEAN**: true/false, yes/no, on/off, y/n, t/f (case-insensitive)
-- **NULL**: null, ~, Null, NULL, empty string
-- **VARCHAR**: Default for unrecognized patterns
+- **BOOLEAN**: true and false, as `true`, `True` or `TRUE`
+- **NULL**: null, ~, Null, NULL, or no value. A quoted empty string is VARCHAR
+- **UUID**: A hyphenated UUID
+- **VARCHAR**: Everything else, including `yes`, `no`, `on`, `off`, `y`, `n`, `inf` and `nan`
 
-> **The "Norway problem".** Because the boolean set above includes `no`/`n`/`off`/`y`/`on`,
-> an unquoted country code, initial, or similar token is read as a boolean:
-> `country: NO` becomes `false`, and `answer: y` becomes `true`. This is YAML 1.1
-> behaviour and is what most YAML tooling does, so the extension keeps it rather than
-> silently disagreeing with other readers. Quote the value to keep it a string:
->
-> ```yaml
-> country: "NO"    # VARCHAR 'NO'
-> country: NO      # BOOLEAN false
-> ```
->
-> The same applies to `ON`, `OFF`, `Y`, `N`, `T`, `F` in any letter case.
+To read `yes` and `no` as booleans, set the column type: `columns = {'enabled': 'BOOLEAN'}`.
 
 ### Array Handling
 - Homogeneous arrays: `INTEGER[]`, `VARCHAR[]`, etc.
@@ -641,7 +639,7 @@ The YAML extension includes comprehensive automatic type detection:
 - YAML anchors and aliases are resolved during parsing but not preserved
 - Streaming support for very large files not yet implemented
 - YAML comments are not preserved
-- Maximum file size limited by memory (default 16MB, configurable)
+- Maximum size of the text of a file limited by memory (default 16MB, configurable). The limit applies after decompression
 - **Duplicate mapping keys are not rejected or normalized.** YAML says keys should be
   unique but does not require an error, and the underlying parser accepts duplicates. The
   two paths then differ: `yaml_to_json` emits every occurrence (`{a: 1, a: 2}` becomes
@@ -649,8 +647,8 @@ The YAML extension includes comprehensive automatic type detection:
   `read_yaml` can only produce one column per name, so the **first** occurrence wins and
   later ones are dropped without warning. Deduplicate upstream if your input may contain
   repeated keys.
-- Boolean coercion follows YAML 1.1, so unquoted `NO`, `N`, `OFF`, `Y`, `ON` are booleans
-  — see the ["Norway problem"](#other-types) note above.
+- `read_yaml` on a file of only `{}` is an INTERNAL error.
+- `parse_yaml(E'a: 1\n---\n5')` reads the map as NULL.
 
 ## Advanced YAML Functions
 

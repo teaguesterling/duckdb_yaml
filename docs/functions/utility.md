@@ -40,12 +40,16 @@ SELECT yaml_valid('unbalanced: [brackets');
 -- Returns: false
 
 -- NULL handling
-SELECT yaml_valid(NULL);
+SELECT yaml_valid(NULL::VARCHAR);
 -- Returns: NULL
 
--- Empty string
+-- Empty string: a string with no documents is not valid
 SELECT yaml_valid('');
--- Returns: true (empty document is valid)
+-- Returns: false
+
+-- A null document is valid
+SELECT yaml_valid('~');
+-- Returns: true
 ```
 
 ### Use Cases

@@ -12,7 +12,7 @@ The YAML extension for DuckDB enables seamless reading, writing, and querying of
 
     ---
 
-    Read single files, glob patterns, or lists of YAML files directly into DuckDB tables with automatic schema detection.
+    Read single files, glob patterns, or lists of YAML files directly into DuckDB tables with automatic schema detection. gzip and zstd files are read too.
 
     [:octicons-arrow-right-24: Reading YAML](guide/reading-yaml.md)
 
@@ -90,13 +90,6 @@ FROM configs;
 
     ```sql
     INSTALL yaml FROM community;
-    LOAD yaml;
-    ```
-
-=== "From GitHub Release"
-
-    ```sql
-    INSTALL yaml FROM 'https://github.com/teaguesterling/duckdb_yaml/releases/download/v0.1.0/yaml.duckdb_extension';
     LOAD yaml;
     ```
 

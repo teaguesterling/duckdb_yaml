@@ -108,4 +108,5 @@ Most functions return `NULL` on error. Use `ignore_errors` parameter in read fun
 - YAML is stored as text; parsing occurs on function calls
 - Use `columns` parameter for schema consistency
 - Increase `sample_size` for complex schemas
+- Bind parses a file only as far as the sample, so a large file binds quickly. A full read still builds the whole file in memory
 - Consider JSON conversion for complex queries

@@ -23,7 +23,8 @@ read_yaml(path VARCHAR, [options...]) → TABLE
 | `multi_document` | BOOLEAN | `true` | Handle multiple YAML documents |
 | `expand_root_sequence` | BOOLEAN | `true` | Expand top-level sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on parsing errors |
-| `maximum_object_size` | INTEGER | 16777216 | Maximum file size in bytes |
+| `compression` | VARCHAR | `'auto'` | `auto`, `gzip`, `zstd` or `none` |
+| `maximum_object_size` | INTEGER | 16777216 | Maximum size of the text of a file in bytes, after decompression |
 | `sample_size` | INTEGER | 20480 | Rows to sample for schema detection |
 | `maximum_sample_files` | INTEGER | 32 | Files to sample for schema detection |
 
