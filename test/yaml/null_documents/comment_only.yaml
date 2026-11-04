@@ -1,0 +1,8 @@
+---
+kind: A
+---
+# Source: chart/templates/empty.yaml
+---
+kind: B
+---
+kind: C

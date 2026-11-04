@@ -9,6 +9,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include <sstream>
+#include <unordered_map>
+#include "yaml-cpp/eventhandler.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -124,6 +126,165 @@ void CheckExpansionBudget(const YAML::Node &node) {
 // YAML Parsing and Emission
 //===--------------------------------------------------------------------===//
 
+namespace {
+// Reads one document. The parser reports a stray ',' as a null document and does not advance, so it would repeat
+// without end. A document that starts where the previous document started is that error.
+template <class EVENTS>
+bool ReadNextDocument(YAML::Parser &parser, EVENTS &events, int &previous_start) {
+	if (!parser.HandleNextDocument(events)) {
+		return false;
+	}
+	if (events.start.pos == previous_start) {
+		throw YAML::ParserException(events.start, "unexpected token outside a collection");
+	}
+	previous_start = events.start.pos;
+	return true;
+}
+
+// The parser raises every error itself, so a handler that builds no tree can check a whole stream.
+class DocumentStartEvents : public YAML::EventHandler {
+public:
+	YAML::Mark start;
+
+	void OnDocumentStart(const YAML::Mark &mark) override {
+		start = mark;
+	}
+	void OnDocumentEnd() override {
+	}
+	void OnNull(const YAML::Mark &, YAML::anchor_t) override {
+	}
+	void OnAlias(const YAML::Mark &, YAML::anchor_t) override {
+	}
+	void OnScalar(const YAML::Mark &, const std::string &, YAML::anchor_t, const std::string &) override {
+	}
+	void OnSequenceStart(const YAML::Mark &, const std::string &, YAML::anchor_t, YAML::EmitterStyle::value) override {
+	}
+	void OnSequenceEnd() override {
+	}
+	void OnMapStart(const YAML::Mark &, const std::string &, YAML::anchor_t, YAML::EmitterStyle::value) override {
+	}
+	void OnMapEnd() override {
+	}
+};
+
+// Builds the tree of each document. YAML::LoadAll does this too, but it stops at the first null document, and the
+// builder it uses is private. Node handles are copied, never assigned: assignment rebinds and an alias must share.
+class DocumentBuilder : public YAML::EventHandler {
+public:
+	YAML::Mark start;
+	std::vector<YAML::Node> documents;
+
+	void OnDocumentStart(const YAML::Mark &mark) override {
+		start = mark;
+		anchors.clear();
+	}
+	void OnDocumentEnd() override {
+	}
+	void OnNull(const YAML::Mark &, YAML::anchor_t anchor) override {
+		Finish(YAML::Node(YAML::NodeType::Null), anchor);
+	}
+	void OnAlias(const YAML::Mark &, YAML::anchor_t anchor) override {
+		Add(anchors.at(anchor));
+	}
+	void OnScalar(const YAML::Mark &, const std::string &tag, YAML::anchor_t anchor,
+	              const std::string &value) override {
+		YAML::Node node(value);
+		node.SetTag(tag);
+		Finish(node, anchor);
+	}
+	void OnSequenceStart(const YAML::Mark &, const std::string &tag, YAML::anchor_t anchor,
+	                     YAML::EmitterStyle::value style) override {
+		Open(YAML::NodeType::Sequence, tag, anchor, style);
+	}
+	void OnSequenceEnd() override {
+		Close();
+	}
+	void OnMapStart(const YAML::Mark &, const std::string &tag, YAML::anchor_t anchor,
+	                YAML::EmitterStyle::value style) override {
+		Open(YAML::NodeType::Map, tag, anchor, style);
+	}
+	void OnMapEnd() override {
+		Close();
+	}
+
+private:
+	struct OpenCollection {
+		YAML::Node node;
+		bool has_key;
+	};
+
+	void Open(YAML::NodeType::value type, const std::string &tag, YAML::anchor_t anchor,
+	          YAML::EmitterStyle::value style) {
+		YAML::Node node(type);
+		node.SetTag(tag);
+		node.SetStyle(style);
+		// The anchor comes first, because an alias inside the collection can name it
+		Register(node, anchor);
+		open.push_back({node, false});
+	}
+	void Close() {
+		YAML::Node node = open.back().node;
+		open.pop_back();
+		Add(node);
+	}
+	void Finish(const YAML::Node &node, YAML::anchor_t anchor) {
+		Register(node, anchor);
+		Add(node);
+	}
+	void Register(const YAML::Node &node, YAML::anchor_t anchor) {
+		if (anchor != YAML::NullAnchor) {
+			anchors.emplace(anchor, node);
+		}
+	}
+	void Add(const YAML::Node &node) {
+		if (open.empty()) {
+			documents.push_back(node);
+			return;
+		}
+		auto &parent = open.back();
+		if (parent.node.IsSequence()) {
+			parent.node.push_back(node);
+		} else if (parent.has_key) {
+			parent.node.force_insert(keys.back(), node);
+			keys.pop_back();
+			parent.has_key = false;
+		} else {
+			keys.push_back(node);
+			parent.has_key = true;
+		}
+	}
+
+	std::vector<OpenCollection> open;
+	std::vector<YAML::Node> keys;
+	std::unordered_map<YAML::anchor_t, YAML::Node> anchors;
+};
+} // namespace
+
+std::vector<YAML::Node> LoadAllDocuments(std::istream &input) {
+	YAML::Parser parser(input);
+	DocumentBuilder builder;
+	int previous_start = -1;
+	while (ReadNextDocument(parser, builder, previous_start)) {
+	}
+	return std::move(builder.documents);
+}
+
+bool IsValidYAML(const std::string &yaml_str) {
+	try {
+		std::stringstream yaml_stream(yaml_str);
+		YAML::Parser parser(yaml_stream);
+		DocumentStartEvents events;
+		bool has_document = false;
+		int previous_start = -1;
+		while (ReadNextDocument(parser, events, previous_start)) {
+			has_document = true;
+		}
+		return has_document;
+	} catch (...) {
+		return false;
+	}
+}
+
 std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {
 	if (yaml_str.empty()) {
 		return {};
@@ -132,7 +293,7 @@ std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {
 	try {
 		std::stringstream yaml_stream(yaml_str);
 		if (multi_doc) {
-			return YAML::LoadAll(yaml_stream);
+			return LoadAllDocuments(yaml_stream);
 		} else {
 			std::vector<YAML::Node> result;
 			result.push_back(YAML::Load(yaml_stream));

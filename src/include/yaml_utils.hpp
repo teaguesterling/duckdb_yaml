@@ -2,6 +2,7 @@
 
 #include "duckdb.hpp"
 #include "yaml-cpp/yaml.h"
+#include <istream>
 #include <string>
 #include <vector>
 
@@ -172,6 +173,12 @@ std::string EmitYAMLMultiDoc(const std::vector<YAML::Node> &docs, YAMLFormat for
 
 // Parse YAML string (supports multi-document)
 std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_document = true);
+
+// Whether the parser accepts this text and finds at least one document. Builds no nodes.
+bool IsValidYAML(const std::string &yaml_str);
+
+// Every document of a stream, null documents included. YAML::LoadAll stops at the first null document.
+std::vector<YAML::Node> LoadAllDocuments(std::istream &input);
 
 //===--------------------------------------------------------------------===//
 // YAML to JSON Conversion

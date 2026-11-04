@@ -1,0 +1,157 @@
+# name: test/sql/yaml_read_key_lookup.test
+# description: A row's values reach the right columns, however its keys are ordered or repeated
+# group: [sql]
+
+require yaml
+
+# Keys in another order than the columns
+query III
+SELECT a, b, c FROM parse_yaml('[{a: 1, b: 2, c: 3}, {c: 6, a: 4, b: 5}]');
+----
+1	2	3
+4	5	6
+
+# A missing key is NULL, in every position
+query III
+SELECT a, b, c FROM parse_yaml('[{a: 1, b: 2, c: 3}, {b: 5}, {}]');
+----
+1	2	3
+NULL	5	NULL
+NULL	NULL	NULL
+
+# The same through read_yaml, which has its own row loop
+statement ok
+COPY (SELECT $$- {a: 1, b: x, c: 3}
+- {c: 6, a: 4, b: y}
+- {b: z}$$ AS s) TO '__TEST_DIR__/order.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query III
+SELECT a, b, c FROM read_yaml('__TEST_DIR__/order.yaml');
+----
+1	x	3
+4	y	6
+NULL	z	NULL
+
+# A repeated key reads the same value as before, and a later one does not overwrite it
+statement ok
+COPY (SELECT $$- {a: 1, b: 2, a: 9}
+- {a: 3, b: 4}$$ AS s) TO '__TEST_DIR__/dup.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query II
+SELECT a, b FROM read_yaml('__TEST_DIR__/dup.yaml');
+----
+1	2
+3	4
+
+# A key that is a null or a collection is no column, and does not take a column's value
+statement ok
+COPY (SELECT $$- {~: 1, a: 2}
+- {[x, y]: 3, a: 4}
+- {{p: q}: 5, a: 6}$$ AS s) TO '__TEST_DIR__/oddkeys.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query I
+SELECT a FROM read_yaml('__TEST_DIR__/oddkeys.yaml', columns={'a': 'BIGINT'});
+----
+2
+4
+6
+
+# A number as a key still finds its column
+statement ok
+COPY (SELECT $$- {1: a, 2: b}
+- {2: c, 1: d}$$ AS s) TO '__TEST_DIR__/numkey.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query II
+SELECT "1", "2" FROM read_yaml('__TEST_DIR__/numkey.yaml');
+----
+a	b
+d	c
+
+# Frontmatter columns come first, and the keys of the data rows fill only the columns after them
+statement ok
+COPY (SELECT $$---
+v: top
+---
+v: inner
+x: 1
+---
+x: 2$$ AS s) TO '__TEST_DIR__/fm.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query III
+SELECT * FROM read_yaml('__TEST_DIR__/fm.yaml', multi_document='frontmatter');
+----
+top	inner	1
+top	NULL	2
+
+# Nested maps, with reordered, missing and repeated keys
+statement ok
+COPY (SELECT $$- {s: {p: 1, q: x}}
+- {s: {q: y, p: 2}}
+- {s: {q: z}}
+- {s: {p: 3, q: w, p: 8}}$$ AS s) TO '__TEST_DIR__/nested.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query II
+SELECT s.p, s.q FROM read_yaml('__TEST_DIR__/nested.yaml');
+----
+1	x
+2	y
+NULL	z
+3	w
+
+# A mismatch is still an error, also when another column in the row also has one
+statement ok
+COPY (SELECT $$- {a: 1, b: 2}
+- {a: 3, b: 4}
+- {b: oops, a: 5}$$ AS s) TO '__TEST_DIR__/bad.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+statement error
+SELECT * FROM read_yaml('__TEST_DIR__/bad.yaml', columns={'a': 'BIGINT', 'b': 'BIGINT'});
+----
+oops
+
+# Date formats are found for a column in any key position, and only values of that column count
+statement ok
+COPY (SELECT $$- {d: 13-01-2026, n: 1}
+- {n: 2, d: 14-01-2026}
+- {n: 3}$$ AS s) TO '__TEST_DIR__/fmt.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query II
+SELECT typeof(d), d FROM read_yaml('__TEST_DIR__/fmt.yaml') WHERE n = 2;
+----
+DATE	2026-01-14
+
+# A format is found from the first value of a repeated key only
+statement ok
+COPY (SELECT $$- {d: 13-01-2026, d: not-a-date}
+- {d: 14-01-2026}$$ AS s) TO '__TEST_DIR__/fmtdup.yaml' (FORMAT csv, HEADER false, QUOTE '', DELIMITER E'\x01');
+
+query II
+SELECT typeof(d), d FROM read_yaml('__TEST_DIR__/fmtdup.yaml') ORDER BY d LIMIT 1;
+----
+DATE	2026-01-13
+
+# yaml_valid answers from the parser alone
+query IIIIIIII
+SELECT yaml_valid('a: 1'), yaml_valid(E'---\na: 1\n---\nb: 2'), yaml_valid(''), yaml_valid('plain'),
+       yaml_valid('[1, 2'), yaml_valid('a: *missing'), yaml_valid('# only a comment'), yaml_valid(NULL::VARCHAR);
+----
+true	true	false	true	false	false	false	NULL
+
+# A null document is valid YAML, and it does not hide the documents after it
+query IIIIII
+SELECT yaml_valid('~'), yaml_valid('---'), yaml_valid(E'---\n---\nBody'), yaml_valid('!'),
+       yaml_valid(E'a: 1\n---\n~\n---\nb: 2'), yaml_valid(E'---\n...\n');
+----
+true	true	true	true	true	true
+
+# An error after a null document is still an error
+query II
+SELECT yaml_valid(E'a: 1\n---\n~\n---\n[1, 2'), yaml_valid(E'---\n---\n{a: 1');
+----
+false	false
+
+# A stray ',' outside a flow collection is invalid. The parser does not advance past it, so this must also end.
+query IIII
+SELECT yaml_valid(','), yaml_valid(E'   \n\n , '), yaml_valid('{}, a'), yaml_valid('[1], 2');
+----
+false	false	false	false

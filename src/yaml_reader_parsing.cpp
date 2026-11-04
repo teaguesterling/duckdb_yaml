@@ -1,4 +1,5 @@
 #include "yaml_reader.hpp"
+#include "yaml_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -49,7 +50,7 @@ vector<YAML::Node> YAMLReader::ParseMultiDocumentYAML(const string &yaml_content
 
 	vector<YAML::Node> valid_docs;
 	try {
-		valid_docs = YAML::LoadAll(yaml_stream);
+		valid_docs = yaml_utils::LoadAllDocuments(yaml_stream);
 		return valid_docs;
 	} catch (const YAML::Exception &e) {
 		if (!ignore_errors) {

@@ -1,0 +1,111 @@
+# name: test/sql/yaml_read_null_documents.test
+# description: A null document is valid YAML. It gives no row, and it must not hide the documents after it.
+# group: [sql]
+
+require yaml
+
+require json
+
+# Rendered Kubernetes manifests often hold a document with only a comment
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/comment_only.yaml') ORDER BY kind;
+----
+A
+B
+C
+
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/explicit_null.yaml') ORDER BY kind;
+----
+A
+B
+
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/leading.yaml');
+----
+A
+
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/trailing.yaml') ORDER BY kind;
+----
+A
+B
+
+# The same rule for every reader of the documents
+query I
+SELECT count(*) FROM read_yaml_objects('test/yaml/null_documents/comment_only.yaml');
+----
+3
+
+query I
+SELECT count(*) FROM read_yaml_objects('test/yaml/null_documents/comment_only.yaml') WHERE yaml IS NULL;
+----
+0
+
+query I
+SELECT kind FROM parse_yaml(E'kind: A\n---\n~\n---\nkind: B') ORDER BY kind;
+----
+A
+B
+
+# A later error is an error. It was not seen when the read stopped at the null document.
+statement error
+SELECT * FROM read_yaml('test/yaml/null_documents/error_after.yaml');
+----
+Error parsing
+
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/error_after.yaml', ignore_errors = true);
+----
+A
+
+# The parser does not advance past a stray ',' so this must be an error and must end
+statement error
+SELECT * FROM read_yaml('test/yaml/null_documents/stray_comma.yaml');
+----
+Error parsing
+
+statement error
+SELECT * FROM parse_yaml('[1], 2');
+----
+Failed to parse YAML
+
+# A file with no data is still a file with no data
+statement error
+SELECT * FROM read_yaml('test/yaml/null_documents/only_null.yaml');
+----
+No valid YAML documents found
+
+# In frontmatter mode the first document is the metadata, also when it is empty. The data must stay data.
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/leading.yaml', multi_document = 'frontmatter');
+----
+A
+
+query II
+SELECT kind, frontmatter::VARCHAR FROM read_yaml('test/yaml/null_documents/leading.yaml', multi_document = 'frontmatter', frontmatter_as_columns = false);
+----
+A	~
+
+# List mode keeps one element for each document
+query I
+SELECT len(documents) FROM read_yaml('test/yaml/null_documents/explicit_null.yaml', multi_document = 'list');
+----
+3
+
+# JSON has a null, so a conversion keeps each document in its position
+query I
+SELECT yaml_to_json(E'a: 1\n---\n~\n---\na: 2');
+----
+[{"a":1},null,{"a":2}]
+
+query I
+SELECT yaml_to_json(E'---\n---\na: 1');
+----
+[null,{"a":1}]
+
+# One null document is the same as before
+query I
+SELECT yaml_to_json('~');
+----
+null
