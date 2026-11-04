@@ -285,6 +285,49 @@ bool IsValidYAML(const std::string &yaml_str) {
 	}
 }
 
+bool ReadFileText(FileSystem &fs, const std::string &path, FileCompressionType compression, idx_t limit,
+                  std::string &text, idx_t &size) {
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | compression);
+	// For a compressed file this is the compressed size, so it only sets the first capacity. Read until the end.
+	size = handle->GetFileSize();
+	if (size > limit) {
+		return false;
+	}
+	text.resize(size + 1);
+	idx_t total = 0;
+	while (true) {
+		if (total == text.size()) {
+			if (total > limit) {
+				size = total;
+				return false;
+			}
+			text.resize(MinValue<idx_t>(total * 2, limit + 1));
+		}
+		const auto bytes_read = handle->Read(&text[total], text.size() - total);
+		if (bytes_read <= 0) {
+			break;
+		}
+		total += static_cast<idx_t>(bytes_read);
+	}
+	text.resize(total);
+	size = total;
+	return true;
+}
+
+FileCompressionType ParseFileCompression(const std::string &name) {
+	const auto lower_name = StringUtil::Lower(name);
+	if (lower_name == "auto" || lower_name == "infer") {
+		return FileCompressionType::AUTO_DETECT;
+	} else if (lower_name == "gzip") {
+		return FileCompressionType::GZIP;
+	} else if (lower_name == "zstd") {
+		return FileCompressionType::ZSTD;
+	} else if (lower_name == "uncompressed" || lower_name == "none" || lower_name.empty()) {
+		return FileCompressionType::UNCOMPRESSED;
+	}
+	throw ParserException("Unrecognized file compression type \"%s\"", lower_name);
+}
+
 std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_doc) {
 	if (yaml_str.empty()) {
 		return {};

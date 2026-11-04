@@ -32,7 +32,8 @@ Complete reference for all configurable parameters.
 | `multi_document` | BOOLEAN | `true` | Handle multiple YAML documents |
 | `expand_root_sequence` | BOOLEAN | `true` | Expand sequences into rows |
 | `ignore_errors` | BOOLEAN | `false` | Continue on errors |
-| `maximum_object_size` | INTEGER | `16777216` | Max file size (16MB) |
+| `compression` | VARCHAR | `'auto'` | `auto`, `gzip`, `zstd` or `none` |
+| `maximum_object_size` | INTEGER | `16777216` | Max size of the text of a file (16MB) |
 
 ---
 
@@ -276,9 +277,28 @@ With `ignore_errors=false`, a value that the column type cannot hold is an error
 
 ---
 
+## compression
+
+How to decompress the file. `auto` uses the extension: `.gz` is gzip and `.zst` is zstd.
+
+**Default:** `'auto'`
+
+**Example:**
+
+```sql
+SELECT * FROM read_yaml('data.yaml.gz');
+SELECT * FROM 'data.yaml.gz';
+
+-- The name of the file does not give the compression
+SELECT * FROM read_yaml('data.backup', compression = 'gzip');
+```
+
+DuckDB reads zstd through the `parquet` extension, so that extension must be available. `read_yaml_frontmatter` always uses `auto`.
+
+---
 ## maximum_object_size
 
-Maximum allowed file size in bytes.
+Maximum allowed size of the text of a file, in bytes. For a compressed file, the limit applies to the decompressed text.
 
 **Default:** `16777216` (16MB)
 

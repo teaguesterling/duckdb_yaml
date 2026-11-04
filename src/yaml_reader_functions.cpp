@@ -231,6 +231,10 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	if (seen_parameters.find("ignore_errors") != seen_parameters.end()) {
 		options.ignore_errors = input.named_parameters["ignore_errors"].GetValue<bool>();
 	}
+	if (seen_parameters.find("compression") != seen_parameters.end()) {
+		options.compression =
+		    yaml_utils::ParseFileCompression(input.named_parameters["compression"].GetValue<string>());
+	}
 	if (seen_parameters.find("maximum_object_size") != seen_parameters.end()) {
 		options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
 		if (options.maximum_object_size <= 0) {
@@ -646,6 +650,10 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 	if (seen_parameters.find("ignore_errors") != seen_parameters.end()) {
 		options.ignore_errors = input.named_parameters["ignore_errors"].GetValue<bool>();
 	}
+	if (seen_parameters.find("compression") != seen_parameters.end()) {
+		options.compression =
+		    yaml_utils::ParseFileCompression(input.named_parameters["compression"].GetValue<string>());
+	}
 	if (seen_parameters.find("maximum_object_size") != seen_parameters.end()) {
 		options.maximum_object_size = input.named_parameters["maximum_object_size"].GetValue<int64_t>();
 		if (options.maximum_object_size <= 0) {
@@ -788,23 +796,17 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 
 		try {
 			if (!lstate.file_loaded) {
-				auto file_handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
-				auto file_size = fs.GetFileSize(*file_handle);
-
-				if (file_size > bind_data.options.maximum_object_size) {
+				string content;
+				string size_error;
+				if (!ReadYAMLFileText(fs, filename, bind_data.options, content, size_error)) {
 					if (!bind_data.options.ignore_errors) {
-						throw IOException("YAML file size (" + to_string(file_size) +
-						                  " bytes) exceeds maximum allowed size (" +
-						                  to_string(bind_data.options.maximum_object_size) + " bytes)");
+						throw IOException(size_error);
 					}
 					// Skip file with ignore_errors
 					lstate.ResetFileResources();
 					lstate.have_file = false;
 					continue;
 				}
-
-				string content(file_size, ' ');
-				fs.Read(*file_handle, const_cast<char *>(content.c_str()), file_size);
 
 				if (bind_data.options.strip_document_suffixes) {
 					content = StripDocumentSuffixes(content);
@@ -1061,22 +1063,16 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 
 		try {
 			if (!lstate.file_loaded) {
-				auto file_handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
-				auto file_size = fs.GetFileSize(*file_handle);
-
-				if (file_size > bind_data.options.maximum_object_size) {
+				string content;
+				string size_error;
+				if (!ReadYAMLFileText(fs, filename, bind_data.options, content, size_error)) {
 					if (!bind_data.options.ignore_errors) {
-						throw IOException("YAML file size (" + to_string(file_size) +
-						                  " bytes) exceeds maximum allowed size (" +
-						                  to_string(bind_data.options.maximum_object_size) + " bytes)");
+						throw IOException(size_error);
 					}
 					lstate.ResetFileResources();
 					lstate.have_file = false;
 					continue;
 				}
-
-				string content(file_size, ' ');
-				fs.Read(*file_handle, const_cast<char *>(content.c_str()), file_size);
 
 				if (bind_data.options.strip_document_suffixes) {
 					content = StripDocumentSuffixes(content);
