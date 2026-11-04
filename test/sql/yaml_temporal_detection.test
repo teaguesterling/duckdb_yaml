@@ -153,6 +153,7 @@ NULL
 2026-11-03 10:00:00
 2026-11-03 04:30:00
 2026-11-03 10:00:00
+NULL
 
 # yaml_to_json used a looser rule than the reader, so it changed plain strings
 query I

@@ -68,14 +68,12 @@ vector<YAML::Node> YAMLReader::ExtractRowNodes(const vector<YAML::Node> &docs, b
 
 	for (const auto &doc : docs) {
 		if (doc.IsSequence() && expand_root_sequence) {
-			// Each item in the sequence becomes a row. A null holds no data.
+			// Each item in the sequence becomes a row
 			for (size_t idx = 0; idx < doc.size(); idx++) {
-				if (!doc[idx].IsNull()) {
-					row_nodes.push_back(doc[idx]);
-				}
+				row_nodes.push_back(doc[idx]);
 			}
-		} else if (!doc.IsNull()) {
-			// Document itself becomes a row
+		} else {
+			// Document itself becomes a row. A null is a row of NULLs, as in read_json.
 			row_nodes.push_back(doc);
 		}
 	}

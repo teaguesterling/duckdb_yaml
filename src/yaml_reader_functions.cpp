@@ -450,15 +450,23 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	}
 
 	// A row that is not a map has no keys to make columns from. So that it is not lost, a file with such rows has one
-	// column that holds each row, map or not. Explicit columns and frontmatter columns keep their schema.
+	// column that holds each row, map or not. Explicit columns and frontmatter columns keep their schema. A null fits
+	// any schema, so it decides only when the sample has nothing else.
+	const auto first_data_node = std::find_if(sample_nodes.begin(), sample_nodes.end(),
+	                                          [](const YAML::Node &node) { return !node.IsNull(); });
+	const bool has_rows_without_keys =
+	    first_data_node == sample_nodes.end() ||
+	    std::any_of(sample_nodes.begin(), sample_nodes.end(),
+	                [](const YAML::Node &node) { return !node.IsMap() && !node.IsNull(); });
 	if (options.column_names.empty() && options.multi_document_mode != MultiDocumentMode::FRONTMATTER &&
-	    std::any_of(sample_nodes.begin(), sample_nodes.end(), [](const YAML::Node &node) { return !node.IsMap(); })) {
+	    has_rows_without_keys) {
 		LogicalType value_type = LogicalType::VARCHAR;
 		if (options.auto_detect_types) {
 			// Maps, sequences and scalars together have no common SQL type, so YAML holds them
-			const auto kind = sample_nodes[0].Type();
-			const bool mixed_kinds = std::any_of(sample_nodes.begin(), sample_nodes.end(),
-			                                     [&](const YAML::Node &node) { return node.Type() != kind; });
+			const auto kind = first_data_node == sample_nodes.end() ? YAML::NodeType::Null : first_data_node->Type();
+			const bool mixed_kinds =
+			    std::any_of(sample_nodes.begin(), sample_nodes.end(),
+			                [&](const YAML::Node &node) { return !node.IsNull() && node.Type() != kind; });
 			value_type = mixed_kinds ? YAMLTypes::YAMLType() : DetectJaggedYAMLType(sample_nodes);
 			DetectColumnFormats(value_type, sample_nodes, string(), result->column_formats);
 			if (sample_truncated) {
@@ -522,6 +530,14 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 					detected_types[key] = WidenConflictingScalarTypes(detected_types[key], value_type);
 				}
 			}
+		}
+	}
+
+	// A sample with no keys, such as only null documents, still has the declared columns
+	if (column_order.empty()) {
+		for (const auto &name : options.column_names) {
+			column_order.push_back(name);
+			detected_types[name] = user_specified_types[name];
 		}
 	}
 
@@ -941,11 +957,14 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 					const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 					if (bind_data.row_is_value) {
-						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors,
-						                            &bind_data.column_formats);
+						// In a yaml column a null node would read as the text ~
+						Value val = node.IsNull() ? Value(bind_data.types[0])
+						                          : YAMLNodeToValue(node, bind_data.types[0],
+						                                            !bind_data.options.ignore_errors,
+						                                            &bind_data.column_formats);
 						output.SetValue(0, output_idx, val);
 					} else {
-						if (!node.IsMap()) {
+						if (!node.IsMap() && !node.IsNull()) {
 							// A row that does not fit the columns: after the sample, or against explicit columns
 							if (!bind_data.options.ignore_errors) {
 								throw InvalidInputException(
@@ -1086,8 +1105,7 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				if (bind_data.options.multi_document_mode != MultiDocumentMode::FIRST) {
 					try {
 						std::stringstream yaml_stream(content);
-						// A null document holds no data, as in read_yaml
-						docs = ExtractRowNodes(yaml_utils::LoadAllDocuments(yaml_stream), false);
+						docs = yaml_utils::LoadAllDocuments(yaml_stream);
 					} catch (const YAML::Exception &e) {
 						if (!bind_data.options.ignore_errors) {
 							throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
@@ -1118,7 +1136,9 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 				if (bind_data.names.size() == 1 && bind_data.names[0] == "yaml") {
-					Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
+					Value val = node.IsNull() ? Value(bind_data.types[0])
+					                          : YAMLNodeToValue(node, bind_data.types[0],
+					                                            !bind_data.options.ignore_errors);
 					output.SetValue(0, output_idx, val);
 				} else {
 					if (node.IsMap()) {
@@ -1134,9 +1154,13 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 							}
 							output.SetValue(col_idx, output_idx, duckdb_value);
 						}
-					} else if (bind_data.types.size() == 1) {
+					} else if (bind_data.types.size() == 1 && !node.IsNull()) {
 						Value val = YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 						output.SetValue(0, output_idx, val);
+					} else {
+						for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
+							output.SetValue(col_idx, output_idx, Value(bind_data.types[col_idx]));
+						}
 					}
 				}
 
@@ -1326,10 +1350,15 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 					output.SetValue(col_idx, count, Value(col_type));
 				}
 			}
-		} else if (bind_data.types.size() == 1) {
+		} else if (bind_data.types.size() == 1 && !node.IsNull()) {
 			// Non-map node with single column output
 			Value val = YAMLNodeToValue(node, bind_data.types[0], false, &bind_data.column_formats);
 			output.SetValue(0, count, val);
+		} else {
+			// A null document among maps
+			for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
+				output.SetValue(col_idx, count, Value(bind_data.types[col_idx]));
+			}
 		}
 		count++;
 	}

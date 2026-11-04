@@ -156,6 +156,14 @@ SELECT * FROM read_yaml('multi.yaml', multi_document = true);
 SELECT * FROM read_yaml('multi.yaml', multi_document = false);
 ```
 
+A null document is a row of NULLs, as in `read_json`. This includes `~`, a document with only a comment, and an empty document after the last `---`. A null item of a root sequence is the same. To keep only the rows with data, filter on a column:
+
+```sql
+SELECT * FROM read_yaml('manifests.yaml') WHERE kind IS NOT NULL;
+```
+
+With `ignore_errors = true`, recovery after a syntax error keeps only the documents with data.
+
 ### expand_root_sequence
 
 Control how top-level sequences are handled:
