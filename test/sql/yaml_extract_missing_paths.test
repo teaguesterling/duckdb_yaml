@@ -1,6 +1,6 @@
 # name: test/sql/yaml_extract_missing_paths.test
 # description: A path that does not exist is NULL at any depth, so one row without a parent key does not stop a query
-# group: [yaml]
+# group: [sql]
 
 require yaml
 
