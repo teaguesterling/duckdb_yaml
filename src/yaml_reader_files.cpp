@@ -235,7 +235,7 @@ bool YAMLReader::ReadYAMLFileText(FileSystem &fs, const string &file_path, const
 
 // Helper to read a single file and parse it
 vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string &file_path,
-                                            const YAMLReadOptions &options) {
+                                            const YAMLReadOptions &options, idx_t row_limit) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	// Check if file exists
@@ -261,7 +261,7 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 		try {
 			// First try to parse the entire file at once
 			std::stringstream yaml_stream(content);
-			docs = yaml_utils::LoadAllDocuments(yaml_stream);
+			docs = yaml_utils::LoadDocumentsForSample(yaml_stream, options.expand_root_sequence, row_limit);
 		} catch (const YAML::Exception &e) {
 			if (!options.ignore_errors) {
 				throw IOException("Error parsing multi-document YAML file: " + string(e.what()));

@@ -307,8 +307,10 @@ public:
 	 * @param options YAML read options
 	 * @return vector<YAML::Node> Parsed YAML documents
 	 */
+	// row_limit: in multi-document modes, the parse may stop after the row that is one past this count.
 	static vector<YAML::Node> ReadYAMLFile(ClientContext &context, const string &file_path,
-	                                       const YAMLReadOptions &options);
+	                                       const YAMLReadOptions &options,
+	                                       idx_t row_limit = NumericLimits<idx_t>::Maximum());
 
 	/**
 	 * @brief Parse a multi-document YAML file with error recovery

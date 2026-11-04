@@ -189,6 +189,9 @@ FileCompressionType ParseFileCompression(const std::string &name);
 // Every document of a stream, null documents included. YAML::LoadAll stops at the first null document.
 std::vector<YAML::Node> LoadAllDocuments(std::istream &input);
 
+// The same, but stops after the row that is one past row_limit. That row shows the caller that rows are left.
+std::vector<YAML::Node> LoadDocumentsForSample(std::istream &input, bool expand_root_sequence, idx_t row_limit);
+
 //===--------------------------------------------------------------------===//
 // YAML to JSON Conversion
 //===--------------------------------------------------------------------===//

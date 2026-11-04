@@ -167,12 +167,27 @@ public:
 	}
 };
 
+// The parser cannot pause inside a document, and a root sequence is one document. A throw from the handler is the way
+// to stop it, and a read for a sample never needs to continue.
+struct RowLimitReached {};
+
 // Builds the tree of each document. YAML::LoadAll does this too, but it stops at the first null document, and the
 // builder it uses is private. Node handles are copied, never assigned: assignment rebinds and an alias must share.
 class DocumentBuilder : public YAML::EventHandler {
 public:
+	DocumentBuilder(bool expand_root_sequence, idx_t row_limit)
+	    : expand_root_sequence(expand_root_sequence), row_limit(row_limit) {
+	}
+
 	YAML::Mark start;
 	std::vector<YAML::Node> documents;
+
+	// After a stop, the root sequence of the current document is still open
+	void KeepOpenRoot() {
+		if (!open.empty()) {
+			documents.push_back(open.front().node);
+		}
+	}
 
 	void OnDocumentStart(const YAML::Mark &mark) override {
 		start = mark;
@@ -236,14 +251,26 @@ private:
 			anchors.emplace(anchor, node);
 		}
 	}
+	// The same count as YAMLReader::ExtractRowNodes: a null is not a row, and an expanded sequence is its items
+	void CountRow(const YAML::Node &node) {
+		if (!node.IsNull() && ++rows > row_limit) {
+			throw RowLimitReached();
+		}
+	}
 	void Add(const YAML::Node &node) {
 		if (open.empty()) {
 			documents.push_back(node);
+			if (!(expand_root_sequence && node.IsSequence())) {
+				CountRow(node);
+			}
 			return;
 		}
 		auto &parent = open.back();
 		if (parent.node.IsSequence()) {
 			parent.node.push_back(node);
+			if (expand_root_sequence && open.size() == 1) {
+				CountRow(node);
+			}
 		} else if (parent.has_key) {
 			parent.node.force_insert(keys.back(), node);
 			keys.pop_back();
@@ -254,19 +281,30 @@ private:
 		}
 	}
 
+	const bool expand_root_sequence;
+	const idx_t row_limit;
+	idx_t rows = 0;
 	std::vector<OpenCollection> open;
 	std::vector<YAML::Node> keys;
 	std::unordered_map<YAML::anchor_t, YAML::Node> anchors;
 };
 } // namespace
 
-std::vector<YAML::Node> LoadAllDocuments(std::istream &input) {
+std::vector<YAML::Node> LoadDocumentsForSample(std::istream &input, bool expand_root_sequence, idx_t row_limit) {
 	YAML::Parser parser(input);
-	DocumentBuilder builder;
+	DocumentBuilder builder(expand_root_sequence, row_limit);
 	int previous_start = -1;
-	while (ReadNextDocument(parser, builder, previous_start)) {
+	try {
+		while (ReadNextDocument(parser, builder, previous_start)) {
+		}
+	} catch (const RowLimitReached &) {
+		builder.KeepOpenRoot();
 	}
 	return std::move(builder.documents);
+}
+
+std::vector<YAML::Node> LoadAllDocuments(std::istream &input) {
+	return LoadDocumentsForSample(input, true, NumericLimits<idx_t>::Maximum());
 }
 
 bool IsValidYAML(const std::string &yaml_str) {

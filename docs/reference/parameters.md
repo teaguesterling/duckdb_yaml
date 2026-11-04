@@ -150,6 +150,8 @@ SELECT * FROM read_yaml('data.yaml', records = 'config.database.tables');
 
 Number of rows to sample for schema detection.
 
+The schema step parses a file only as far as the sample, so a large file binds quickly. A syntax error past the sample is an error when you read the rows, and `DESCRIBE` does not show it. With `ignore_errors = true`, or with `multi_document` set to `first`, `frontmatter` or `list`, or with `records`, the schema step parses the whole file.
+
 **Values:**
 
 - Positive integer: Sample this many rows

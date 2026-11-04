@@ -1,0 +1,127 @@
+# name: test/sql/yaml_read_bind_sample.test
+# description: Bind parses only as far as the sample. The schema and the rows must not depend on where the parse stops.
+# group: [sql]
+
+require yaml
+
+# The type is exact when the sample holds all rows, and BIGINT when rows are left. This needs one row past the sample.
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/seq3.yaml', sample_size = 3) LIMIT 1;
+----
+TINYINT
+
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/seq4.yaml', sample_size = 3) LIMIT 1;
+----
+BIGINT
+
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/doc3.yaml', sample_size = 3) LIMIT 1;
+----
+TINYINT
+
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/doc4.yaml', sample_size = 3) LIMIT 1;
+----
+BIGINT
+
+# A null holds no data, so it does not use the sample
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/nulls2.yaml', sample_size = 2) LIMIT 1;
+----
+TINYINT
+
+query I
+SELECT typeof(a) FROM read_yaml('test/yaml/bind_sample/nulldocs2.yaml', sample_size = 2) LIMIT 1;
+----
+TINYINT
+
+# The scan reads all rows, also those past the sample
+query II
+SELECT count(*), sum(a) FROM read_yaml('test/yaml/bind_sample/seq4.yaml', sample_size = 1);
+----
+4	10
+
+query II
+SELECT count(*), sum(a) FROM read_yaml('test/yaml/bind_sample/doc4.yaml', sample_size = 1);
+----
+4	10
+
+# The sample continues across files
+query I
+SELECT typeof(a) FROM read_yaml(['test/yaml/bind_sample/two_a.yaml', 'test/yaml/bind_sample/two_b.yaml'], sample_size = 4) LIMIT 1;
+----
+TINYINT
+
+query I
+SELECT typeof(a) FROM read_yaml(['test/yaml/bind_sample/two_a.yaml', 'test/yaml/bind_sample/two_b.yaml'], sample_size = 3) LIMIT 1;
+----
+BIGINT
+
+query II
+SELECT count(*), sum(a) FROM read_yaml(['test/yaml/bind_sample/two_a.yaml', 'test/yaml/bind_sample/two_b.yaml'], sample_size = 3);
+----
+4	10
+
+# An alias reads as its anchor, on both sides of the place where the parse stops
+query II
+SELECT count(*), sum(a + b) FROM read_yaml('test/yaml/bind_sample/alias.yaml', sample_size = 1);
+----
+4	12
+
+# A root sequence with expand_root_sequence = false is one row
+query I
+SELECT count(*) FROM read_yaml('test/yaml/bind_sample/seq4.yaml', sample_size = 1, expand_root_sequence = false);
+----
+1
+
+# A value that the sampled type cannot hold is still an error
+statement error
+SELECT * FROM read_yaml('test/yaml/bind_sample/late_type.yaml', sample_size = 2);
+----
+text
+
+# A syntax error past the sample is an error for a read. A schema does not need that row.
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_yaml('test/yaml/bind_sample/late_seq.yaml', sample_size = 2)) ORDER BY 1;
+----
+a	BIGINT
+b	VARCHAR
+
+statement error
+SELECT * FROM read_yaml('test/yaml/bind_sample/late_seq.yaml', sample_size = 2);
+----
+Error parsing
+
+statement error
+SELECT * FROM read_yaml('test/yaml/bind_sample/late_doc.yaml', sample_size = 2);
+----
+Error parsing
+
+# A syntax error inside the sample is still an error at bind
+statement error
+DESCRIBE SELECT * FROM read_yaml('test/yaml/bind_sample/late_seq.yaml');
+----
+Error parsing
+
+# ignore_errors parses the whole file at bind, so its schema and its rows do not depend on the sample
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_yaml('test/yaml/bind_sample/late_seq.yaml', sample_size = 2, ignore_errors = true));
+----
+yaml	VARCHAR
+
+query I
+SELECT count(*) FROM read_yaml('test/yaml/bind_sample/late_seq.yaml', sample_size = 2, ignore_errors = true);
+----
+0
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_yaml('test/yaml/bind_sample/late_doc.yaml', sample_size = 2, ignore_errors = true)) ORDER BY 1;
+----
+a	BIGINT
+b	VARCHAR
+
+query I
+SELECT count(*) FROM read_yaml('test/yaml/bind_sample/late_doc.yaml', sample_size = 2, ignore_errors = true);
+----
+4

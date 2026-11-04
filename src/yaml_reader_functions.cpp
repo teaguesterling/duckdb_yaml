@@ -312,7 +312,13 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 
 	for (const auto &current_file : files) {
 		try {
-			auto docs = ReadYAMLFile(context, current_file, options);
+			// Rows mode needs only the sample. ignore_errors reads the whole file, because recovery after a syntax
+			// error gives other documents than the part of the file before that error.
+			const bool sample_only = options.multi_document_mode == MultiDocumentMode::ROWS &&
+			                         options.records_path.empty() && !options.ignore_errors;
+			auto docs =
+			    ReadYAMLFile(context, current_file, options,
+			                 sample_only ? options.sample_size - sampled_rows : NumericLimits<idx_t>::Maximum());
 
 			if (options.multi_document_mode == MultiDocumentMode::LIST ||
 			    options.multi_document_mode == MultiDocumentMode::FRONTMATTER) {
