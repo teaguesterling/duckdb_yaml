@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "yaml-cpp/yaml.h"
 #include <istream>
 #include <string>
@@ -177,8 +178,19 @@ std::vector<YAML::Node> ParseYAML(const std::string &yaml_str, bool multi_docume
 // Whether the parser accepts this text and finds at least one document. Builds no nodes.
 bool IsValidYAML(const std::string &yaml_str);
 
+// Reads a whole file as text, and decompresses it. The limit applies to the text. Returns false when the text is over
+// the limit, and then size is the size of the file or, for a compressed file, at most limit + 1.
+bool ReadFileText(FileSystem &fs, const std::string &path, FileCompressionType compression, idx_t limit,
+                  std::string &text, idx_t &size);
+
+// The compression names of COPY and of the read functions: auto, infer, gzip, zstd, uncompressed, none
+FileCompressionType ParseFileCompression(const std::string &name);
+
 // Every document of a stream, null documents included. YAML::LoadAll stops at the first null document.
 std::vector<YAML::Node> LoadAllDocuments(std::istream &input);
+
+// The same, but stops after the row that is one past row_limit. That row shows the caller that rows are left.
+std::vector<YAML::Node> LoadDocumentsForSample(std::istream &input, bool expand_root_sequence, idx_t row_limit);
 
 //===--------------------------------------------------------------------===//
 // YAML to JSON Conversion

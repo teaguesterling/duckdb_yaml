@@ -1,52 +1,164 @@
 # name: test/sql/yaml_read_null_documents.test
-# description: A null document is valid YAML. It gives no row, and it must not hide the documents after it.
+# description: A null document is a row of NULLs, as in read_json, and it must not hide the documents after it.
 # group: [sql]
 
 require yaml
 
 require json
 
-# Rendered Kubernetes manifests often hold a document with only a comment
+# Rendered Kubernetes manifests often hold a document with only a comment. It keeps its position.
 query I
-SELECT kind FROM read_yaml('test/yaml/null_documents/comment_only.yaml') ORDER BY kind;
+SELECT kind FROM read_yaml('test/yaml/null_documents/comment_only.yaml');
 ----
 A
+NULL
 B
 C
 
 query I
-SELECT kind FROM read_yaml('test/yaml/null_documents/explicit_null.yaml') ORDER BY kind;
+SELECT kind FROM read_yaml('test/yaml/null_documents/explicit_null.yaml');
 ----
 A
+NULL
 B
 
 query I
 SELECT kind FROM read_yaml('test/yaml/null_documents/leading.yaml');
 ----
+NULL
 A
 
+# An empty document after the last '---' is a document, as in PyYAML
 query I
-SELECT kind FROM read_yaml('test/yaml/null_documents/trailing.yaml') ORDER BY kind;
+SELECT kind FROM read_yaml('test/yaml/null_documents/trailing.yaml');
 ----
 A
 B
+NULL
+
+# A filter gives the documents with data
+query I
+SELECT kind FROM read_yaml('test/yaml/null_documents/comment_only.yaml') WHERE kind IS NOT NULL;
+----
+A
+B
+C
+
+# A null does not change the schema of the other rows. Each column of the row is NULL.
+query III
+SELECT a, b, typeof(a) FROM read_yaml('test/yaml/null_documents/two_columns.yaml');
+----
+1	x	TINYINT
+NULL	NULL	TINYINT
+2	y	TINYINT
+
+# An item of a root sequence follows the same rule, as in read_json
+query I
+SELECT a FROM read_yaml('test/yaml/null_documents/sequence_items.yaml');
+----
+1
+NULL
+2
+
+# A null beside scalars does not change the column type
+query II
+SELECT value, typeof(value) FROM read_yaml('test/yaml/null_documents/scalars.yaml');
+----
+1	TINYINT
+NULL	TINYINT
+2	TINYINT
+
+# Beside a map and a scalar it is still a NULL, not the text of a null
+query I
+SELECT value IS NULL FROM read_yaml('test/yaml/null_documents/mixed.yaml');
+----
+false
+false
+true
+
+query I
+SELECT yaml IS NULL FROM read_yaml_objects('test/yaml/null_documents/mixed.yaml');
+----
+false
+false
+true
+
+query I
+SELECT yaml IS NULL FROM parse_yaml(E'5\n---\nabc\n---\n~');
+----
+false
+false
+true
+
+# A null past the sample fits any schema
+query I
+SELECT a FROM read_yaml('test/yaml/null_documents/null_after_sample.yaml', sample_size = 1);
+----
+1
+NULL
+
+# Explicit columns accept a null row. Another row that is not a map is still an error.
+query I
+SELECT a FROM read_yaml('test/yaml/null_documents/two_columns.yaml', columns = {'a': 'INTEGER'});
+----
+1
+NULL
+2
+
+statement error
+SELECT * FROM read_yaml('test/yaml/null_documents/scalars.yaml', columns = {'a': 'INTEGER'});
+----
+it is not a map
+
+# A sample with no keys still has the declared columns
+query IIII
+SELECT z, a, m, b FROM read_yaml('test/yaml/null_documents/only_null.yaml', columns = {'z': 'INTEGER', 'a': 'VARCHAR', 'm': 'DOUBLE', 'b': 'DATE'});
+----
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+
+query I
+SELECT string_agg(column_name, ',') FROM (DESCRIBE SELECT * FROM read_yaml('test/yaml/null_documents/only_null.yaml', columns = {'z': 'INTEGER', 'a': 'VARCHAR', 'm': 'DOUBLE', 'b': 'DATE'}));
+----
+z,a,m,b
+
+# multi_document = false reads the first document only
+query I
+SELECT count(*) FROM read_yaml('test/yaml/null_documents/explicit_null.yaml', multi_document = false);
+----
+1
 
 # The same rule for every reader of the documents
 query I
 SELECT count(*) FROM read_yaml_objects('test/yaml/null_documents/comment_only.yaml');
 ----
-3
+4
 
 query I
 SELECT count(*) FROM read_yaml_objects('test/yaml/null_documents/comment_only.yaml') WHERE yaml IS NULL;
 ----
-0
+1
+
+query II
+SELECT a, b FROM read_yaml_objects('test/yaml/null_documents/two_columns.yaml', columns = {'a': 'INTEGER', 'b': 'VARCHAR'});
+----
+1	x
+NULL	NULL
+2	y
 
 query I
-SELECT kind FROM parse_yaml(E'kind: A\n---\n~\n---\nkind: B') ORDER BY kind;
+SELECT kind FROM parse_yaml(E'kind: A\n---\n~\n---\nkind: B');
 ----
 A
+NULL
 B
+
+query II
+SELECT a, b FROM parse_yaml(E'a: 1\nb: x\n---\n~\n---\na: 2\nb: y');
+----
+1	x
+NULL	NULL
+2	y
 
 # A later error is an error. It was not seen when the read stopped at the null document.
 statement error
@@ -54,6 +166,7 @@ SELECT * FROM read_yaml('test/yaml/null_documents/error_after.yaml');
 ----
 Error parsing
 
+# Recovery after a syntax error reads each part alone. It keeps only the parts with data.
 query I
 SELECT kind FROM read_yaml('test/yaml/null_documents/error_after.yaml', ignore_errors = true);
 ----
@@ -70,9 +183,16 @@ SELECT * FROM parse_yaml('[1], 2');
 ----
 Failed to parse YAML
 
-# A file with no data is still a file with no data
+# A file of only null documents has rows, as in read_json, and one column to hold them
+query I
+SELECT value FROM read_yaml('test/yaml/null_documents/only_null.yaml');
+----
+NULL
+NULL
+
+# A file with no documents still has no rows to read
 statement error
-SELECT * FROM read_yaml('test/yaml/null_documents/only_null.yaml');
+SELECT * FROM read_yaml('test/yaml/null_documents/no_documents.yaml');
 ----
 No valid YAML documents found
 
@@ -81,6 +201,14 @@ query I
 SELECT kind FROM read_yaml('test/yaml/null_documents/leading.yaml', multi_document = 'frontmatter');
 ----
 A
+
+# A null data document keeps the metadata, and its own columns are NULL
+query II
+SELECT meta_title, kind FROM read_yaml('test/yaml/null_documents/frontmatter.yaml', multi_document = 'frontmatter');
+----
+T	A
+T	NULL
+T	B
 
 query II
 SELECT kind, frontmatter::VARCHAR FROM read_yaml('test/yaml/null_documents/leading.yaml', multi_document = 'frontmatter', frontmatter_as_columns = false);

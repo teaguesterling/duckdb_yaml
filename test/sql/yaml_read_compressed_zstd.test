@@ -1,0 +1,23 @@
+# name: test/sql/yaml_read_compressed_zstd.test
+# description: read_yaml reads zstd files. DuckDB takes its zstd file system from the parquet extension.
+# group: [sql]
+
+require yaml
+
+require parquet
+
+statement ok
+COPY (SELECT i AS id, 'same text in each row' AS s FROM range(20000) t(i)) TO '{TEST_DIR}/many.yaml.zst' (FORMAT yaml);
+
+query II
+SELECT count(*), sum(id) FROM read_yaml('{TEST_DIR}/many.yaml.zst');
+----
+20000	199990000
+
+statement ok
+COPY (SELECT i AS id FROM range(1000) t(i)) TO '{TEST_DIR}/no_extension' (FORMAT yaml, COMPRESSION zstd);
+
+query I
+SELECT count(*) FROM read_yaml('{TEST_DIR}/no_extension', compression = 'zstd');
+----
+1000

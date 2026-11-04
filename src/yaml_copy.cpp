@@ -415,18 +415,7 @@ static unique_ptr<FunctionData> YAMLRowsBind(ClientContext &context, CopyFunctio
 			if (kv.second.size() != 1) {
 				ThrowYAMLCopyParameterException(loption);
 			}
-			const auto name = StringUtil::Lower(kv.second.back().ToString());
-			if (name == "auto" || name == "infer") {
-				result->compression = FileCompressionType::AUTO_DETECT;
-			} else if (name == "gzip") {
-				result->compression = FileCompressionType::GZIP;
-			} else if (name == "zstd") {
-				result->compression = FileCompressionType::ZSTD;
-			} else if (name == "uncompressed" || name == "none" || name.empty()) {
-				result->compression = FileCompressionType::UNCOMPRESSED;
-			} else {
-				throw ParserException("Unrecognized file compression type \"%s\"", name);
-			}
+			result->compression = yaml_utils::ParseFileCompression(kv.second.back().ToString());
 		} else {
 			throw BinderException("Unknown option for COPY ... TO ... (FORMAT YAML): \"%s\".", loption);
 		}
