@@ -32,7 +32,7 @@ FROM read_yaml('data/*.yaml');
 -- With filename tracking
 CREATE TABLE configs_with_source AS
 SELECT *
-FROM read_yaml_objects('configs/*.yaml', filename = true);
+FROM (SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml'));
 ```
 
 ### Incremental Import
@@ -41,7 +41,7 @@ FROM read_yaml_objects('configs/*.yaml', filename = true);
 -- Import only new files
 INSERT INTO config_history
 SELECT current_timestamp AS imported_at, *
-FROM read_yaml_objects('incoming/*.yaml', filename = true)
+FROM (SELECT filename, content::YAML AS data FROM read_text('incoming/*.yaml'))
 WHERE filename NOT IN (SELECT DISTINCT source_file FROM config_history);
 ```
 
@@ -111,7 +111,7 @@ FROM users;
 -- Convert YAML files to JSON
 COPY (
     SELECT yaml_to_json(data) AS json_data
-    FROM read_yaml_objects('input/*.yaml')
+    FROM (SELECT filename, content::YAML AS data FROM read_text('input/*.yaml'))
 ) TO 'output.json';
 ```
 
@@ -148,7 +148,7 @@ COPY (
         yaml_extract_string(data, '$.id') AS id,
         yaml_extract_string(data, '$.name') AS name,
         yaml_extract_string(data, '$.email') AS email
-    FROM read_yaml_objects('users.yaml')
+    FROM (SELECT filename, content::YAML AS data FROM read_text('users.yaml'))
 ) TO 'users.csv';
 ```
 
@@ -166,20 +166,15 @@ SELECT
     yaml_extract_string(data, '$.user.email') AS user_email,
     yaml_extract(data, '$.user.preferences.theme') AS theme,
     yaml_extract(data, '$.user.preferences.notifications') AS notifications
-FROM read_yaml_objects('users.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('users.yaml'));
 ```
 
 ### Normalize Arrays
 
 ```sql
 -- Expand arrays into rows
-SELECT
-    yaml_extract_string(data, '$.order_id') AS order_id,
-    yaml_extract_string(item, '$.product') AS product,
-    yaml_extract(item, '$.quantity')::INTEGER AS quantity,
-    yaml_extract(item, '$.price')::DOUBLE AS price
-FROM read_yaml_objects('orders.yaml'),
-     yaml_array_elements(yaml_extract(data, '$.items')) AS item;
+SELECT order_id, item.product, item.quantity, item.price
+FROM (SELECT order_id, unnest(items) AS item FROM read_yaml('orders.yaml'));
 ```
 
 ### Aggregate to YAML
@@ -209,7 +204,7 @@ GROUP BY department;
 -- Full ETL pipeline
 -- 1. Extract from YAML
 CREATE TEMP TABLE raw_data AS
-SELECT * FROM read_yaml_objects('input/*.yaml', filename = true);
+SELECT * FROM (SELECT filename, content::YAML AS data FROM read_text('input/*.yaml'));
 
 -- 2. Transform and validate
 CREATE TEMP TABLE transformed AS
@@ -242,7 +237,7 @@ CREATE TABLE IF NOT EXISTS etl_log (
 -- Process only new files
 WITH new_files AS (
     SELECT filename, data
-    FROM read_yaml_objects('data/*.yaml', filename = true)
+    FROM (SELECT filename, content::YAML AS data FROM read_text('data/*.yaml'))
     WHERE filename NOT IN (SELECT filename FROM etl_log)
 )
 INSERT INTO target_table
@@ -292,5 +287,5 @@ SELECT
     yaml_array_length(
         yaml_extract(data, '$.data')
     ) AS backup_count
-FROM read_yaml_objects('backup/important_table_full.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('backup/important_table_full.yaml'));
 ```

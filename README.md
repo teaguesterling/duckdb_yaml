@@ -100,7 +100,7 @@ SELECT * FROM read_yaml(['config1.yaml', 'config2.yaml', 'data/settings.yaml']);
 -- Directory path (reads all .yaml and .yml files in directory)
 SELECT * FROM read_yaml('data/configs/');
 
--- Read preserving document structure (one row per file)
+-- Read each document as one value (one row per document)
 SELECT * FROM read_yaml_objects('path/to/file.yaml');
 
 -- Type detection example
@@ -276,8 +276,8 @@ SELECT value_to_yaml([1, 2, 3]) AS yaml_array;
 SELECT '{"name":"John","age":30}'::JSON::YAML AS yaml_data;
 
 -- Format YAML with specific style
-SELECT format_yaml(config, 'block') FROM configs;  -- block style
-SELECT format_yaml(config, 'flow') FROM configs;   -- flow style (inline)
+SELECT format_yaml(config, style := 'block') FROM configs;  -- block style
+SELECT format_yaml(config, style := 'flow') FROM configs;   -- flow style (inline)
 
 -- Validate YAML
 SELECT yaml_valid('invalid: yaml: data');  -- returns false
@@ -339,6 +339,7 @@ SELECT from_yaml('user:
 
 ```sql
 -- Set default YAML output style
+-- format_yaml follows this setting. value_to_yaml is always flow style.
 SELECT yaml_set_default_style('block');  -- Use block style by default
 SELECT yaml_set_default_style('flow');   -- Use flow style by default
 
@@ -374,16 +375,16 @@ The YAML extension supports writing query results to YAML files using the `COPY 
 
 ```sql
 -- Basic COPY TO with default settings (flow style)
-COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml);
+COPY (SELECT * FROM my_table) TO 'output.yaml' (FORMAT yaml);
 
 -- Write with block style (more readable for complex data)
-COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, STYLE block);
+COPY (SELECT * FROM my_table) TO 'output.yaml' (FORMAT yaml, STYLE block);
 
 -- Write as sequence (each row as a YAML sequence item)
-COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, LAYOUT sequence);
+COPY (SELECT * FROM my_table) TO 'output.yaml' (FORMAT yaml, LAYOUT sequence);
 
 -- Write as documents (each row as a separate YAML document)
-COPY (SELECT * FROM table) TO 'output.yaml' (FORMAT yaml, LAYOUT document, STYLE block);
+COPY (SELECT * FROM my_table) TO 'output.yaml' (FORMAT yaml, LAYOUT document, STYLE block);
 
 -- Combine with queries and transformations
 COPY (
@@ -648,6 +649,8 @@ To read `yes` and `no` as booleans, set the column type: `columns = {'enabled': 
   later ones are dropped without warning. Deduplicate upstream if your input may contain
   repeated keys.
 - `read_yaml` on a file of only `{}` is an INTERNAL error.
+- A path through a missing key is an error in `yaml_extract`, `yaml_extract_string` and `yaml_type`: `yaml_extract('a: 1', '$.b.c')`. A missing last key, `'$.b'`, is NULL. `yaml_exists` returns false for both.
+- The `frontmatter` column from `read_yaml_frontmatter(..., as_yaml_objects := true)` needs a cast before a `yaml_*` function: `frontmatter::YAML`.
 - `parse_yaml(E'a: 1\n---\n5')` reads the map as NULL.
 
 ## Advanced YAML Functions
@@ -709,9 +712,8 @@ SELECT yaml_build_object('data', '[1, 2, 3]'::YAML, 'nested', '{key: value}'::YA
 #### Combined Usage Patterns
 ```sql
 -- Get keys and use in queries
-SELECT key, value
-FROM yaml_each(config)
-WHERE yaml_array_length(value, '$.items') > 3;
+SELECT id, key
+FROM configs, unnest(yaml_keys(config)) AS t(key);
 
 -- Unnest and aggregate
 SELECT category, yaml_build_object('items', yaml_agg(item))
@@ -738,11 +740,10 @@ yaml_exists(yaml, path) → boolean
 yaml_type(yaml [, path]) → varchar
 yaml_array_length(yaml [, path]) → bigint  -- ✅ NEW
 yaml_keys(yaml [, path]) → varchar[]  -- ✅ NEW
-
--- Planned ⏳
-yaml_extract_path(yaml, path_elem1, path_elem2, ...) → yaml
-yaml_extract_path_text(yaml, path_elem1, path_elem2, ...) → varchar
-yaml_structure(yaml) → yaml  -- Returns structure with types
+yaml_extract_path(yaml, path) → yaml  -- Alias for yaml_extract
+yaml_extract_path_text(yaml, path) → varchar  -- Alias for yaml_extract_string
+yaml_value(yaml, path) → varchar  -- Scalars only
+yaml_structure(yaml) → json  -- Returns structure with types
 ```
 
 #### Transformation/Unnesting Functions
@@ -769,9 +770,9 @@ yaml_to_recordset(yaml) → table
 -- Already implemented ✅
 value_to_yaml(any) → yaml
 yaml_build_object(...) → yaml  -- ✅ NEW
+to_yaml(any) → yaml  -- Alias for value_to_yaml
 
 -- Planned ⏳
-to_yaml(any) → yaml  -- Alias for value_to_yaml
 row_to_yaml(record) → yaml
 yaml_build_array(...) → yaml
 yaml_object(keys varchar[], values varchar[]) → yaml
@@ -781,8 +782,10 @@ array_to_yaml(anyarray) → yaml
 
 #### Aggregate Functions
 ```sql
+-- Already implemented ✅
+yaml_agg(any) → yaml
+
 -- Planned ⏳
-yaml_agg(any) → yaml  -- In progress, state management debugging
 yaml_agg_strict(any) → yaml  -- Excludes NULLs
 yaml_object_agg(key varchar, value any) → yaml
 yaml_object_agg_strict(key varchar, value any) → yaml
@@ -795,13 +798,13 @@ yaml_merge_agg(yaml) → yaml  -- Merges multiple YAML objects
 yaml_valid(varchar) → boolean
 yaml_to_json(yaml) → json
 format_yaml(any, style := 'flow'|'block') → varchar
+yaml_merge_patch(target yaml, patch yaml) → yaml
+yaml_contains(yaml, yaml) → boolean
 
 -- Planned ⏳
 yaml_strip_nulls(yaml) → yaml
 yaml_pretty(yaml) → varchar  -- Pretty print
 yaml_merge(yaml1, yaml2) → yaml
-yaml_merge_patch(target yaml, patch yaml) → yaml
-yaml_contains(yaml, yaml) → boolean
 yaml_contained_in(yaml, yaml) → boolean
 yaml_equal(yaml, yaml) → boolean
 ```
@@ -818,8 +821,7 @@ yaml_validate_schema(schema) → boolean
 
 #### Operators (if supported by DuckDB)
 ```sql
-yaml -> path → yaml           -- Extract field/element
-yaml ->> path → varchar       -- Extract as text
+yaml ->> path → varchar       -- Implemented. Extract as text
 yaml #> path[] → yaml         -- Extract path
 yaml #>> path[] → varchar     -- Extract path as text
 yaml @> yaml → boolean        -- Contains

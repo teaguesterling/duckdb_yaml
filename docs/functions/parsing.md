@@ -96,15 +96,14 @@ Result:
 ### Usage Patterns
 
 ```sql
--- Parse and query
+-- Parse and query. The argument must be a constant, not a column.
 SELECT name, score
-FROM parse_yaml(yaml_content)
+FROM parse_yaml('[{name: Alice, score: 95}, {name: Bob, score: 87}]')
 WHERE score > 90;
 
--- Parse from table column
-SELECT t.id, p.*
-FROM my_table t
-CROSS JOIN LATERAL parse_yaml(t.yaml_column) p;
+-- Parse from a table column: use from_yaml
+SELECT t.id, from_yaml(t.yaml_column, {'name': ''}) AS parsed
+FROM my_table t;
 
 -- With explicit string
 SELECT *
@@ -246,20 +245,27 @@ SELECT
     yaml_extract(data::YAML, '$.config') AS config
 FROM raw_data;
 
--- Or use parse_yaml for tabular data
-SELECT * FROM parse_yaml(dynamic_yaml);
+-- Or use parse_yaml for a constant
+SELECT * FROM parse_yaml('[{a: 1}, {a: 2}]');
 ```
 
 ### Error Handling
 
 ```sql
--- from_yaml returns NULL for invalid YAML
+-- Invalid YAML is an error. TRY gives NULL.
 SELECT from_yaml('invalid: : yaml', {'key': ''});
+-- Invalid Input Error: Error converting YAML to type 'STRUCT("key" VARCHAR)': ...
+
+SELECT TRY(from_yaml('invalid: : yaml', {'key': ''}));
 -- Returns: NULL
+
+-- A value that does not fit its type is NULL
+SELECT from_yaml('a: x', {'a': 0});
+-- Returns: {'a': NULL}
 
 -- Use COALESCE for defaults
 SELECT COALESCE(
-    from_yaml(yaml_col, {'name': ''}),
+    TRY(from_yaml(yaml_col, {'name': ''})),
     {'name': 'unknown'}
 ) AS parsed
 FROM data;
@@ -271,14 +277,8 @@ FROM data;
 -- Parse and convert
 SELECT yaml_to_json(
     value_to_yaml(
-        from_yaml('name: John\nage: 30', {'name': '', 'age': 0})
+        from_yaml(E'name: John\nage: 30', {'name': '', 'age': 0})
     )
-);
-
--- Parse and extract
-SELECT yaml_extract(
-    parse_yaml('data: {nested: value}').*::YAML,
-    '$.data.nested'
 );
 ```
 

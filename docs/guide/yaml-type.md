@@ -16,7 +16,7 @@ The YAML type is implemented as an alias for VARCHAR, enabling:
 
 ```sql
 -- Using cast
-SELECT 'name: John\nage: 30'::YAML;
+SELECT E'name: John\nage: 30'::YAML;
 
 -- Using the YAML type in columns
 CREATE TABLE configs (
@@ -30,11 +30,11 @@ CREATE TABLE configs (
 ```sql
 -- Convert structs to YAML
 SELECT value_to_yaml({'name': 'John', 'age': 30});
--- Returns: name: John\nage: 30
+-- Returns: {name: John, age: 30}
 
 -- Convert arrays to YAML
 SELECT value_to_yaml([1, 2, 3]);
--- Returns: - 1\n- 2\n- 3
+-- Returns: [1, 2, 3]
 
 -- Convert nested structures
 SELECT value_to_yaml({
@@ -57,7 +57,7 @@ SELECT '{"name": "John", "age": 30}'::JSON::YAML;
 
 ```sql
 -- Using function
-SELECT yaml_to_json('name: John\nage: 30'::YAML);
+SELECT yaml_to_json(E'name: John\nage: 30'::YAML);
 -- Returns: {"name":"John","age":30}
 
 -- Using cast
@@ -110,10 +110,10 @@ scores:
 
 ```sql
 -- Format as block style
-SELECT format_yaml('name: John\nscores: [1, 2, 3]'::YAML, 'block');
+SELECT format_yaml(E'name: John\nscores: [1, 2, 3]'::YAML, style := 'block');
 
 -- Format as flow style
-SELECT format_yaml('name: John\nscores: [1, 2, 3]'::YAML, 'flow');
+SELECT format_yaml(E'name: John\nscores: [1, 2, 3]'::YAML, style := 'flow');
 
 -- Set default style for session
 SELECT yaml_set_default_style('block');
@@ -202,7 +202,7 @@ SELECT yaml_valid('name: John');  -- true
 SELECT yaml_valid('name: : invalid: yaml');  -- false
 
 -- NULL handling
-SELECT yaml_valid(NULL);  -- NULL
+SELECT yaml_valid(NULL::VARCHAR);  -- NULL
 ```
 
 ## Examples

@@ -41,13 +41,13 @@ SELECT
     yaml_extract_string(data, '$.app.version') AS version,
     yaml_extract_string(data, '$.database.host') AS db_host,
     yaml_extract(data, '$.database.port')::INTEGER AS db_port
-FROM read_yaml_objects('app.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('app.yaml'));
 
 -- Check feature flags
 SELECT
     yaml_extract(data, '$.features.authentication')::BOOLEAN AS auth_enabled,
     yaml_extract(data, '$.features.rate_limiting')::BOOLEAN AS rate_limit
-FROM read_yaml_objects('app.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('app.yaml'));
 ```
 
 ### Multi-Environment Configs
@@ -81,7 +81,7 @@ SELECT
     yaml_extract_string(data, '$.environment') AS env,
     yaml_extract_string(data, '$.database.host') AS db_host,
     yaml_extract_string(data, '$.log_level') AS log_level
-FROM read_yaml_objects('*.yaml', filename = true)
+FROM (SELECT filename, content::YAML AS data FROM read_text('*.yaml'))
 ORDER BY env;
 ```
 
@@ -212,7 +212,7 @@ SELECT
     yaml_extract_string(data, '$.kind') AS kind,
     yaml_extract(data, '$.spec.replicas')::INTEGER AS replicas,
     yaml_extract_string(data, '$.spec.template.spec.containers[0].image') AS image
-FROM read_yaml_objects('k8s/*.yaml')
+FROM (SELECT filename, content::YAML AS data FROM read_text('k8s/*.yaml'))
 WHERE yaml_extract_string(data, '$.kind') = 'Deployment';
 ```
 
@@ -248,12 +248,9 @@ volumes:
 SELECT key AS service_name,
        yaml_extract_string(value, '$.image') AS image,
        yaml_extract(value, '$.ports') AS ports
-FROM yaml_each(
-    yaml_extract(
-        (SELECT data FROM read_yaml_objects('docker-compose.yaml')),
-        '$.services'
-    )
-);
+FROM (SELECT content::YAML AS data FROM read_text('docker-compose.yaml')),
+     unnest(yaml_keys(data, '$.services')) AS t(key),
+     LATERAL (SELECT yaml_extract(data, '$.services.' || key) AS value);
 ```
 
 ---
@@ -294,15 +291,16 @@ jobs:
 SELECT
     yaml_extract_string(data, '$.name') AS workflow_name,
     yaml_keys(yaml_extract(data, '$.jobs')) AS job_names
-FROM read_yaml_objects('.github/workflows/*.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('.github/workflows/*.yaml'));
 
 -- Get job details
 SELECT
     key AS job_name,
     yaml_extract_string(value, '$.runs-on') AS runner,
     yaml_extract(value, '$.needs') AS dependencies
-FROM read_yaml_objects('.github/workflows/ci.yaml'),
-     yaml_each(yaml_extract(data, '$.jobs'));
+FROM (SELECT filename, content::YAML AS data FROM read_text('.github/workflows/ci.yaml')),
+     unnest(yaml_keys(data, '$.jobs')) AS t(key),
+     LATERAL (SELECT yaml_extract(data, '$.jobs.' || key) AS value);
 ```
 
 ---
@@ -318,11 +316,11 @@ SELECT
     yaml_exists(data, '$.app.name') AS has_app_name,
     yaml_exists(data, '$.database.host') AS has_db_host,
     yaml_exists(data, '$.database.port') AS has_db_port
-FROM read_yaml_objects('configs/*.yaml', filename = true);
+FROM (SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml'));
 
 -- Find missing required fields
 SELECT filename
-FROM read_yaml_objects('configs/*.yaml', filename = true)
+FROM (SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml'))
 WHERE NOT yaml_exists(data, '$.database.host')
    OR NOT yaml_exists(data, '$.database.port');
 ```
@@ -335,7 +333,7 @@ SELECT
     filename,
     yaml_type(yaml_extract(data, '$.database.port')) AS port_type,
     yaml_type(yaml_extract(data, '$.features')) AS features_type
-FROM read_yaml_objects('configs/*.yaml', filename = true)
+FROM (SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml'))
 WHERE yaml_type(yaml_extract(data, '$.database.port')) != 'scalar'
    OR yaml_type(yaml_extract(data, '$.features')) != 'object';
 ```
@@ -372,7 +370,7 @@ COPY (
 
 ```sql
 -- Combine base config with overrides
-SELECT yaml_to_json(base.data) || yaml_to_json(override.data) AS merged
-FROM read_yaml_objects('base.yaml') base,
-     read_yaml_objects('override.yaml') override;
+SELECT yaml_merge_patch(base.data, override.data) AS merged
+FROM (SELECT filename, content::YAML AS data FROM read_text('base.yaml')) base,
+     (SELECT filename, content::YAML AS data FROM read_text('override.yaml')) override;
 ```

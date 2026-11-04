@@ -86,8 +86,8 @@ CREATE TABLE app_configs (
 
 -- Insert YAML data
 INSERT INTO app_configs VALUES
-    ('web', 'port: 8080\nworkers: 4'),
-    ('api', 'port: 3000\nrateLimit: 100');
+    ('web', E'port: 8080\nworkers: 4'),
+    ('api', E'port: 3000\nrateLimit: 100');
 
 -- Query the data
 SELECT
@@ -101,15 +101,15 @@ FROM app_configs;
 ```sql
 -- Extract specific values
 SELECT yaml_extract_string(config, '$.database.host') AS db_host
-FROM 'config.yaml';
+FROM (SELECT content::YAML AS config FROM read_text('config.yaml'));
 
 -- Check if paths exist
 SELECT yaml_exists(config, '$.features') AS has_features
-FROM 'config.yaml';
+FROM (SELECT content::YAML AS config FROM read_text('config.yaml'));
 
 -- Get value types
 SELECT yaml_type(config, '$.settings') AS settings_type
-FROM 'config.yaml';
+FROM (SELECT content::YAML AS config FROM read_text('config.yaml'));
 ```
 
 ## Extracting Frontmatter
@@ -136,7 +136,7 @@ ORDER BY date DESC;
 
 ```sql
 -- YAML to JSON
-SELECT yaml_to_json('name: John\nage: 30'::YAML);
+SELECT yaml_to_json(E'name: John\nage: 30'::YAML);
 -- Returns: {"name":"John","age":30}
 
 -- JSON to YAML
@@ -145,7 +145,7 @@ SELECT '{"name":"John"}'::JSON::YAML;
 
 -- DuckDB values to YAML
 SELECT value_to_yaml({'name': 'John', 'scores': [85, 90, 95]});
--- Returns: name: John\nscores:\n  - 85\n  - 90\n  - 95
+-- Returns: {name: John, scores: [85, 90, 95]}
 ```
 
 ## Writing YAML Files

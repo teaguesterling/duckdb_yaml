@@ -169,9 +169,9 @@ SELECT yaml_exists('[1, 2, 3]'::YAML, '$[5]');
 SELECT yaml_exists('{user: {profile: {bio: Hello}}}'::YAML, '$.user.profile.bio');
 -- Returns: true
 
--- Check null values (exists but null)
+-- A key with a null value reads as not existing. json_exists returns true here.
 SELECT yaml_exists('{value: null}'::YAML, '$.value');
--- Returns: true
+-- Returns: false
 ```
 
 ---
@@ -410,8 +410,12 @@ FROM yaml_array_elements('[{name: Alice}, {name: Bob}]'::YAML);
 SELECT
     yaml_extract_string(value, '$.product') AS product,
     yaml_extract(value, '$.quantity')::INTEGER AS qty
-FROM yaml_array_elements(yaml_extract(order_data, '$.items'));
+FROM yaml_array_elements('[{product: Widget, quantity: 2}]'::YAML);
 ```
+
+---
+
+The argument of `yaml_each` and `yaml_array_elements` must be a constant. It cannot be a column or a subquery.
 
 ---
 
@@ -424,6 +428,8 @@ Returns a JSON representation of the YAML document's structure/schema, showing t
 ```sql
 yaml_structure(yaml_value) → JSON
 ```
+
+The order of the keys in the result is not fixed.
 
 ### Parameters
 
@@ -459,11 +465,11 @@ SELECT yaml_structure('users:
     scores: [90, 85]
   - name: Bob
     scores: [88, 92]');
--- Returns: {"users":[{"name":"VARCHAR","scores":["UBIGINT"]}]}
+-- Returns: {"users":[{"scores":["UBIGINT"],"name":"VARCHAR"}]}
 
 -- Arrays of objects with different keys are merged
 SELECT yaml_structure('[{a: 1}, {b: 2}]');
--- Returns: [{"a":"UBIGINT","b":"UBIGINT"}]
+-- Returns: [{"b":"UBIGINT","a":"UBIGINT"}]
 ```
 
 ---

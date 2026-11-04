@@ -40,10 +40,13 @@ SELECT yaml_build_object('name', 'John', 'age', 30);
 SELECT yaml_build_object(
     'string', 'hello',
     'number', 42,
-    'boolean', true,
-    'null_val', NULL
+    'boolean', true
 );
--- Returns: {string: hello, number: 42, boolean: true, null_val: null}
+-- Returns: {string: hello, number: 42, boolean: true}
+
+-- A NULL argument makes the result NULL
+SELECT yaml_build_object('a', 1, 'b', NULL::INTEGER);
+-- Returns: NULL
 ```
 
 #### Nested Objects

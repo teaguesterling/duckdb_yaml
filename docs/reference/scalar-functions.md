@@ -156,7 +156,7 @@ Converts YAML to JSON.
 **Returns:** JSON equivalent.
 
 ```sql
-SELECT yaml_to_json('name: John\nage: 30'::YAML);
+SELECT yaml_to_json(E'name: John\nage: 30'::YAML);
 -- Returns: {"name":"John","age":30}
 ```
 
@@ -178,7 +178,7 @@ Converts any DuckDB value to YAML.
 
 ```sql
 SELECT value_to_yaml({'name': 'John', 'scores': [1, 2, 3]});
--- Returns: name: John\nscores:\n  - 1\n  - 2\n  - 3
+-- Returns: {name: John, scores: [1, 2, 3]}
 ```
 
 ---
@@ -238,7 +238,7 @@ Parses YAML into a structured type.
 **Returns:** Struct matching the template.
 
 ```sql
-SELECT from_yaml('name: John\nage: 30', {'name': '', 'age': 0});
+SELECT from_yaml(E'name: John\nage: 30', {'name': '', 'age': 0});
 -- Returns: {'name': John, 'age': 30}
 ```
 

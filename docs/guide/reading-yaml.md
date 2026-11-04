@@ -276,7 +276,7 @@ SELECT * FROM read_yaml('data.yaml',
 
 ## read_yaml_objects
 
-For preserving the complete document structure (one row per file):
+To read each document as one value, in one column called `yaml` (one row per document):
 
 ```sql
 SELECT * FROM read_yaml_objects('config.yaml');
@@ -287,6 +287,12 @@ This is useful when you want to:
 - Keep the entire YAML as a single value
 - Process complex nested structures
 - Maintain document boundaries
+
+The `yaml` column has a detected type, such as a STRUCT. It does not have the YAML type, so the `yaml_*` functions do not accept it. It has no `filename` option. To get the file name and a YAML value, use `read_text`:
+
+```sql
+SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml');
+```
 
 ## Multi-Document YAML
 
@@ -358,7 +364,7 @@ SELECT
     filename,
     yaml_extract_string(data, '$.name') AS name,
     yaml_extract(data, '$.version') AS version
-FROM read_yaml_objects('configs/*.yaml');
+FROM (SELECT filename, content::YAML AS data FROM read_text('configs/*.yaml'));
 ```
 
 ### Creating Tables from YAML

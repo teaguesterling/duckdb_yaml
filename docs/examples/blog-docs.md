@@ -201,8 +201,8 @@ ORDER BY category;
 -- Analyze Astro pages
 SELECT
     filename,
-    yaml_extract_string(frontmatter, '$.layout') AS layout,
-    yaml_extract_string(frontmatter, '$.title') AS title
+    yaml_extract_string(frontmatter::YAML, '$.layout') AS layout,
+    yaml_extract_string(frontmatter::YAML, '$.title') AS title
 FROM read_yaml_frontmatter('src/pages/**/*.astro',
     filename = true,
     as_yaml_objects = true
