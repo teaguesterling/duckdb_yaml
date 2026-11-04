@@ -452,8 +452,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// A row that is not a map has no keys to make columns from. So that it is not lost, a file with such rows has one
 	// column that holds each row, map or not. Explicit columns and frontmatter columns keep their schema. A null fits
 	// any schema, so it decides only when the sample has nothing else.
-	const auto first_data_node = std::find_if(sample_nodes.begin(), sample_nodes.end(),
-	                                          [](const YAML::Node &node) { return !node.IsNull(); });
+	const auto first_data_node =
+	    std::find_if(sample_nodes.begin(), sample_nodes.end(), [](const YAML::Node &node) { return !node.IsNull(); });
 	const bool has_rows_without_keys =
 	    first_data_node == sample_nodes.end() ||
 	    std::any_of(sample_nodes.begin(), sample_nodes.end(),
@@ -464,9 +464,9 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		if (options.auto_detect_types) {
 			// Maps, sequences and scalars together have no common SQL type, so YAML holds them
 			const auto kind = first_data_node == sample_nodes.end() ? YAML::NodeType::Null : first_data_node->Type();
-			const bool mixed_kinds =
-			    std::any_of(sample_nodes.begin(), sample_nodes.end(),
-			                [&](const YAML::Node &node) { return !node.IsNull() && node.Type() != kind; });
+			const bool mixed_kinds = std::any_of(sample_nodes.begin(), sample_nodes.end(), [&](const YAML::Node &node) {
+				return !node.IsNull() && node.Type() != kind;
+			});
 			value_type = mixed_kinds ? YAMLTypes::YAMLType() : DetectJaggedYAMLType(sample_nodes);
 			DetectColumnFormats(value_type, sample_nodes, string(), result->column_formats);
 			if (sample_truncated) {
@@ -958,10 +958,10 @@ void YAMLReader::YAMLReadRowsFunction(ClientContext &context, TableFunctionInput
 
 					if (bind_data.row_is_value) {
 						// In a yaml column a null node would read as the text ~
-						Value val = node.IsNull() ? Value(bind_data.types[0])
-						                          : YAMLNodeToValue(node, bind_data.types[0],
-						                                            !bind_data.options.ignore_errors,
-						                                            &bind_data.column_formats);
+						Value val = node.IsNull()
+						                ? Value(bind_data.types[0])
+						                : YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors,
+						                                  &bind_data.column_formats);
 						output.SetValue(0, output_idx, val);
 					} else {
 						if (!node.IsMap() && !node.IsNull()) {
@@ -1136,9 +1136,9 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 				const auto &node = lstate.file_nodes[lstate.current_row_index];
 
 				if (bind_data.names.size() == 1 && bind_data.names[0] == "yaml") {
-					Value val = node.IsNull() ? Value(bind_data.types[0])
-					                          : YAMLNodeToValue(node, bind_data.types[0],
-					                                            !bind_data.options.ignore_errors);
+					Value val = node.IsNull()
+					                ? Value(bind_data.types[0])
+					                : YAMLNodeToValue(node, bind_data.types[0], !bind_data.options.ignore_errors);
 					output.SetValue(0, output_idx, val);
 				} else {
 					if (node.IsMap()) {
