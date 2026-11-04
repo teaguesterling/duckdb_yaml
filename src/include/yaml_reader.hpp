@@ -64,7 +64,8 @@ public:
 		bool auto_detect_types = true;         // Whether to auto-detect types from YAML content
 		bool ignore_errors = false;            // Whether to ignore parsing errors
 		size_t maximum_object_size = 16777216; // 16MB default maximum file size
-		MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS; // How to handle multi-document YAML
+		FileCompressionType compression = FileCompressionType::AUTO_DETECT; // From the extension, as read_json
+		MultiDocumentMode multi_document_mode = MultiDocumentMode::ROWS;    // How to handle multi-document YAML
 		bool expand_root_sequence = true; // Whether to expand top-level sequences into rows
 
 		// Sampling parameters for schema detection (matching JSON extension behavior)
@@ -306,8 +307,10 @@ public:
 	 * @param options YAML read options
 	 * @return vector<YAML::Node> Parsed YAML documents
 	 */
+	// row_limit: in multi-document modes, the parse may stop after the row that is one past this count.
 	static vector<YAML::Node> ReadYAMLFile(ClientContext &context, const string &file_path,
-	                                       const YAMLReadOptions &options);
+	                                       const YAMLReadOptions &options,
+	                                       idx_t row_limit = NumericLimits<idx_t>::Maximum());
 
 	/**
 	 * @brief Parse a multi-document YAML file with error recovery
@@ -325,6 +328,11 @@ public:
 	 * @param expand_root_sequence Whether to expand top-level sequences
 	 * @return vector<YAML::Node> Row nodes extracted from documents
 	 */
+	// Reads the text of a file for the options. Returns false with an error message when it is over
+	// maximum_object_size.
+	static bool ReadYAMLFileText(FileSystem &fs, const string &file_path, const YAMLReadOptions &options, string &text,
+	                             string &size_error);
+
 	static vector<YAML::Node> ExtractRowNodes(const vector<YAML::Node> &docs, bool expand_root_sequence);
 
 	/**

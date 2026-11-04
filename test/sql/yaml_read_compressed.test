@@ -1,0 +1,102 @@
+# name: test/sql/yaml_read_compressed.test
+# description: read_yaml reads gzip files, and the size limit applies to the decompressed text.
+# group: [sql]
+
+require yaml
+
+# A file from another tool, found by its extension
+query IT
+SELECT id, name FROM read_yaml('test/yaml/compressed/rows.yaml.gz') ORDER BY id;
+----
+1	one
+2	two
+3	three
+
+query I
+SELECT count(*) FROM read_yaml_objects('test/yaml/compressed/rows.yaml.gz');
+----
+1
+
+# A path alone also finds the reader
+query I
+SELECT count(*) FROM 'test/yaml/compressed/rows.yaml.gz';
+----
+3
+
+# The file size of a compressed file is not the size of its text. Text that compresses well shows a short read.
+statement ok
+COPY (SELECT i AS id, 'same text in each row' AS s FROM range(20000) t(i)) TO '{TEST_DIR}/many.yaml.gz' (FORMAT yaml);
+
+query III
+SELECT count(*), sum(id), count(DISTINCT s) FROM read_yaml('{TEST_DIR}/many.yaml.gz');
+----
+20000	199990000	1
+
+# Bind and scan read the same text
+query I
+SELECT count(*) FROM read_yaml_objects('{TEST_DIR}/many.yaml.gz');
+----
+20000
+
+# The name of a file does not have to give the compression
+query I
+SELECT count(*) FROM read_yaml('test/yaml/compressed/rows_no_extension', compression = 'gzip');
+----
+3
+
+query I
+SELECT count(*) FROM read_yaml_objects('test/yaml/compressed/rows_no_extension', compression = 'gzip');
+----
+1
+
+query I
+SELECT count(*) FROM read_yaml('test/yaml/compressed/rows.yaml.gz', compression = 'auto');
+----
+3
+
+# 'none' reads the bytes as they are, so a gzip file is not YAML
+statement error
+SELECT * FROM read_yaml('test/yaml/compressed/rows.yaml.gz', compression = 'none');
+----
+Error
+
+statement error
+SELECT * FROM read_yaml('test/yaml/compressed/plain.yaml', compression = 'lz4');
+----
+Unrecognized file compression type
+
+# A file with no compression reads as before, also beside a compressed file
+query I
+SELECT count(*) FROM read_yaml(['test/yaml/compressed/rows.yaml.gz', 'test/yaml/compressed/plain.yaml']);
+----
+4
+
+query I
+SELECT count(*) FROM read_yaml('test/yaml/compressed/plain.yaml', compression = 'none');
+----
+1
+
+# maximum_object_size is the limit for the text, so a small compressed file cannot expand without limit
+statement ok
+COPY (SELECT 1 AS a FROM range(20000)) TO '{TEST_DIR}/small.yaml.gz' (FORMAT yaml);
+
+statement error
+SELECT * FROM read_yaml('{TEST_DIR}/small.yaml.gz', maximum_object_size = 100000);
+----
+exceeds maximum allowed size
+
+statement error
+SELECT * FROM read_yaml_objects('{TEST_DIR}/small.yaml.gz', maximum_object_size = 100000);
+----
+exceeds maximum allowed size
+
+query I
+SELECT count(*) FROM read_yaml('{TEST_DIR}/small.yaml.gz', maximum_object_size = 10000000);
+----
+20000
+
+# The frontmatter reader uses the same file reader
+query I
+SELECT title FROM read_yaml_frontmatter('test/yaml/compressed/page.md.gz');
+----
+Hello

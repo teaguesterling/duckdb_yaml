@@ -220,9 +220,22 @@ vector<string> YAMLReader::GetGlobFiles(ClientContext &context, const string &pa
 	return result;
 }
 
+bool YAMLReader::ReadYAMLFileText(FileSystem &fs, const string &file_path, const YAMLReadOptions &options, string &text,
+                                  string &size_error) {
+	idx_t size = 0;
+	if (yaml_utils::ReadFileText(fs, file_path, options.compression, options.maximum_object_size, text, size)) {
+		return true;
+	}
+	// The read of a compressed file stops one byte over the limit
+	size_error = "YAML file size (" + string(size == options.maximum_object_size + 1 ? "at least " : "") +
+	             to_string(size) + " bytes) exceeds maximum allowed size (" + to_string(options.maximum_object_size) +
+	             " bytes)";
+	return false;
+}
+
 // Helper to read a single file and parse it
 vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string &file_path,
-                                            const YAMLReadOptions &options) {
+                                            const YAMLReadOptions &options, idx_t row_limit) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	// Check if file exists
@@ -230,17 +243,11 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 		throw IOException("File does not exist: " + file_path);
 	}
 
-	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
-	idx_t file_size = fs.GetFileSize(*handle);
-
-	if (file_size > options.maximum_object_size) {
-		throw IOException("YAML file size (" + to_string(file_size) + " bytes) exceeds maximum allowed size (" +
-		                  to_string(options.maximum_object_size) + " bytes)");
+	string content;
+	string size_error;
+	if (!ReadYAMLFileText(fs, file_path, options, content, size_error)) {
+		throw IOException(size_error);
 	}
-
-	// Read the file content
-	string content(file_size, ' ');
-	fs.Read(*handle, const_cast<char *>(content.c_str()), file_size);
 
 	// Strip non-standard document suffixes if enabled (issue #34)
 	// This allows parsing files with custom annotations like Unity's "stripped" keyword
@@ -254,7 +261,7 @@ vector<YAML::Node> YAMLReader::ReadYAMLFile(ClientContext &context, const string
 		try {
 			// First try to parse the entire file at once
 			std::stringstream yaml_stream(content);
-			docs = yaml_utils::LoadAllDocuments(yaml_stream);
+			docs = yaml_utils::LoadDocumentsForSample(yaml_stream, options.expand_root_sequence, row_limit);
 		} catch (const YAML::Exception &e) {
 			if (!options.ignore_errors) {
 				throw IOException("Error parsing multi-document YAML file: " + string(e.what()));
