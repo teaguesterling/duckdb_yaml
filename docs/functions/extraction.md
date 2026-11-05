@@ -169,8 +169,12 @@ SELECT yaml_exists('[1, 2, 3]'::YAML, '$[5]');
 SELECT yaml_exists('{user: {profile: {bio: Hello}}}'::YAML, '$.user.profile.bio');
 -- Returns: true
 
--- A key with a null value reads as not existing. json_exists returns true here.
+-- A key with a null value exists, as in json_exists
 SELECT yaml_exists('{value: null}'::YAML, '$.value');
+-- Returns: true
+
+-- A path through a missing key does not exist
+SELECT yaml_exists('{value: null}'::YAML, '$.other.key');
 -- Returns: false
 ```
 

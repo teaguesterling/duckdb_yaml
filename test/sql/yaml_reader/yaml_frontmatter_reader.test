@@ -14,7 +14,7 @@ My First Blog Post	John Doe	2024-01-15	false	[programming, duckdb]
 query I
 SELECT typeof(frontmatter) FROM read_yaml_frontmatter('test/yaml/frontmatter/post1.md', as_yaml_objects:=true);
 ----
-YAML
+yaml
 
 # Test 3: Raw YAML content is correctly extracted
 query I

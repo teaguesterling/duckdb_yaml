@@ -464,10 +464,11 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 	// any schema, so it decides only when the sample has nothing else.
 	const auto first_data_node =
 	    std::find_if(sample_nodes.begin(), sample_nodes.end(), [](const YAML::Node &node) { return !node.IsNull(); });
+	const bool sample_has_keys = std::any_of(sample_nodes.begin(), sample_nodes.end(),
+	                                         [](const YAML::Node &node) { return node.IsMap() && node.size() > 0; });
 	const bool has_rows_without_keys =
-	    first_data_node == sample_nodes.end() ||
-	    std::any_of(sample_nodes.begin(), sample_nodes.end(),
-	                [](const YAML::Node &node) { return !node.IsMap() && !node.IsNull(); });
+	    !sample_has_keys || std::any_of(sample_nodes.begin(), sample_nodes.end(),
+	                                    [](const YAML::Node &node) { return !node.IsMap() && !node.IsNull(); });
 	if (options.column_names.empty() && options.multi_document_mode != MultiDocumentMode::FRONTMATTER &&
 	    has_rows_without_keys) {
 		LogicalType value_type = LogicalType::VARCHAR;
@@ -1220,6 +1221,8 @@ void YAMLReader::YAMLReadObjectsFunction(ClientContext &context, TableFunctionIn
 // Bind data structure for parse_yaml (immutable after bind)
 struct ParseYAMLBindData : public TableFunctionData {
 	ParseYAMLBindData() = default;
+	// The one column holds each row whole, also a row that is a map
+	bool row_is_value = false;
 
 	vector<YAML::Node> yaml_docs;                                    // Parsed YAML documents
 	vector<string> names;                                            // Column names
@@ -1308,6 +1311,7 @@ unique_ptr<FunctionData> YAMLReader::ParseYAMLBind(ClientContext &context, Table
 		// Non-struct type - return single yaml column
 		names.emplace_back("yaml");
 		return_types.emplace_back(merged_type);
+		result->row_is_value = true;
 	}
 
 	result->names = CompatNameStrings(names);
@@ -1339,7 +1343,7 @@ void YAMLReader::ParseYAMLFunction(ClientContext &context, TableFunctionInput &d
 	for (idx_t doc_idx = 0; doc_idx < max_count; doc_idx++) {
 		YAML::Node node = bind_data.yaml_docs[local_state.current_row + doc_idx];
 
-		if (node.IsMap()) {
+		if (node.IsMap() && !bind_data.row_is_value) {
 			// Map node - process each field as a column
 			for (idx_t col_idx = 0; col_idx < bind_data.names.size(); col_idx++) {
 				const string &col_name = bind_data.names[col_idx];

@@ -1,0 +1,137 @@
+# name: test/sql/yaml_extract_missing_paths.test
+# description: A path that does not exist is NULL at any depth, so one row without a parent key does not stop a query
+# group: [sql]
+
+require yaml
+
+# A missing key at the end of the path already was NULL
+query I
+SELECT yaml_extract('a: 1', '$.b');
+----
+NULL
+
+# A missing key before the end of the path threw "invalid node"
+query I
+SELECT yaml_extract('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_extract_string('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_type('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_value('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_array_length('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_keys('a: 1', '$.b.c');
+----
+NULL
+
+query I
+SELECT yaml_exists('a: 1', '$.b.c');
+----
+false
+
+query I
+SELECT yaml_extract('a: 1', '$.b[0]');
+----
+NULL
+
+query I
+SELECT yaml_extract('a: 1', '$.b[0].c');
+----
+NULL
+
+# The reason this matters: documents with different shapes in one column
+statement ok
+CREATE TABLE configs(id INT, config YAML);
+
+statement ok
+INSERT INTO configs VALUES (1, 'db: {host: h}'), (2, 'other: 1');
+
+query II
+SELECT id, yaml_extract_string(config, '$.db.host') FROM configs ORDER BY id;
+----
+1	h
+2	NULL
+
+# An index into a scalar or a map, or a key of a scalar or a sequence, does not exist. It read as a null value.
+query I
+SELECT yaml_extract('a: 1', '$.a[0]');
+----
+NULL
+
+query I
+SELECT yaml_type('a: 1', '$.a[0]');
+----
+NULL
+
+query I
+SELECT yaml_extract('a: 1', '$.a.b');
+----
+NULL
+
+query I
+SELECT yaml_extract('a: [1]', '$.a.b');
+----
+NULL
+
+query I
+SELECT yaml_extract('[1]', '$[5]');
+----
+NULL
+
+# A key with a null value exists, as in json_exists. It is not the same as a missing key.
+query I
+SELECT yaml_exists('{v: null}', '$.v');
+----
+true
+
+query I
+SELECT yaml_exists('{v: ~}', '$.v');
+----
+true
+
+query I
+SELECT yaml_exists('{v: null}', '$.w');
+----
+false
+
+query I
+SELECT yaml_exists('{v: null}', '$.v.x');
+----
+false
+
+query I
+SELECT yaml_exists('[1, null]', '$[1]');
+----
+true
+
+query I
+SELECT yaml_type('{v: null}', '$.v');
+----
+null
+
+query I
+SELECT yaml_extract('{v: null}', '$.v');
+----
+~
+
+query I
+SELECT yaml_extract_string('{v: null}', '$.v') IS NULL;
+----
+true

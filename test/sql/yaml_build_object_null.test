@@ -1,0 +1,33 @@
+# name: test/sql/yaml_build_object_null.test
+# description: A NULL value is one key with a null value, as in json_object. It does not make the whole object NULL
+# group: [sql]
+
+require yaml
+
+query I
+SELECT yaml_build_object('a', 1, 'b', NULL);
+----
+{a: 1, b: ~}
+
+query I
+SELECT yaml_build_object('a', 1, 'b', NULL::INTEGER);
+----
+{a: 1, b: ~}
+
+query I
+SELECT yaml_to_json(yaml_build_object('a', 1, 'b', NULL));
+----
+{"a":1,"b":null}
+
+# The other rows of a column are not affected
+query I
+SELECT yaml_build_object('v', x) FROM (VALUES (1), (NULL), (3)) t(x);
+----
+{v: 1}
+{v: ~}
+{v: 3}
+
+statement error
+SELECT yaml_build_object(NULL::VARCHAR, 1);
+----
+keys cannot be NULL
