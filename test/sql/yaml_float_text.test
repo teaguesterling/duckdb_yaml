@@ -1,0 +1,65 @@
+# name: test/sql/yaml_float_text.test
+# description: A FLOAT or DOUBLE is written as the shortest text that reads back as the same number, and as a float in both YAML 1.1 and 1.2: it has a dot, and an exponent has a sign
+# group: [sql]
+
+require yaml
+
+statement ok
+CREATE TABLE floats AS SELECT * FROM (VALUES
+    (1, 1.0::DOUBLE, '1.0'),
+    (2, 1.5::DOUBLE, '1.5'),
+    (3, 0.1::DOUBLE, '0.1'),
+    (4, -0.0::DOUBLE, '-0.0'),
+    (5, 1e20::DOUBLE, '1.0e+20'),
+    (6, 2.5e-05::DOUBLE, '2.5e-05'),
+    (7, 1.5e300::DOUBLE, '1.5e+300'),
+    (8, 123456789012345680000::DOUBLE, '1.2345678901234568e+20'),
+    (9, 'inf'::DOUBLE, '.inf'),
+    (10, '-inf'::DOUBLE, '-.inf'),
+    (11, 'nan'::DOUBLE, '.nan')
+) t(id, d, expected);
+
+# 0.1 as DOUBLE is not 0.10000000000000001, and 1.0 is not the integer 1
+query I
+SELECT count(*) FROM floats WHERE value_to_yaml(d)::VARCHAR <> expected;
+----
+0
+
+query II
+SELECT id, value_to_yaml(d) FROM floats WHERE value_to_yaml(d)::VARCHAR <> expected ORDER BY id;
+----
+
+# A FLOAT is written with the digits that FLOAT needs, so 0.1 is not 0.100000001
+query T
+SELECT value_to_yaml(0.1::FLOAT);
+----
+0.1
+
+query T
+SELECT value_to_yaml(3.4e38::FLOAT);
+----
+3.4e+38
+
+# The COPY writer uses the same text, in a struct and in a list too
+statement ok
+COPY (SELECT id, d FROM floats ORDER BY id) TO '__TEST_DIR__/floats.yaml' (FORMAT yaml, LAYOUT sequence, STYLE block);
+
+# One line per query result, so the file's newlines are shown as |
+query T
+SELECT replace(content, chr(10), '|') FROM read_text('__TEST_DIR__/floats.yaml');
+----
+- id: 1|  d: 1.0|- id: 2|  d: 1.5|- id: 3|  d: 0.1|- id: 4|  d: -0.0|- id: 5|  d: 1.0e+20|- id: 6|  d: 2.5e-05|- id: 7|  d: 1.5e+300|- id: 8|  d: 1.2345678901234568e+20|- id: 9|  d: .inf|- id: 10|  d: -.inf|- id: 11|  d: .nan|
+
+statement ok
+COPY (SELECT {'d': 1.0::DOUBLE, 'l': [0.1::DOUBLE, 1e20::DOUBLE]} AS s) TO '__TEST_DIR__/nested_floats.yaml' (FORMAT yaml, STYLE flow);
+
+query T
+SELECT rtrim(content, chr(10)) FROM read_text('__TEST_DIR__/nested_floats.yaml');
+----
+{s: {d: 1.0, l: [0.1, 1.0e+20]}}
+
+# Each value reads back as the same DOUBLE
+query I
+SELECT count(*) FROM read_yaml('__TEST_DIR__/floats.yaml') r JOIN floats f USING (id) WHERE r.d IS DISTINCT FROM f.d OR typeof(r.d) <> 'DOUBLE';
+----
+0
