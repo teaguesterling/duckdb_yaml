@@ -297,6 +297,10 @@ public:
 	 * @param path Key in `formats`: the column name, or empty for a whole row
 	 * @param formats Output, from path to format
 	 */
+	//! Make a DOUBLE, also in a list or struct, VARCHAR when its sample has a plain integer with no exact DOUBLE,
+	//! such as 2^53 + 1. DetectColumnFormats calls it too.
+	static void KeepSampledIntegersExact(LogicalType &type, const vector<YAML::Node> &nodes);
+
 	static void DetectColumnFormats(LogicalType &type, const vector<YAML::Node> &nodes, const string &path,
 	                                YAMLColumnFormats &formats);
 

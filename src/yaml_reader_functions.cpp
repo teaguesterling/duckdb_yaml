@@ -780,6 +780,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadObjectsBind(ClientContext &context,
 		if (options.auto_detect_types) {
 			names.emplace_back("yaml");
 			auto doc_type = DetectJaggedYAMLType(sample_docs);
+			KeepSampledIntegersExact(doc_type, sample_docs);
 			return_types.emplace_back(sample_truncated ? WidenSampledIntegers(doc_type) : doc_type);
 		} else {
 			names.emplace_back("yaml");

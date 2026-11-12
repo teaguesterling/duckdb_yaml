@@ -602,6 +602,44 @@ static bool FitsEveryValue(const vector<string> &values, const FITS &fits) {
 	return std::all_of(values.begin(), values.end(), fits);
 }
 
+void YAMLReader::KeepSampledIntegersExact(LogicalType &type, const vector<YAML::Node> &nodes) {
+	if (type.id() == LogicalTypeId::LIST) {
+		vector<YAML::Node> elements;
+		for (const YAML::Node &node : nodes) {
+			if (node && node.IsSequence()) {
+				for (size_t idx = 0; idx < node.size(); idx++) {
+					elements.push_back(node[idx]);
+				}
+			}
+		}
+		auto child_type = ListType::GetChildType(type);
+		KeepSampledIntegersExact(child_type, elements);
+		type = LogicalType::LIST(child_type);
+	} else if (type.id() == LogicalTypeId::STRUCT) {
+		child_list_t<LogicalType> children;
+		for (auto &entry : StructType::GetChildTypes(type)) {
+			const auto field = CompatIdentifierName(entry.first);
+			vector<YAML::Node> values;
+			for (const YAML::Node &node : nodes) {
+				if (node && node.IsMap()) {
+					const YAML::Node value = node[field];
+					if (value) {
+						values.push_back(value);
+					}
+				}
+			}
+			auto child_type = entry.second;
+			KeepSampledIntegersExact(child_type, values);
+			children.push_back(make_pair(entry.first, child_type));
+		}
+		type = LogicalType::STRUCT(std::move(children));
+	} else if (type.id() == LogicalTypeId::DOUBLE &&
+	           std::any_of(nodes.begin(), nodes.end(), IsIntegerInexactAsDouble)) {
+		// As read_xml does, an integer beside a float keeps the type DOUBLE only if the integer stays exact
+		type = LogicalType::VARCHAR;
+	}
+}
+
 void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node> &nodes, const string &path,
                                      YAMLColumnFormats &formats) {
 	if (type.id() == LogicalTypeId::LIST) {
@@ -639,10 +677,7 @@ void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node>
 		return;
 	}
 	if (type.id() == LogicalTypeId::DOUBLE) {
-		// As read_xml does, an integer beside a float keeps the column DOUBLE only if the integer stays exact
-		if (std::any_of(nodes.begin(), nodes.end(), IsIntegerInexactAsDouble)) {
-			type = LogicalType::VARCHAR;
-		}
+		KeepSampledIntegersExact(type, nodes);
 		return;
 	}
 	if (type.id() != LogicalTypeId::VARCHAR || type.HasAlias()) {

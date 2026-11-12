@@ -57,3 +57,10 @@ SELECT n IS NULL FROM read_yaml('test/yaml/numeric/bigint_after_sample.yaml', sa
 ----
 false
 true
+
+# read_yaml_objects types its documents by the same rule
+query TT
+SELECT typeof(yaml), yaml.n FROM read_yaml_objects('test/yaml/numeric/bigint_beside_double.yaml');
+----
+STRUCT(n VARCHAR)	9007199254740993
+STRUCT(n VARCHAR)	2.5
