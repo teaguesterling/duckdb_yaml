@@ -276,6 +276,21 @@ static bool TryParseYAMLInteger(const std::string &scalar_value, int64_t &result
 	return true;
 }
 
+// Whether a plain integer has no exact DOUBLE, such as 2^53 + 1. As a DOUBLE it would read as a different number.
+static bool IsIntegerInexactAsDouble(const YAML::Node &node) {
+	if (!node || !node.IsScalar() || yaml_utils::IsStringScalar(node) ||
+	    yaml_utils::ClassifyPlainScalar(node.Scalar()) != yaml_utils::YAMLCoreKind::INTEGER) {
+		return false;
+	}
+	int64_t value;
+	if (!yaml_utils::ParseCoreInteger(node.Scalar(), value)) {
+		return true; // Past BIGINT
+	}
+	const double as_double = static_cast<double>(value);
+	// 2^63 is the first double past BIGINT, so it cannot be cast back
+	return as_double >= 9223372036854775808.0 || static_cast<int64_t>(as_double) != value;
+}
+
 // A value that the column type cannot hold. Strict callers raise an error, because NULL here is data lost in silence.
 static Value MismatchedValue(const YAML::Node &node, const LogicalType &target_type, bool strict) {
 	if (!strict) {
@@ -434,6 +449,9 @@ static Value YAMLNodeToValueImpl(const YAML::Node &node, const LogicalType &targ
 			}
 			return MismatchedValue(node, target_type, strict);
 		} else if (target_type.id() == LogicalTypeId::DOUBLE) {
+			if (IsIntegerInexactAsDouble(node)) {
+				return MismatchedValue(node, target_type, strict);
+			}
 			double core_value;
 			if (yaml_utils::ParseCoreFloat(scalar_value, core_value)) {
 				return Value::DOUBLE(core_value);
@@ -584,6 +602,44 @@ static bool FitsEveryValue(const vector<string> &values, const FITS &fits) {
 	return std::all_of(values.begin(), values.end(), fits);
 }
 
+void YAMLReader::KeepSampledIntegersExact(LogicalType &type, const vector<YAML::Node> &nodes) {
+	if (type.id() == LogicalTypeId::LIST) {
+		vector<YAML::Node> elements;
+		for (const YAML::Node &node : nodes) {
+			if (node && node.IsSequence()) {
+				for (size_t idx = 0; idx < node.size(); idx++) {
+					elements.push_back(node[idx]);
+				}
+			}
+		}
+		auto child_type = ListType::GetChildType(type);
+		KeepSampledIntegersExact(child_type, elements);
+		type = LogicalType::LIST(child_type);
+	} else if (type.id() == LogicalTypeId::STRUCT) {
+		child_list_t<LogicalType> children;
+		for (auto &entry : StructType::GetChildTypes(type)) {
+			const auto field = CompatIdentifierName(entry.first);
+			vector<YAML::Node> values;
+			for (const YAML::Node &node : nodes) {
+				if (node && node.IsMap()) {
+					const YAML::Node value = node[field];
+					if (value) {
+						values.push_back(value);
+					}
+				}
+			}
+			auto child_type = entry.second;
+			KeepSampledIntegersExact(child_type, values);
+			children.push_back(make_pair(entry.first, child_type));
+		}
+		type = LogicalType::STRUCT(std::move(children));
+	} else if (type.id() == LogicalTypeId::DOUBLE &&
+	           std::any_of(nodes.begin(), nodes.end(), IsIntegerInexactAsDouble)) {
+		// As read_xml does, an integer beside a float keeps the type DOUBLE only if the integer stays exact
+		type = LogicalType::VARCHAR;
+	}
+}
+
 void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node> &nodes, const string &path,
                                      YAMLColumnFormats &formats) {
 	if (type.id() == LogicalTypeId::LIST) {
@@ -618,6 +674,10 @@ void YAMLReader::DetectColumnFormats(LogicalType &type, const vector<YAML::Node>
 			children.push_back(make_pair(entry.first, child_type));
 		}
 		type = LogicalType::STRUCT(std::move(children));
+		return;
+	}
+	if (type.id() == LogicalTypeId::DOUBLE) {
+		KeepSampledIntegersExact(type, nodes);
 		return;
 	}
 	if (type.id() != LogicalTypeId::VARCHAR || type.HasAlias()) {

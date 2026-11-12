@@ -623,6 +623,27 @@ static bool ChangesWhenPlain(const YAML::Node &node) {
 	       YAMLReader::DetectYAMLType(YAML::Node(value)) != LogicalType::VARCHAR;
 }
 
+// The text of a FLOAT or DOUBLE: the shortest digits that read back as the same value, which is DuckDB's own cast to
+// VARCHAR. yaml-cpp would write 0.1 as 0.10000000000000001 and 1.0 as the integer 1. A dot and a signed exponent make
+// the text a float in YAML 1.1 too, so PyYAML does not read 1e+20 as a string.
+static std::string FloatToYAMLText(const Value &value) {
+	const double number = value.GetValue<double>();
+	if (std::isnan(number)) {
+		return ".nan";
+	}
+	if (std::isinf(number)) {
+		return number > 0 ? ".inf" : "-.inf";
+	}
+	std::string text = value.ToString();
+	auto exponent = text.find_first_of("eE");
+	const std::string mantissa = text.substr(0, exponent);
+	std::string suffix = exponent == std::string::npos ? "" : "e" + text.substr(exponent + 1);
+	if (suffix.size() > 1 && suffix[1] != '+' && suffix[1] != '-') {
+		suffix.insert(1, "+");
+	}
+	return mantissa.find('.') == std::string::npos ? mantissa + ".0" + suffix : mantissa + suffix;
+}
+
 // yaml-cpp writes every literal block as a bare `|`, which means "exactly one trailing newline". It has no way to
 // write `|-`. So a string with no trailing newline is emitted with this marker (U+10FFFD, a private-use character) in
 // front of it, and ApplyLiteralStripMarkers then turns `|`, newline, indent, marker into `|-`, newline, indent.
@@ -1022,7 +1043,7 @@ static void EmitValueToYAMLImpl(YAML::Emitter &out, const Value &value, YAMLTrav
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 			try {
-				out << value.GetValue<double>();
+				out << FloatToYAMLText(value);
 			} catch (...) {
 				// If casting fails, convert to string as fallback
 				out << YAML::SingleQuoted << value.ToString();
@@ -1142,9 +1163,8 @@ static YAML::Node ValueToYAMLNodeImpl(const Value &value, YAMLTraversalBudget &b
 	case LogicalTypeId::BIGINT:
 		return YAML::Node(value.GetValue<int64_t>());
 	case LogicalTypeId::FLOAT:
-		return YAML::Node(value.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
-		return YAML::Node(value.GetValue<double>());
+		return YAML::Node(FloatToYAMLText(value)); // Untagged, so it is written plain
 	case LogicalTypeId::LIST: {
 		YAML::Node list_node(YAML::NodeType::Sequence);
 		const auto &list_vals = ListValue::GetChildren(value);
