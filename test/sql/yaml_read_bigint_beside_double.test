@@ -1,0 +1,59 @@
+# name: test/sql/yaml_read_bigint_beside_double.test
+# description: An integer next to a float types the column DOUBLE only when every sampled integer is exact as a DOUBLE. Otherwise the column is VARCHAR, so no digit changes in silence
+# group: [sql]
+
+require yaml
+
+# 2^53 + 1 has no exact DOUBLE. As DOUBLE it would read as 9007199254740992.
+query TT
+SELECT typeof(n), n FROM read_yaml('test/yaml/numeric/bigint_beside_double.yaml');
+----
+VARCHAR	9007199254740993
+VARCHAR	2.5
+
+query TT
+SELECT typeof(n), n FROM read_yaml('test/yaml/numeric/negative_bigint_beside_double.yaml');
+----
+VARCHAR	-9007199254740993
+VARCHAR	2.5
+
+# An integer that a DOUBLE holds exactly still makes the column DOUBLE
+query TT
+SELECT typeof(n), n FROM read_yaml('test/yaml/numeric/int_beside_double.yaml');
+----
+DOUBLE	1.0
+DOUBLE	2.5
+
+query TT
+SELECT typeof(n), n::BIGINT = 9007199254740992 FROM read_yaml('test/yaml/numeric/two_pow_53_beside_double.yaml') LIMIT 1;
+----
+DOUBLE	true
+
+# The same rule applies to a struct field and to list elements
+query T
+SELECT typeof(s) FROM read_yaml('test/yaml/numeric/bigint_beside_double_nested.yaml') LIMIT 1;
+----
+STRUCT(n VARCHAR)
+
+query T
+SELECT s.n FROM read_yaml('test/yaml/numeric/bigint_beside_double_nested.yaml');
+----
+9007199254740993
+2.5
+
+query TT
+SELECT typeof(l), l FROM read_yaml('test/yaml/numeric/bigint_beside_double_list.yaml');
+----
+VARCHAR[]	[9007199254740993, 2.5]
+
+# Past the sample, the column is DOUBLE, and an integer it cannot hold exactly is an error, not a changed number
+statement error
+SELECT n FROM read_yaml('test/yaml/numeric/bigint_after_sample.yaml', sample_size = 1);
+----
+Cannot read "9007199254740993" as DOUBLE
+
+query T
+SELECT n IS NULL FROM read_yaml('test/yaml/numeric/bigint_after_sample.yaml', sample_size = 1, ignore_errors = true) ORDER BY ALL;
+----
+false
+true

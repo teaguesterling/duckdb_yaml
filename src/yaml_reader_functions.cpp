@@ -552,7 +552,8 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 		}
 	}
 
-	// Only text and nested columns can take a date format. One pass over the sample collects their values, because
+	// Only text and nested columns can take a date format, and a DOUBLE column is checked for inexact integers. One
+	// pass over the sample collects their values, because
 	// node[col] scans the whole map for each column.
 	struct FormatColumn {
 		vector<YAML::Node> values;
@@ -567,7 +568,7 @@ unique_ptr<FunctionData> YAMLReader::YAMLReadRowsBind(ClientContext &context, Ta
 			detected_types[col] = ResolveNullTypes(detected_types[col]);
 			const auto &type = detected_types[col];
 			if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::STRUCT ||
-			    (type.id() == LogicalTypeId::VARCHAR && !type.HasAlias())) {
+			    type.id() == LogicalTypeId::DOUBLE || (type.id() == LogicalTypeId::VARCHAR && !type.HasAlias())) {
 				format_columns[col];
 			}
 		}

@@ -290,6 +290,7 @@ public:
 	 *
 	 * The candidates and their order are read_json's. Forms with a four-digit year are not among them, because
 	 * DetectTemporal already detects those. Lists and structs are searched too.
+	 * A DOUBLE whose sample also has a plain integer with no exact DOUBLE, such as 2^53 + 1, becomes VARCHAR.
 	 *
 	 * @param type Detected type of the values, changed in place
 	 * @param nodes The sampled values
