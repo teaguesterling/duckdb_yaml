@@ -47,14 +47,14 @@ jobs:
     # required-check configuration may key on this job name.
     runs-on: ubuntu-latest
     env:
-      DUCKDB_COMMIT: d54cbbe3df17e8e5ce68312f483b4155836112aa
+      DUCKDB_COMMIT: 8d78114e90a53823803660bf821f6073ac87da8c
       # The version the build reports, passed as duckdb_version while duckdb_commit
       # selects the checkout. It must be a short release-shaped string: the
       # extension's metadata stamps at most 32 bytes of it, and DuckDB refuses to
       # load a file whose stamp differs from its own version, so a bare 40-char
       # commit as duckdb_version makes every `require yaml` fail
       # (duckdb/community-extensions#3086).
-      DUCKDB_VERSION: v2.0.0
+      DUCKDB_VERSION: v2.0.1
       DUCKDB_CI_TOOLS: v2.0-cyanoptera
       # Flip day keeps a duckdb-legacy-build at the outgoing version for one
       # release; set this to that version then so the stray-literal scan exempts
@@ -412,7 +412,7 @@ jobs:
   # SHIPPABLE BUILD, and the registry default line: the same commit, version and
   # ci-tools branch as community-extensions' build.yml. The submodule gitlink is
   # that commit; `duckdb_version` is what the binary reports, so the artifacts land
-  # as `yaml-v2.0.0-extension-<arch>` and the result is a proper release binary
+  # as `yaml-v2.0.1-extension-<arch>` and the result is a proper release binary
   # (loadable by released DuckDB), not a `-dev` build. This is the leg the
   # community-extensions manylinux (linux_amd64 / linux_arm64 docker) binaries are
   # cut from.
@@ -420,8 +420,8 @@ jobs:
     name: Build extension binaries
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v2.0-cyanoptera
     with:
-      duckdb_version: v2.0.0
-      duckdb_commit: d54cbbe3df17e8e5ce68312f483b4155836112aa
+      duckdb_version: v2.0.1
+      duckdb_commit: 8d78114e90a53823803660bf821f6073ac87da8c
       ci_tools_version: v2.0-cyanoptera
       extension_name: yaml
       # Windows fully enabled: both windows_amd64 (MSVC) and windows_amd64_mingw build
@@ -447,7 +447,7 @@ jobs:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
-      duckdb_version: v2.0.0
+      duckdb_version: v2.0.1
       ci_tools_version: main
       extension_name: yaml
       format_checks: 'format'
@@ -473,7 +473,7 @@ jobs:
       # catch. The scan resolves this line against its OWN constant by name, so a
       # bump that misses it is flagged here rather than silently downloading no
       # artifacts. Keep it equal to duckdb-stable-build's duckdb_version.
-      DUCKDB_VERSION: v2.0.0
+      DUCKDB_VERSION: v2.0.1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
